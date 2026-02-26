@@ -17,6 +17,8 @@ import { CartPage } from './views/CartPage';
 import { CheckoutPage } from './views/CheckoutPage';
 import { SellerProfile } from './views/SellerProfile';
 import { SettingsPage } from './views/SettingsPage';
+import { LoginPage } from './views/LoginPage';
+import { RegisterPage } from './views/RegisterPage';
 import { FloatingCart } from './components/FloatingCart';
 
 export default function App() {
@@ -34,6 +36,24 @@ export default function App() {
                   exit={{ opacity: 0 }}
                 >
                   <ConsumerFeed />
+                </motion.div>
+              } />
+              <Route path="/login" element={
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                >
+                  <LoginPage />
+                </motion.div>
+              } />
+              <Route path="/register" element={
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                >
+                  <RegisterPage />
                 </motion.div>
               } />
               <Route path="/item/:type/:id" element={
@@ -73,86 +93,86 @@ export default function App() {
                 </motion.div>
               } />
               <Route path="/search" element={
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                <SearchPage />
-              </motion.div>
-            } />
-            <Route path="/profile" element={
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              >
-                <ProfilePage />
-              </motion.div>
-            } />
-            <Route path="/settings" element={
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-              >
-                <SettingsPage />
-              </motion.div>
-            } />
-            <Route path="/admin/products" element={
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-              >
-                <ProductAdmin />
-              </motion.div>
-            } />
-            <Route path="/admin/products/new" element={
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-              >
-                <AddProduct />
-              </motion.div>
-            } />
-            <Route path="/admin/services" element={
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-              >
-                <ServiceAdmin />
-              </motion.div>
-            } />
-            <Route path="/admin/services/availability" element={
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-              >
-                <ServiceAvailability />
-              </motion.div>
-            } />
-            <Route path="/admin/delivery" element={
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-              >
-                <DeliveryAdmin />
-              </motion.div>
-            } />
-            <Route path="/admin/delivery/area" element={
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-              >
-                <DeliveryAreaSettings />
-              </motion.div>
-            } />
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <SearchPage />
+                </motion.div>
+              } />
+              <Route path="/profile" element={
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  <ProfilePage />
+                </motion.div>
+              } />
+              <Route path="/settings" element={
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                >
+                  <SettingsPage />
+                </motion.div>
+              } />
+              <Route path="/admin/products" element={
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                >
+                  <ProductAdmin />
+                </motion.div>
+              } />
+              <Route path="/admin/products/new" element={
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                >
+                  <AddProduct />
+                </motion.div>
+              } />
+              <Route path="/admin/services" element={
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                >
+                  <ServiceAdmin />
+                </motion.div>
+              } />
+              <Route path="/admin/services/availability" element={
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                >
+                  <ServiceAvailability />
+                </motion.div>
+              } />
+              <Route path="/admin/delivery" element={
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                >
+                  <DeliveryAdmin />
+                </motion.div>
+              } />
+              <Route path="/admin/delivery/area" element={
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                >
+                  <DeliveryAreaSettings />
+                </motion.div>
+              } />
             </Routes>
           </AnimatePresence>
         </Router>

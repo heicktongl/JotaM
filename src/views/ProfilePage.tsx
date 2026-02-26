@@ -4,27 +4,68 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Settings, Heart, Clock, ChevronRight, LogOut, Store, Bike, Briefcase, ChevronDown, DollarSign } from 'lucide-react';
 import { BottomNav } from '../components/BottomNav';
 import { LocationSelector } from '../components/LocationSelector';
+import { useAuth } from '../hooks/useAuth';
+import { Logo } from '../components/Logo';
 
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const [isEarnMoneyOpen, setIsEarnMoneyOpen] = useState(false);
+  const { user, signOut, loading } = useAuth();
+
+  if (loading) return null;
+
+  if (!user) {
+    return (
+      <div className="min-h-screen pb-24 bg-neutral-50 flex flex-col">
+        <header className="pt-12 pb-6 px-6 text-center border-b border-neutral-100 bg-white shadow-sm flex flex-col justify-center items-center h-48">
+          <Logo variant="orange" className="mb-4" />
+          <h1 className="font-display text-2xl font-extrabold tracking-tighter text-neutral-900">
+            Seu Perfil
+          </h1>
+          <p className="text-neutral-500 text-sm mt-1 mb-2">Faça login para ver seu histórico e favoritos.</p>
+        </header>
+
+        <main className="flex-1 flex flex-col items-center justify-center p-6 space-y-4">
+          <button
+            onClick={() => navigate('/login')}
+            className="w-full max-w-sm rounded-2xl bg-neutral-900 py-4 font-bold text-white shadow-lg shadow-neutral-900/20 transition-all hover:bg-neutral-800"
+          >
+            Fazer Login
+          </button>
+
+          <button
+            onClick={() => navigate('/register')}
+            className="w-full max-w-sm rounded-2xl bg-orange-50 py-4 font-bold text-orange-600 transition-all hover:bg-orange-100 border border-orange-100"
+          >
+            Criar Conta
+          </button>
+        </main>
+
+        <BottomNav />
+      </div>
+    );
+  }
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/');
+  };
 
   return (
     <div className="min-h-screen pb-24 bg-neutral-50">
       <header className="pt-12 pb-6 px-6 bg-white border-b border-neutral-100">
         <div className="mx-auto max-w-7xl flex items-center gap-6">
-          {/* @DB_TODO: Fetch user profile data (name, photo URL) from 'users' table */}
           <div className="h-24 w-24 rounded-full bg-orange-100 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">
-            <img 
-              src="https://picsum.photos/seed/user/200/200" 
-              alt="Perfil" 
+            <img
+              src={`https://ui-avatars.com/api/?name=${user.user_metadata?.name || 'User'}&background=FFF7ED&color=EA580C`}
+              alt="Perfil"
               className="h-full w-full object-cover"
               referrerPolicy="no-referrer"
             />
           </div>
           <div>
             <h1 className="font-display text-2xl font-extrabold tracking-tighter text-neutral-900">
-              Mariana Silva
+              {user.user_metadata?.name || 'Seu Nome'}
             </h1>
             <LocationSelector />
           </div>
@@ -54,7 +95,7 @@ export const ProfilePage: React.FC = () => {
                 </div>
                 <ChevronRight size={18} className="text-neutral-400" />
               </button>
-              <button 
+              <button
                 onClick={() => navigate('/settings')}
                 className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors"
               >
@@ -71,7 +112,7 @@ export const ProfilePage: React.FC = () => {
 
           <section>
             <div className="bg-white rounded-3xl border border-neutral-100 overflow-hidden shadow-sm">
-              <button 
+              <button
                 onClick={() => setIsEarnMoneyOpen(!isEarnMoneyOpen)}
                 className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors"
               >
@@ -144,8 +185,10 @@ export const ProfilePage: React.FC = () => {
           </section>
 
           <section>
-            {/* @DB_TODO: Implement logout logic (clear session/token) */}
-            <button className="w-full flex items-center justify-center gap-2 p-4 rounded-2xl bg-red-50 text-red-600 font-bold hover:bg-red-100 transition-colors">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center gap-2 p-4 rounded-2xl bg-red-50 text-red-600 font-bold hover:bg-red-100 transition-colors"
+            >
               <LogOut size={18} />
               Sair da conta
             </button>
