@@ -1,0 +1,5 @@
+{
+  "name": "jotaM - Marketplace Hiper-Local",
+  "description": "jotaM: O marketplace hiper-local com curadoria rigorosa. Sem decepção na mesa, apenas produtos e serviços únicos e memoráveis.",
+  "requestFramePermissions": ["geolocation"]
+}
