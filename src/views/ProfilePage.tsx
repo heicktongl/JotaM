@@ -142,7 +142,10 @@ export const ProfilePage: React.FC = () => {
                     transition={{ duration: 0.2 }}
                     className="border-t border-neutral-100 bg-neutral-50/50"
                   >
-                    <button className="w-full flex items-center justify-between p-4 pl-12 hover:bg-neutral-100 transition-colors border-b border-neutral-100/50">
+                    <button
+                      onClick={() => navigate('/seller-setup')}
+                      className="w-full flex items-center justify-between p-4 pl-12 hover:bg-neutral-100 transition-colors border-b border-neutral-100/50"
+                    >
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-xl bg-orange-50 text-orange-600">
                           <Store size={18} />

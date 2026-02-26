@@ -19,6 +19,7 @@ import { SellerProfile } from './views/SellerProfile';
 import { SettingsPage } from './views/SettingsPage';
 import { LoginPage } from './views/LoginPage';
 import { RegisterPage } from './views/RegisterPage';
+import { SellerSetup } from './views/SellerSetup';
 import { FloatingCart } from './components/FloatingCart';
 
 export default function App() {
@@ -117,6 +118,15 @@ export default function App() {
                   exit={{ opacity: 0, x: -20 }}
                 >
                   <SettingsPage />
+                </motion.div>
+              } />
+              <Route path="/seller-setup" element={
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                >
+                  <SellerSetup />
                 </motion.div>
               } />
               <Route path="/admin/products" element={
