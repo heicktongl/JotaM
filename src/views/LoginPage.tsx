@@ -24,7 +24,7 @@ export const LoginPage: React.FC = () => {
             setError(signInError.message === 'Invalid login credentials' ? 'Email ou senha incorretos.' : signInError.message);
             setIsLoading(false);
         } else {
-            navigate('/profile');
+            navigate('/');
         }
     };
 

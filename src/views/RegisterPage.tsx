@@ -47,7 +47,7 @@ export const RegisterPage: React.FC = () => {
                 console.error('Erro ao criar perfil:', insertError);
             }
 
-            navigate('/profile');
+            navigate('/');
         }
     };
 
