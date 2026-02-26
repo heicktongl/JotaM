@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 
 export const SellerSetup: React.FC = () => {
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
 
     const [storeName, setStoreName] = useState('');
     const [username, setUsername] = useState('');
@@ -17,13 +17,15 @@ export const SellerSetup: React.FC = () => {
 
     // Verifica se o usuário já é vendedor
     useEffect(() => {
+        if (authLoading) return; // Espera o auth carregar
+
         const checkExistingSeller = async () => {
             if (!user) {
-                navigate('/login');
+                navigate(-1); // Volta pra página anterior, sem mandar pro login
                 return;
             }
 
-            const { data, error } = await supabase
+            const { data } = await supabase
                 .from('sellers')
                 .select('id')
                 .eq('user_id', user.id)
@@ -38,7 +40,7 @@ export const SellerSetup: React.FC = () => {
         };
 
         checkExistingSeller();
-    }, [user, navigate]);
+    }, [user, authLoading, navigate]);
 
     const handleCreateStore = async (e: React.FormEvent) => {
         e.preventDefault();
