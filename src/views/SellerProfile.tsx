@@ -68,7 +68,11 @@ export const SellerProfile: React.FC = () => {
   const normalizedUsername = rawUsername.startsWith('@') ? rawUsername.slice(1) : rawUsername;
 
   const fetchProfileData = useCallback(async () => {
-    if (!normalizedUsername) return;
+    if (!normalizedUsername) {
+      setError('A URL deste perfil é inválida ou o profissional ainda não configurou seu link público.');
+      setIsLoading(false);
+      return;
+    }
     try {
       setIsLoading(true);
       setError(null);
@@ -139,22 +143,20 @@ export const SellerProfile: React.FC = () => {
       setProfileType(targetType);
       setUserId(targetUserId);
 
-      // Promessas paralelas de Feed de Produtos ou Serviços
-      let prodQuery = supabase.from('products').select('*').eq('is_active', true).order('created_at', { ascending: false });
-      let svcQuery = supabase.from('services').select('*').eq('is_active', true).order('created_at', { ascending: false });
+      // Promessas de Feed de Produtos ou Serviços
+      let productsData: any[] = [];
+      let servicesData: any[] = [];
 
       if (targetType === 'seller') {
-        prodQuery = prodQuery.eq('seller_id', targetId);
-        // Serviços associados a um seller via auth? (Normalmente seller apenas possui produtos)
-        svcQuery = svcQuery.eq('id', 'uuid-impossivel'); // Forçando vazio, só Provider tem serviços
+        const { data } = await supabase.from('products').select('*').eq('is_active', true).eq('seller_id', targetId).order('created_at', { ascending: false });
+        productsData = data ?? [];
       } else {
-        svcQuery = svcQuery.eq('provider_id', targetId);
-        prodQuery = prodQuery.eq('id', 'uuid-impossivel'); // Forçando vazio, provider só tem serviços
+        const { data } = await supabase.from('services').select('*').eq('is_active', true).eq('provider_id', targetId).order('created_at', { ascending: false });
+        servicesData = data ?? [];
       }
 
-      const [productsRes, servicesRes] = await Promise.all([prodQuery, svcQuery]);
-      setProducts(productsRes.data ?? []);
-      setServices(servicesRes.data ?? []);
+      setProducts(productsData);
+      setServices(servicesData);
 
       // Se for Seller, puxa followers e locs
       if (targetType === 'seller') {
