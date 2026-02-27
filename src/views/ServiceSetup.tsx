@@ -177,7 +177,7 @@ export const ServiceSetup: React.FC = () => {
                 await Promise.all(uploadPromises);
             }
 
-            navigate('/admin/services');
+            navigate('/profile');
         } catch (err: any) {
             setError(err.message || 'Erro ao processar seu perfil profissional.');
             setIsLoading(false);
