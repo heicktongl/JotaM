@@ -18,6 +18,7 @@ interface LocationContextType {
   isLoading: boolean;
   error: string | null;
   requestLocation: () => void;
+  searchManualLocation: (query: string) => Promise<void>;
   displayLocation: string;
 }
 
@@ -163,6 +164,66 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
+  const searchManualLocation = async (query: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // 1. Deteção ultra-rápida de CEP brasileiro (8 dígitos apenas números)
+      const cleanCep = query.replace(/\D/g, '');
+      if (cleanCep.length === 8) {
+        const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+        const data = await res.json();
+
+        if (data.erro) {
+          setError('CEP não encontrado em território nacional.');
+          setIsLoading(false);
+          return;
+        }
+
+        // Fake Coords since ViaCEP doesn't return lat/lng, we use standard Brasilia or request Osm
+        handleLocationUpdate({
+          lat: -15.7801, // Arbitrary center, because UI only uses Strings now for filtering
+          lng: -47.9292,
+          condo: `${data.logradouro} (${data.cep})` || 'Meu Endereço',
+          neighborhood: data.bairro || 'Bairro Desconhecido',
+          city: data.localidade || 'Cidade Desconhecida'
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Fallback Nominatim Universal Mapping (OSM) para Strings "Texto Livre" que funciona inclusive no iOS/Android
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1&accept-language=pt-BR`);
+      const data = await res.json();
+
+      if (data && data.length > 0) {
+        const locationJson = data[0];
+        const addr = locationJson.address;
+
+        const condo = addr.amenity || addr.building || addr.road || addr.residential || query;
+        const neighborhood = addr.neighbourhood || addr.suburb || addr.city_district || addr.quarter;
+        const city = addr.city || addr.town || addr.municipality || addr.state;
+
+        handleLocationUpdate({
+          lat: parseFloat(locationJson.lat),
+          lng: parseFloat(locationJson.lon),
+          condo: condo || 'Meu Endereço',
+          neighborhood: neighborhood || 'Bairro Desconhecido',
+          city: city || 'Cidade Desconhecida'
+        });
+      } else {
+        setError('Nenhuma localidade encontrada. Tente digitar [Bairro, Cidade].');
+      }
+
+    } catch (err) {
+      console.error(err);
+      setError('Erro ao buscar servidor de Endereços. Tente novamente mais tarde.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const displayLocation = location
     ? scope === 'condo' ? location.condo
       : scope === 'neighborhood' ? location.neighborhood
@@ -170,7 +231,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     : 'Definir localização';
 
   return (
-    <LocationContext.Provider value={{ scope, setScope, location, isLoading, error, requestLocation, displayLocation }}>
+    <LocationContext.Provider value={{ scope, setScope, location, isLoading, error, requestLocation, searchManualLocation, displayLocation }}>
       {children}
     </LocationContext.Provider>
   );
