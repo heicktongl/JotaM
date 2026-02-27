@@ -32,6 +32,7 @@ interface UserRoles {
   } | null;
   serviceData: {
     name: string;
+    username: string;
     rating: number;
     appointmentCount: number;
   } | null;
@@ -106,6 +107,7 @@ export const ProfilePage: React.FC = () => {
             .eq('provider_id', service.id);
           serviceData = {
             name: service.name,
+            username: service.username,
             rating: Number(service.rating),
             appointmentCount: appointRes.count ?? 0,
           };
@@ -357,11 +359,36 @@ export const ProfilePage: React.FC = () => {
                       </button>
                       <button
                         onClick={() => navigate('/admin/services/availability')}
+                        className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600"><Plus size={18} /></div>
+                          <span className="font-bold text-neutral-900">Cadastrar Novo Serviço</span>
+                        </div>
+                        <ChevronRight size={18} className="text-neutral-400" />
+                      </button>
+                      <button
+                        onClick={() => navigate('/service-setup')}
+                        className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-xl bg-neutral-100 text-neutral-600"><Settings size={18} /></div>
+                          <span className="font-bold text-neutral-900">Configurar Minha Vitrine</span>
+                        </div>
+                        <ChevronRight size={18} className="text-neutral-400" />
+                      </button>
+                      <button
+                        onClick={() => roles.serviceData?.username ? navigate(`/@${roles.serviceData.username}`) : alert('Configure sua vitrine primeiro!')}
                         className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600"><Calendar size={18} /></div>
-                          <span className="font-bold text-neutral-900">Cadastrar Novo Serviço</span>
+                          <div className="p-2 rounded-xl bg-purple-50 text-purple-600"><Briefcase size={18} /></div>
+                          <div className="text-left">
+                            <span className="font-bold text-neutral-900 block">Ver Minha Vitrine</span>
+                            <span className="text-xs text-neutral-500">
+                              {roles.serviceData.username ? `@${roles.serviceData.username}` : 'Link não configurado'}
+                            </span>
+                          </div>
                         </div>
                         <ChevronRight size={18} className="text-neutral-400" />
                       </button>

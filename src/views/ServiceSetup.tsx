@@ -13,7 +13,9 @@ export const ServiceSetup: React.FC = () => {
     const [username, setUsername] = useState('');
     const [bio, setBio] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isFetchingOriginal, setIsFetchingOriginal] = useState(true);
     const [error, setError] = useState('');
+    const [existingProviderId, setExistingProviderId] = useState<string | null>(null);
 
     // Avatar (foto de perfil)
     const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -56,6 +58,33 @@ export const ServiceSetup: React.FC = () => {
         setServicePhotos((prev) => prev.filter((_, i) => i !== index));
     };
 
+    // Carregar dados existentes
+    React.useEffect(() => {
+        const loadExistingProfile = async () => {
+            if (!user) return;
+            try {
+                const { data, error } = await supabase
+                    .from('service_providers')
+                    .select('*')
+                    .eq('user_id', user.id)
+                    .maybeSingle();
+
+                if (data) {
+                    setName(data.name || '');
+                    setUsername(data.username || '');
+                    setBio(data.bio || '');
+                    setAvatarPreview(data.avatar_url || null);
+                    setExistingProviderId(data.id);
+                }
+            } catch (err) {
+                console.error("Erro ao carregar perfil existente:", err);
+            } finally {
+                setIsFetchingOriginal(false);
+            }
+        };
+        loadExistingProfile();
+    }, [user]);
+
     const uploadFile = async (file: File, path: string): Promise<string | null> => {
         const { error: uploadError } = await supabase.storage
             .from('avatars')
@@ -94,47 +123,63 @@ export const ServiceSetup: React.FC = () => {
 
         try {
             // 1) Upload avatar se tiver
-            let avatarUrl: string | null = null;
+            let avatarUrl = avatarPreview; // Mantém o atual se não mudar
             if (avatarFile) {
                 const ext = avatarFile.name.split('.').pop();
                 const path = `${user.id}/avatar_${Date.now()}.${ext}`;
                 avatarUrl = await uploadFile(avatarFile, path);
             }
 
-            // 2) Criar perfil do prestador
-            const { data: provider, error: insertError } = await supabase
-                .from('service_providers')
-                .insert({
-                    user_id: user.id,
-                    name: name.trim(),
-                    username: username.trim().toLowerCase(),
-                    bio: bio.trim() || null,
-                    avatar_url: avatarUrl,
-                })
-                .select('id')
-                .single();
+            // 2) Criar ou Atualizar perfil
+            const profileData = {
+                user_id: user.id,
+                name: name.trim(),
+                username: username.trim().toLowerCase(),
+                bio: bio.trim() || null,
+                avatar_url: avatarUrl,
+            };
 
-            if (insertError || !provider) {
-                setError(insertError?.message || 'Erro ao criar perfil.');
+            let result;
+            if (existingProviderId) {
+                result = await supabase
+                    .from('service_providers')
+                    .update(profileData)
+                    .eq('id', existingProviderId)
+                    .select('id')
+                    .single();
+            } else {
+                result = await supabase
+                    .from('service_providers')
+                    .insert(profileData)
+                    .select('id')
+                    .single();
+            }
+
+            if (result.error) {
+                if (result.error.code === '23505') {
+                    setError('Este nome de usuário já está em uso. Escolha outro.');
+                } else {
+                    setError(result.error.message || 'Erro ao salvar perfil.');
+                }
                 setIsLoading(false);
                 return;
             }
 
-            // 3) Upload fotos de portfólio (associar ao provider)
+            const providerId = result.data.id;
+
+            // 3) Upload fotos de portfólio
             if (servicePhotos.length > 0) {
                 const uploadPromises = servicePhotos.map(async (photo, index) => {
                     const ext = photo.file.name.split('.').pop();
-                    const path = `${user.id}/service_${provider.id}_${index}_${Date.now()}.${ext}`;
+                    const path = `${user.id}/service_${providerId}_${index}_${Date.now()}.${ext}`;
                     return uploadFile(photo.file, path);
                 });
                 await Promise.all(uploadPromises);
-                // Nota: As URLs dos portfólios podem ser salvas em uma tabela de galeria futuramente
             }
 
-            // Sucesso! Redireciona para o admin de serviços
             navigate('/admin/services');
         } catch (err: any) {
-            setError(err.message || 'Erro ao criar perfil de prestador de serviços.');
+            setError(err.message || 'Erro ao processar seu perfil profissional.');
             setIsLoading(false);
         }
     };
@@ -143,6 +188,14 @@ export const ServiceSetup: React.FC = () => {
         await signOut();
         navigate('/');
     };
+
+    if (isFetchingOriginal) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-neutral-50 text-purple-600">
+                <Loader2 className="animate-spin" size={32} />
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-neutral-50 flex flex-col">
@@ -165,10 +218,10 @@ export const ServiceSetup: React.FC = () => {
                         className="text-center mb-10"
                     >
                         <h1 className="font-display text-3xl font-extrabold tracking-tight text-neutral-900 mb-2">
-                            Ofereça Seus Serviços
+                            {existingProviderId ? 'Configurar Sua Vitrine' : 'Ofereça Seus Serviços'}
                         </h1>
                         <p className="text-neutral-500">
-                            Crie seu perfil profissional e comece a receber agendamentos.
+                            {existingProviderId ? 'Atualize suas informações e seu link público.' : 'Crie seu perfil profissional e comece a receber agendamentos.'}
                         </p>
                     </motion.div>
 
@@ -330,7 +383,7 @@ export const ServiceSetup: React.FC = () => {
                             {isLoading ? (
                                 <Loader2 size={18} className="animate-spin" />
                             ) : (
-                                'Criar Perfil Profissional'
+                                existingProviderId ? 'Salvar Alterações' : 'Criar Perfil Profissional'
                             )}
                         </button>
 
