@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { supabase } from '../lib/supabase';
 
 export type Scope = 'condo' | 'neighborhood' | 'city';
 
@@ -28,6 +29,24 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const handleLocationUpdate = async (loc: LocationData) => {
+    setLocation(loc);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await supabase.from('location_history').insert({
+          user_id: session.user.id,
+          lat: loc.lat,
+          lng: loc.lng,
+          city: loc.city,
+          neighborhood: loc.neighborhood
+        });
+      }
+    } catch (err) {
+      console.error('Erro ao salvar histórico de localização:', err);
+    }
+  };
+
   const requestLocation = () => {
     setIsLoading(true);
     setError(null);
@@ -43,26 +62,25 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
         const { latitude, longitude } = position.coords;
         try {
           const apiKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY;
-          
+
           if (!apiKey) {
             // Serviço Gratuito: Nominatim (OpenStreetMap) com extração robusta para o Brasil
             const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=pt-BR`);
             const data = await res.json();
-            
+
             if (data && data.address) {
               const addr = data.address;
-              
+
               // 1. Extração do Condomínio / Rua
-              const condo = addr.amenity || addr.building || addr.residential || 
-                           (addr.road ? `${addr.road}${addr.house_number ? `, ${addr.house_number}` : ''}` : '');
-              
+              const condo = addr.amenity || addr.building || addr.residential ||
+                (addr.road ? `${addr.road}${addr.house_number ? `, ${addr.house_number}` : ''}` : '');
+
               // 2. Extração Robusta do Bairro (Priorizando as tags mais precisas do OSM no Brasil)
               const neighborhood = addr.neighbourhood || addr.suburb || addr.city_district || addr.quarter || addr.village;
-              
-              // 3. Extração da Cidade
+
               const city = addr.city || addr.town || addr.municipality;
 
-              setLocation({
+              handleLocationUpdate({
                 lat: latitude,
                 lng: longitude,
                 condo: condo || 'Meu Endereço',
@@ -79,7 +97,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
           // Use Google Maps API exclusively, forcing Portuguese language
           const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}&language=pt-BR`);
           const data = await res.json();
-          
+
           if (data.status === 'OK' && data.results.length > 0) {
             let condo = '';
             let neighborhood = '';
@@ -121,7 +139,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
               }
             }
 
-            setLocation({
+            handleLocationUpdate({
               lat: latitude,
               lng: longitude,
               condo: condo || (route ? `${route}${streetNumber ? `, ${streetNumber}` : ''}` : 'Meu Endereço'),
@@ -145,10 +163,10 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
-  const displayLocation = location 
-    ? scope === 'condo' ? location.condo 
-      : scope === 'neighborhood' ? location.neighborhood 
-      : location.city
+  const displayLocation = location
+    ? scope === 'condo' ? location.condo
+      : scope === 'neighborhood' ? location.neighborhood
+        : location.city
     : 'Definir localização';
 
   return (

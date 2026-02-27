@@ -4,8 +4,10 @@ import { MapPin, ShoppingBag, Star, ArrowRight } from 'lucide-react';
 import { Product, Service } from '../data';
 import { Link } from 'react-router-dom';
 
+export type ItemType = (Product & { target_type?: 'product'; created_at?: string }) | (Service & { target_type?: 'service'; created_at?: string });
+
 interface CardProps {
-  item: Product | Service;
+  item: ItemType;
   type: 'product' | 'service';
 }
 
@@ -30,7 +32,7 @@ export const ItemCard: React.FC<CardProps> = ({ item, type }) => {
             className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
             referrerPolicy="no-referrer"
           />
-          
+
           {/* Top Badges */}
           <div className="absolute top-3 left-3 flex items-center gap-2">
             <span className="inline-flex items-center rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-neutral-900 backdrop-blur-md shadow-sm">
@@ -68,7 +70,7 @@ export const ItemCard: React.FC<CardProps> = ({ item, type }) => {
                 {isProduct ? product.price.toFixed(2) : service.pricePerHour.toFixed(2)}
               </span>
             </div>
-            
+
             <div className="flex items-center gap-2">
               {!isProduct && (
                 <div className="flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-amber-600">

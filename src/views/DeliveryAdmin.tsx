@@ -26,6 +26,7 @@ import type { Database } from '../lib/database.types';
 type DeliveryProfile = Database['public']['Tables']['delivery_profiles']['Row'];
 type Earning = Database['public']['Tables']['earnings']['Row'];
 type Delivery = Database['public']['Tables']['deliveries']['Row'];
+type Order = Database['public']['Tables']['orders']['Row'];
 
 interface WeeklyData {
   day: string;
@@ -41,8 +42,10 @@ export const DeliveryAdmin: React.FC = () => {
   const [userName, setUserName] = useState('Entregador');
   const [earnings, setEarnings] = useState<Earning[]>([]);
   const [activeDelivery, setActiveDelivery] = useState<Delivery | null>(null);
+  const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
   const [weeklyData, setWeeklyData] = useState<WeeklyData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAccepting, setIsAccepting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [tempGoal, setTempGoal] = useState('');
@@ -121,6 +124,27 @@ export const DeliveryAdmin: React.FC = () => {
         .maybeSingle();
 
       setActiveDelivery(deliveryData);
+
+      // Busca entregas disponíveis (Pedidos que os lojistas confirmaram mas estão sem motoboy)
+      // Aqui poderíamos aplicar um filtro de raio geográfico também (usando as coordenadas do delivery_profile), 
+      // mas por ora, trazemos as mais recentes sem entregador da área.
+      const { data: availableData } = await supabase
+        .from('orders')
+        .select(`
+          id, 
+          status, 
+          created_at, 
+          total_price,
+          order_items (
+            products ( sellers ( store_name, neighborhood ) )
+          )
+        `)
+        .in('status', ['preparing', 'ready', 'confirmed'])
+        .is('delivery_profile_id', null)
+        .order('created_at', { ascending: false });
+
+      setAvailableOrders(availableData || []);
+
     } catch (e: unknown) {
       setError('Erro ao carregar dados. Tente novamente.');
       console.error(e);
@@ -177,6 +201,45 @@ export const DeliveryAdmin: React.FC = () => {
       setProfile(prev => prev ? { ...prev, is_online: newStatus } : prev);
     }
     setIsTogglingOnline(false);
+  };
+
+  const handleAcceptDelivery = async (orderId: string) => {
+    if (!profile || isAccepting) return;
+    setIsAccepting(orderId);
+    try {
+      // 1. Vincula o Entregador ao Pedido (Impede que outro pegue)
+      const { error: orderErr } = await supabase
+        .from('orders')
+        .update({ delivery_profile_id: profile.id, status: 'delivering' })
+        .eq('id', orderId)
+        .is('delivery_profile_id', null); // Garantir concorrência (ninguém pegou ao mesmo tempo)
+
+      if (orderErr) throw orderErr;
+
+      // 2. Cria a entrada na tabela Deliveries
+      const { data: routeData, error: deliveryErr } = await supabase
+        .from('deliveries')
+        .insert({
+          order_id: orderId,
+          delivery_profile_id: profile.id,
+          status: 'collecting', // Primeiro ele vai coletar na loja
+          vehicle_type: profile.vehicle_type
+        })
+        .select()
+        .single();
+
+      if (deliveryErr) throw deliveryErr;
+
+      // 3. Atualiza os estados locais instantaneamente.
+      setActiveDelivery(routeData);
+      setAvailableOrders(prev => prev.filter(o => o.id !== orderId));
+
+    } catch (err) {
+      console.error('Erro ao aceitar corrida:', err);
+      // Aqui poderiamos emitir um toast se houvesse context para erro.
+    } finally {
+      setIsAccepting(null);
+    }
   };
 
   if (isLoading) {
@@ -289,8 +352,8 @@ export const DeliveryAdmin: React.FC = () => {
               onClick={handleToggleOnline}
               disabled={isTogglingOnline}
               className={`flex-1 md:flex-none rounded-2xl px-6 py-3 text-sm font-bold shadow-sm transition-all text-center flex items-center justify-center gap-2 ${profile?.is_online
-                  ? 'bg-red-100 text-red-600 hover:bg-red-200'
-                  : 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200'
+                ? 'bg-red-100 text-red-600 hover:bg-red-200'
+                : 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200'
                 }`}
             >
               {isTogglingOnline ? (
@@ -405,8 +468,8 @@ export const DeliveryAdmin: React.FC = () => {
                             initial={{ height: 0 }}
                             animate={{ height: `${Math.max(heightPct, 4)}%` }}
                             className={`w-full max-w-[12px] md:max-w-[16px] rounded-full transition-all duration-500 ${isToday
-                                ? 'bg-orange-500 shadow-[0_0_20px_rgba(249,115,22,0.3)]'
-                                : 'bg-neutral-100 group-hover/bar:bg-orange-200'
+                              ? 'bg-orange-500 shadow-[0_0_20px_rgba(249,115,22,0.3)]'
+                              : 'bg-neutral-100 group-hover/bar:bg-orange-200'
                               }`}
                           />
                         </div>
@@ -481,12 +544,12 @@ export const DeliveryAdmin: React.FC = () => {
                       Pedido #{activeDelivery.order_id.slice(0, 6).toUpperCase()}
                     </p>
                     <p className="text-sm font-bold text-orange-600">
-                      {statusLabel[activeDelivery.status] ?? activeDelivery.status}
+                      {statusLabel[activeDelivery.status as keyof typeof statusLabel] ?? activeDelivery.status}
                     </p>
                   </div>
                 </div>
                 <span className="rounded-full bg-orange-50 px-4 py-1.5 text-xs font-bold text-orange-600 uppercase tracking-widest">
-                  {statusLabel[activeDelivery.status] ?? activeDelivery.status}
+                  {statusLabel[activeDelivery.status as keyof typeof statusLabel] ?? activeDelivery.status}
                 </span>
               </div>
 
@@ -513,14 +576,70 @@ export const DeliveryAdmin: React.FC = () => {
             </motion.div>
           </div>
         ) : (
-          <div className="mb-10 rounded-[2.5rem] bg-white p-10 border border-dashed border-neutral-200 text-center">
-            <Package size={40} className="text-neutral-300 mx-auto mb-4" />
-            <p className="font-bold text-neutral-500">Nenhuma entrega ativa no momento</p>
-            <p className="text-sm text-neutral-400 mt-1">
-              {profile?.is_online
-                ? 'Aguardando novos pedidos...'
-                : 'Fique online para receber pedidos.'}
-            </p>
+          <div className="mb-10 space-y-6">
+            <div className="rounded-[2.5rem] bg-white p-10 border border-dashed border-neutral-200 text-center">
+              <Package size={40} className="text-neutral-300 mx-auto mb-4" />
+              <p className="font-bold text-neutral-500">Nenhuma entrega ativa no momento</p>
+              <p className="text-sm text-neutral-400 mt-1">
+                {profile?.is_online
+                  ? 'Verifique as solicitações disponíveis abaixo.'
+                  : 'Fique online para receber pedidos.'}
+              </p>
+            </div>
+
+            {/* Painel de Solicitações Locais */}
+            {profile?.is_online && (
+              <div>
+                <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                  Entregas Disponíveis na sua Área
+                </h3>
+
+                {availableOrders.length === 0 ? (
+                  <div className="rounded-3xl bg-neutral-50 p-6 text-center border border-neutral-100">
+                    <p className="text-sm font-medium text-neutral-400">Nenhum pedido precisando de motoboy agora.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {availableOrders.map((order) => {
+                      // Extração segura do bairro do lojista (Coleta)
+                      const storeName = (order as any).order_items?.[0]?.products?.sellers?.store_name || "Lojista Local";
+                      const neighborhood = (order as any).order_items?.[0]?.products?.sellers?.neighborhood || "Bairro não informado";
+                      const timeString = new Date(order.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+                      return (
+                        <div key={order.id} className="bg-white rounded-[2rem] p-6 shadow-sm border border-neutral-100 hover:shadow-md transition-all">
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-lg uppercase tracking-wider mb-2 inline-block">
+                                R$ {order.total_price.toFixed(2)} Carrinho
+                              </span>
+                              <h4 className="font-bold text-neutral-900 text-lg">Coleta: {storeName}</h4>
+                              <p className="text-xs text-neutral-500 flex items-center gap-1 mt-1">
+                                <MapPin size={12} /> Bairro: {neighborhood}
+                              </p>
+                            </div>
+                            <span className="text-xs font-bold text-neutral-400">{timeString}</span>
+                          </div>
+
+                          <button
+                            onClick={() => handleAcceptDelivery(order.id)}
+                            disabled={isAccepting === order.id}
+                            className="w-full mt-2 rounded-xl bg-neutral-900 py-3 text-sm font-bold text-white hover:bg-neutral-800 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                          >
+                            {isAccepting === order.id ? (
+                              <Loader2 size={16} className="animate-spin" />
+                            ) : (
+                              <>Aceitar Rota <Navigation size={14} /></>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

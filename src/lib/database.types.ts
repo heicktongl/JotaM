@@ -68,6 +68,39 @@ export interface Database {
                 Insert: Omit<Database['public']['Tables']['sellers']['Row'], 'id' | 'created_at' | 'views'>;
                 Update: Partial<Database['public']['Tables']['sellers']['Insert']>;
             };
+            store_locations: {
+                Row: {
+                    id: string;
+                    seller_id: string;
+                    label: string;
+                    zip_code: string;
+                    street: string;
+                    number: string | null;
+                    complement: string | null;
+                    neighborhood: string;
+                    city: string;
+                    state: string;
+                    latitude: number | null;
+                    longitude: number | null;
+                    is_primary: boolean;
+                    created_at: string;
+                };
+                Insert: Omit<Database['public']['Tables']['store_locations']['Row'], 'id' | 'created_at'>;
+                Update: Partial<Database['public']['Tables']['store_locations']['Insert']>;
+            };
+            location_history: {
+                Row: {
+                    id: string;
+                    user_id: string;
+                    lat: number;
+                    lng: number;
+                    city: string;
+                    neighborhood: string;
+                    created_at: string;
+                };
+                Insert: Omit<Database['public']['Tables']['location_history']['Row'], 'id' | 'created_at'>;
+                Update: Partial<Database['public']['Tables']['location_history']['Insert']>;
+            };
             products: {
                 Row: {
                     id: string;
@@ -79,6 +112,8 @@ export interface Database {
                     image_url: string | null;
                     stock: number;
                     is_active: boolean;
+                    city: string | null;
+                    neighborhood: string | null;
                     created_at: string;
                 };
                 Insert: Omit<Database['public']['Tables']['products']['Row'], 'id' | 'created_at'>;
@@ -95,6 +130,8 @@ export interface Database {
                     duration_minutes: number;
                     image_url: string | null;
                     is_active: boolean;
+                    city: string | null;
+                    neighborhood: string | null;
                     created_at: string;
                 };
                 Insert: Omit<Database['public']['Tables']['services']['Row'], 'id' | 'created_at'>;
@@ -105,6 +142,7 @@ export interface Database {
                     id: string;
                     user_id: string;
                     name: string;
+                    username: string | null;
                     bio: string | null;
                     avatar_url: string | null;
                     rating: number;

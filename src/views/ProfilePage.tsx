@@ -11,6 +11,7 @@ import { LocationSelector } from '../components/LocationSelector';
 import { useAuth } from '../hooks/useAuth';
 import { Logo } from '../components/Logo';
 import { supabase } from '../lib/supabase';
+import { AvatarUploader } from '../components/AvatarUploader';
 
 interface UserRoles {
   isSeller: boolean;
@@ -42,6 +43,8 @@ export const ProfilePage: React.FC = () => {
   const { user, signOut, loading } = useAuth();
   const [roles, setRoles] = useState<UserRoles | null>(null);
   const [loadingRoles, setLoadingRoles] = useState(true);
+  const [userAvatar, setUserAvatar] = useState<string | null>(null);
+
 
   useEffect(() => {
     if (!user) {
@@ -51,12 +54,14 @@ export const ProfilePage: React.FC = () => {
 
     const fetchRoles = async () => {
       try {
-        // Busca paralela nos 3 perfis
+        // Busca paralela no usuário e nos 3 perfis
         const [sellerRes, deliveryRes, serviceRes] = await Promise.all([
           supabase.from('sellers').select('*').eq('user_id', user.id).maybeSingle(),
           supabase.from('delivery_profiles').select('*').eq('user_id', user.id).maybeSingle(),
           supabase.from('service_providers').select('*').eq('user_id', user.id).maybeSingle(),
         ]);
+
+        if (user.user_metadata?.avatar_url) setUserAvatar(user.user_metadata.avatar_url);
 
         const seller = sellerRes.data;
         const delivery = deliveryRes.data;
@@ -170,14 +175,23 @@ export const ProfilePage: React.FC = () => {
     <div className="min-h-screen pb-24 bg-neutral-50">
       <header className="pt-12 pb-6 px-6 bg-white border-b border-neutral-100">
         <div className="mx-auto max-w-7xl flex items-center gap-6">
-          <div className="h-24 w-24 rounded-full bg-orange-100 flex items-center justify-center overflow-hidden border-4 border-white shadow-sm">
-            <img
-              src={`https://ui-avatars.com/api/?name=${user.user_metadata?.name || 'User'}&background=FFF7ED&color=EA580C`}
-              alt="Perfil"
-              className="h-full w-full object-cover"
-              referrerPolicy="no-referrer"
-            />
-          </div>
+          <AvatarUploader
+            currentUrl={userAvatar}
+            fallbackUrl={`https://ui-avatars.com/api/?name=${user.user_metadata?.name || 'User'}&background=FFF7ED&color=EA580C`}
+            onUploadSuccess={async (url) => {
+              setUserAvatar(url);
+              const { error } = await supabase.auth.updateUser({
+                data: { avatar_url: url }
+              });
+              if (error) {
+                console.error("Erro Update User:", error);
+                alert("Sua foto foi enviada mas houve uma falha ao vincular com seu perfil. Erro: " + error.message);
+              }
+            }}
+            uid={user.id}
+            folder="users"
+            size="md"
+          />
           <div>
             <h1 className="font-display text-2xl font-extrabold tracking-tighter text-neutral-900">
               {user.user_metadata?.name || 'Seu Nome'}
@@ -455,7 +469,7 @@ export const ProfilePage: React.FC = () => {
                           )}
                           {!roles?.isServiceProvider && (
                             <button
-                              onClick={() => navigate('/admin/services')}
+                              onClick={() => navigate('/service-setup')}
                               className="w-full flex items-center justify-between p-4 pl-12 hover:bg-neutral-100 transition-colors"
                             >
                               <div className="flex items-center gap-3">

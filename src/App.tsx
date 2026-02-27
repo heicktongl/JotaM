@@ -7,6 +7,7 @@ import { ProfilePage } from './views/ProfilePage';
 import { ProductAdmin } from './views/ProductAdmin';
 import { AddProduct } from './views/AddProduct';
 import { ServiceAdmin } from './views/ServiceAdmin';
+import { AddService } from './views/AddService';
 import { ServiceAvailability } from './views/ServiceAvailability';
 import { DeliveryAdmin } from './views/DeliveryAdmin';
 import { DeliveryAreaSettings } from './views/DeliveryAreaSettings';
@@ -20,6 +21,7 @@ import { SettingsPage } from './views/SettingsPage';
 import { LoginPage } from './views/LoginPage';
 import { RegisterPage } from './views/RegisterPage';
 import { SellerSetup } from './views/SellerSetup';
+import { ServiceSetup } from './views/ServiceSetup';
 import { FloatingCart } from './components/FloatingCart';
 
 export default function App() {
@@ -129,6 +131,15 @@ export default function App() {
                   <SellerSetup />
                 </motion.div>
               } />
+              <Route path="/service-setup" element={
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                >
+                  <ServiceSetup />
+                </motion.div>
+              } />
               <Route path="/admin/products" element={
                 <motion.div
                   initial={{ opacity: 0, x: 20 }}
@@ -154,6 +165,15 @@ export default function App() {
                   exit={{ opacity: 0, x: -20 }}
                 >
                   <ServiceAdmin />
+                </motion.div>
+              } />
+              <Route path="/admin/services/new" element={
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                >
+                  <AddService />
                 </motion.div>
               } />
               <Route path="/admin/services/availability" element={

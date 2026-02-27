@@ -4,12 +4,15 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, Plus, X, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { useLocationScope } from '../context/LocationContext';
 import { Logo } from '../components/Logo';
 
 export const AddProduct: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [images, setImages] = useState<string[]>([]);
+  const { location } = useLocationScope();
+  const [images, setImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
@@ -33,15 +36,45 @@ export const AddProduct: React.FC = () => {
       });
   }, []);
 
-  const addMockImage = () => {
-    if (images.length < 5) {
-      const newImage = `https://picsum.photos/seed/${Math.random()}/800/600`;
-      setImages([...images, newImage]);
-    }
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const remaining = 5 - images.length;
+    const toAdd = files.slice(0, remaining);
+
+    toAdd.forEach((file) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImages(prev => [...prev, file]);
+        setImagePreviews(prev => [...prev, reader.result as string]);
+      };
+      reader.readAsDataURL(file as Blob);
+    });
+
+    e.target.value = '';
   };
 
   const removeImage = (index: number) => {
-    setImages(images.filter((_, i) => i !== index));
+    setImages(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const uploadFile = async (file: File, path: string): Promise<string | null> => {
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(path, file, { upsert: true });
+
+    if (uploadError) {
+      console.error('Upload error:', uploadError);
+      return null;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(path);
+
+    return publicUrl;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -64,8 +97,19 @@ export const AddProduct: React.FC = () => {
         .single();
       if (sellerErr || !sellerData) {
         alert('Perfil de vendedor não encontrado. Crie sua loja primeiro.');
+        setSaving(false);
         return;
       }
+
+      // Upload da foto principal da mercadoria
+      let mainImageUrl: string | null = null;
+      if (images.length > 0) {
+        const file = images[0];
+        const ext = file.name.split('.').pop();
+        const path = `${user.id}/product_${Date.now()}.${ext}`;
+        mainImageUrl = await uploadFile(file, path);
+      }
+
       const { error } = await supabase.from('products').insert({
         seller_id: sellerData.id,
         category_id: formData.category_id || null,
@@ -73,8 +117,10 @@ export const AddProduct: React.FC = () => {
         description: formData.description,
         price: parseFloat(formData.price),
         stock: parseInt(formData.stock, 10),
-        image_url: images[0] ?? null,
+        image_url: mainImageUrl,
         is_active: true,
+        neighborhood: location?.neighborhood || null,
+        city: location?.city || null,
       });
       if (error) throw error;
       alert('Produto cadastrado com sucesso!');
@@ -116,15 +162,15 @@ export const AddProduct: React.FC = () => {
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <AnimatePresence mode="popLayout">
-                {images.map((img, index) => (
+                {imagePreviews.map((preview, index) => (
                   <motion.div
-                    key={img}
+                    key={index}
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.8 }}
                     className="relative aspect-square rounded-3xl overflow-hidden bg-neutral-200 border border-neutral-100 group"
                   >
-                    <img src={img} className="h-full w-full object-cover" alt="" />
+                    <img src={preview} className="h-full w-full object-cover" alt="" />
                     <button
                       type="button"
                       onClick={() => removeImage(index)}
@@ -142,16 +188,19 @@ export const AddProduct: React.FC = () => {
               </AnimatePresence>
 
               {images.length < 5 && (
-                <button
-                  type="button"
-                  onClick={addMockImage}
-                  className="aspect-square rounded-3xl border-2 border-dashed border-neutral-200 bg-white flex flex-col items-center justify-center gap-2 text-neutral-400 hover:border-orange-500 hover:text-orange-500 transition-all"
-                >
+                <label className="aspect-square rounded-3xl border-2 border-dashed border-neutral-200 bg-white flex flex-col items-center justify-center gap-2 text-neutral-400 hover:border-orange-500 hover:text-orange-500 transition-all cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={handleImageSelect}
+                  />
                   <div className="p-3 rounded-full bg-neutral-50">
                     <Plus size={24} />
                   </div>
-                  <span className="text-xs font-bold">Adicionar</span>
-                </button>
+                  <span className="text-xs font-bold text-center">Adicionar<br />Lado a Lado</span>
+                </label>
               )}
             </div>
           </section>

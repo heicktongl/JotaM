@@ -66,6 +66,24 @@ CREATE TABLE IF NOT EXISTS public.sellers (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Localizações/Pontos de Venda da loja (1 loja pode ter N pontos em bairros diferentes)
+CREATE TABLE IF NOT EXISTS public.store_locations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  seller_id UUID NOT NULL REFERENCES public.sellers(id) ON DELETE CASCADE,
+  label TEXT NOT NULL DEFAULT 'Principal',
+  zip_code TEXT NOT NULL,
+  street TEXT NOT NULL,
+  number TEXT,
+  complement TEXT,
+  neighborhood TEXT NOT NULL,
+  city TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'CE',
+  is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- Impede a mesma loja de ter dois pontos no mesmo bairro+cidade
+  UNIQUE(seller_id, neighborhood, city)
+);
+
 -- Produtos
 CREATE TABLE IF NOT EXISTS public.products (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -264,6 +282,7 @@ ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_addresses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sellers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.store_locations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.service_providers ENABLE ROW LEVEL SECURITY;
@@ -317,6 +336,14 @@ CREATE POLICY "Usuário gerencia seus endereços" ON public.user_addresses
 
 CREATE POLICY "Vendedor gerencia sua loja" ON public.sellers
   FOR ALL USING (auth.uid() = user_id);
+
+CREATE POLICY "Localizações públicas" ON public.store_locations
+  FOR SELECT USING (TRUE);
+
+CREATE POLICY "Vendedor gerencia suas localizações" ON public.store_locations
+  FOR ALL USING (EXISTS (
+    SELECT 1 FROM public.sellers WHERE sellers.id = store_locations.seller_id AND sellers.user_id = auth.uid()
+  ));
 
 CREATE POLICY "Vendedor gerencia seus produtos" ON public.products
   FOR ALL USING (EXISTS (
