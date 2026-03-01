@@ -16,16 +16,15 @@ export const SearchPage: React.FC = () => {
     const fetchResults = async () => {
       setIsSearching(true);
       try {
-        const buildQuery = (table: 'products' | 'services', useLocationFilter: boolean) => {
+        const buildQuery = (table: 'products' | 'services', filterMode: 'neighborhood' | 'city' | 'none') => {
           let q = supabase.from(table).select('*').eq('is_active', true).limit(20);
 
-          if (useLocationFilter && location) {
-            if (scope === 'city' && location.city) {
-              q = q.ilike('city', `%${location.city}%`);
-            } else if ((scope === 'neighborhood' || scope === 'condo') && location.neighborhood) {
-              q = q.ilike('neighborhood', `%${location.neighborhood}%`);
-            }
+          if (filterMode === 'neighborhood' && location?.neighborhood) {
+            q = q.ilike('neighborhood', `%${location.neighborhood}%`);
+          } else if (filterMode === 'city' && location?.city) {
+            q = q.ilike('city', `%${location.city}%`);
           }
+          // filterMode 'none' só é usado quando não há location configurada
 
           if (query.trim().length > 0) {
             q = q.or(`name.ilike.%${query}%,description.ilike.%${query}%`);
@@ -34,20 +33,26 @@ export const SearchPage: React.FC = () => {
           return q;
         };
 
-        // 1: Busca Hiperlocal
+        // Escopo inicial do usuário
+        const initialMode: 'neighborhood' | 'city' | 'none' = !location
+          ? 'none'
+          : scope === 'city'
+            ? 'city'
+            : 'neighborhood';
+
         let [prodsRes, servsRes] = await Promise.all([
-          buildQuery('products', true),
-          buildQuery('services', true),
+          buildQuery('products', initialMode),
+          buildQuery('services', initialMode),
         ]);
 
         let pData = prodsRes.data || [];
         let sData = servsRes.data || [];
 
-        // Fallback: Se não achou na área exata e tem pouco resultado, tenta busca global
-        if (pData.length + sData.length < 3) {
+        // Tentativa 2: se era por bairro e achou pouco, expande para cidade (SEM sair da cidade)
+        if (initialMode === 'neighborhood' && pData.length + sData.length < 3 && location?.city) {
           const [p2, s2] = await Promise.all([
-            buildQuery('products', false),
-            buildQuery('services', false),
+            buildQuery('products', 'city'),
+            buildQuery('services', 'city'),
           ]);
           pData = p2.data || [];
           sData = s2.data || [];

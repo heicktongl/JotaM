@@ -43,38 +43,47 @@ export const ConsumerFeed: React.FC = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const buildQuery = (table: 'products' | 'services', selectFields: string, useLocationFiler: boolean) => {
+        const buildQuery = (
+          table: 'products' | 'services',
+          selectFields: string,
+          filterMode: 'neighborhood' | 'city' | 'none'
+        ) => {
           let q = supabase.from(table).select(selectFields).eq('is_active', true).limit(30);
-          if (useLocationFiler && location) {
-            if (scope === 'city' && location.city) {
-              q = q.or(`city.ilike.%${location.city}%,city.is.null`);
-            } else if ((scope === 'neighborhood' || scope === 'condo') && location.neighborhood) {
-              q = q.or(`neighborhood.ilike.%${location.neighborhood}%,neighborhood.is.null`);
-            }
+
+          if (filterMode === 'neighborhood' && location?.neighborhood) {
+            q = q.ilike('neighborhood', `%${location.neighborhood}%`);
+          } else if (filterMode === 'city' && location?.city) {
+            q = q.ilike('city', `%${location.city}%`);
           }
+          // filterMode === 'none' nunca é usado no feed: a escada para no nível cidade.
+
           return q;
         };
 
         const prodSelect = 'id, name, price, image_url, category_id, sellers(store_name, username)';
         const svcSelect = 'id, name, price, image_url, category_id, service_providers(name, rating)';
 
-        // Tentativa 1: Busca Hiperlocal (com filtro de location)
+        // Tentativa 1: escopo atual do usuário (bairro ou cidade)
+        const initialMode: 'neighborhood' | 'city' =
+          scope === 'city' ? 'city' : 'neighborhood';
+
         let [prodResult, svcResult] = await Promise.all([
-          buildQuery('products', prodSelect, true),
-          buildQuery('services', svcSelect, true),
+          buildQuery('products', prodSelect, initialMode),
+          buildQuery('services', svcSelect, initialMode),
         ]);
 
-        let prods = prodResult.data as unknown as FeedProduct[] || [];
-        let svcs = svcResult.data as unknown as FeedService[] || [];
+        let prods = (prodResult.data ?? []) as unknown as FeedProduct[];
+        let svcs = (svcResult.data ?? []) as unknown as FeedService[];
 
-        // Fallback: Se não retornou quase nada do bairro/cidade exata (ex: teste em localhost com GPS impreciso)
-        if (prods.length + svcs.length < 4) {
+        // Tentativa 2: se era por bairro e achou pouco/nada, expande para cidade
+        // MAS não vai além disso — outra cidade é bloqueada.
+        if (initialMode === 'neighborhood' && prods.length + svcs.length < 4 && location?.city) {
           const [p2, s2] = await Promise.all([
-            buildQuery('products', prodSelect, false),
-            buildQuery('services', svcSelect, false),
+            buildQuery('products', prodSelect, 'city'),
+            buildQuery('services', svcSelect, 'city'),
           ]);
-          prods = p2.data as unknown as FeedProduct[] || [];
-          svcs = s2.data as unknown as FeedService[] || [];
+          prods = (p2.data ?? []) as unknown as FeedProduct[];
+          svcs = (s2.data ?? []) as unknown as FeedService[];
         }
 
         setProducts(prods);
