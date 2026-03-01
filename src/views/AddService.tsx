@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, Plus, X, Loader2 } from 'lucide-react';
+import { ChevronLeft, Plus, X, Loader2, Zap, Calendar, Repeat } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useLocationScope } from '../context/LocationContext';
@@ -22,7 +22,10 @@ export const AddService: React.FC = () => {
         name: '',
         description: '',
         price: '',
+        service_type: 'immediate' as 'immediate' | 'scheduled' | 'recurring',
+        response_time_mins: '30',
         duration_minutes: '60',
+        billing_cycle: 'monthly' as 'weekly' | 'biweekly' | 'monthly',
         category_id: '',
     });
 
@@ -117,17 +120,28 @@ export const AddService: React.FC = () => {
                 mainImageUrl = await uploadFile(file, path);
             }
 
-            const { error } = await supabase.from('services').insert({
+            const basePayload = {
                 provider_id: providerData.id,
                 category_id: formData.category_id || null,
                 name: formData.name,
                 description: formData.description,
                 price: parseFloat(formData.price),
-                duration_minutes: parseInt(formData.duration_minutes, 10),
                 image_url: mainImageUrl,
                 is_active: true,
                 neighborhood: location?.neighborhood || null,
                 city: location?.city || null,
+                service_type: formData.service_type,
+            };
+
+            const typePayload = formData.service_type === 'immediate'
+                ? { response_time_mins: parseInt(formData.response_time_mins, 10), duration_mins: null, billing_cycle: null }
+                : formData.service_type === 'scheduled'
+                    ? { response_time_mins: null, duration_mins: parseInt(formData.duration_minutes, 10), billing_cycle: null }
+                    : { response_time_mins: null, duration_mins: null, billing_cycle: formData.billing_cycle };
+
+            const { error } = await supabase.from('services').insert({
+                ...basePayload,
+                ...typePayload,
             });
 
             if (error) throw error;
@@ -216,9 +230,60 @@ export const AddService: React.FC = () => {
                         </div>
                     </section>
 
+                    {/* Modalidade de Serviço (Fase 1) */}
+                    <section className="space-y-4">
+                        <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Modalidade do Serviço</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            {/* Imediato */}
+                            <button
+                                type="button"
+                                onClick={() => setFormData({ ...formData, service_type: 'immediate' })}
+                                className={`flex flex-col items-center justify-center gap-3 p-4 rounded-3xl border-2 transition-all text-center ${formData.service_type === 'immediate' ? 'border-red-500 bg-red-50 text-red-700' : 'border-neutral-100 bg-white hover:border-red-200'}`}
+                            >
+                                <div className={`p-3 rounded-full ${formData.service_type === 'immediate' ? 'bg-red-500 text-white' : 'bg-neutral-100 text-neutral-400'}`}>
+                                    <Zap size={24} />
+                                </div>
+                                <div>
+                                    <p className="font-bold">Imediato / Urgência</p>
+                                    <p className="text-xs opacity-70 mt-1">Ex: Chaveiro, Reboque, Encanador</p>
+                                </div>
+                            </button>
+
+                            {/* Agendamento */}
+                            <button
+                                type="button"
+                                onClick={() => setFormData({ ...formData, service_type: 'scheduled' })}
+                                className={`flex flex-col items-center justify-center gap-3 p-4 rounded-3xl border-2 transition-all text-center ${formData.service_type === 'scheduled' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-neutral-100 bg-white hover:border-blue-200'}`}
+                            >
+                                <div className={`p-3 rounded-full ${formData.service_type === 'scheduled' ? 'bg-blue-500 text-white' : 'bg-neutral-100 text-neutral-400'}`}>
+                                    <Calendar size={24} />
+                                </div>
+                                <div>
+                                    <p className="font-bold">Agendamento</p>
+                                    <p className="text-xs opacity-70 mt-1">Ex: Barbeiro, Psicólogo, Faxina</p>
+                                </div>
+                            </button>
+
+                            {/* Recorrente */}
+                            <button
+                                type="button"
+                                onClick={() => setFormData({ ...formData, service_type: 'recurring' })}
+                                className={`flex flex-col items-center justify-center gap-3 p-4 rounded-3xl border-2 transition-all text-center ${formData.service_type === 'recurring' ? 'border-green-500 bg-green-50 text-green-700' : 'border-neutral-100 bg-white hover:border-green-200'}`}
+                            >
+                                <div className={`p-3 rounded-full ${formData.service_type === 'recurring' ? 'bg-green-500 text-white' : 'bg-neutral-100 text-neutral-400'}`}>
+                                    <Repeat size={24} />
+                                </div>
+                                <div>
+                                    <p className="font-bold">Plano Contínuo</p>
+                                    <p className="text-xs opacity-70 mt-1">Ex: Limpeza de Piscina, Mentoria</p>
+                                </div>
+                            </button>
+                        </div>
+                    </section>
+
                     {/* Informações Básicas */}
                     <section className="space-y-6">
-                        <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Detalhes Básicos</h3>
+                        <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Detalhes do Serviço</h3>
 
                         <div className="space-y-4">
                             <div>
@@ -284,19 +349,53 @@ export const AddService: React.FC = () => {
                         </div>
 
                         <div className="space-y-6">
-                            <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Duração Aproximada</h3>
+                            <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">
+                                {formData.service_type === 'immediate' ? 'Tempo de Resposta' : formData.service_type === 'scheduled' ? 'Duração da Sessão' : 'Ciclo de Pagamento'}
+                            </h3>
                             <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-bold text-neutral-700 mb-2">Em minutos</label>
-                                    <input
-                                        type="number"
-                                        required
-                                        placeholder="Ex: 60"
-                                        className="w-full rounded-2xl border border-neutral-200 bg-white px-5 py-3 text-neutral-900 focus:border-purple-500 focus:ring-0 transition-all"
-                                        value={formData.duration_minutes}
-                                        onChange={(e) => setFormData({ ...formData, duration_minutes: e.target.value })}
-                                    />
-                                </div>
+                                {formData.service_type === 'immediate' && (
+                                    <div>
+                                        <label className="block text-sm font-bold text-neutral-700 mb-2">Em minutos (Aproximado)</label>
+                                        <input
+                                            type="number"
+                                            required
+                                            placeholder="Ex: 30"
+                                            className="w-full rounded-2xl border border-neutral-200 bg-white px-5 py-3 text-neutral-900 focus:border-red-500 focus:ring-0 transition-all"
+                                            value={formData.response_time_mins}
+                                            onChange={(e) => setFormData({ ...formData, response_time_mins: e.target.value })}
+                                        />
+                                        <p className="text-xs font-medium text-neutral-500 mt-2">Os clientes darão preferência aos profissionais mais rápidos.</p>
+                                    </div>
+                                )}
+                                {formData.service_type === 'scheduled' && (
+                                    <div>
+                                        <label className="block text-sm font-bold text-neutral-700 mb-2">Em minutos</label>
+                                        <input
+                                            type="number"
+                                            required
+                                            placeholder="Ex: 60"
+                                            className="w-full rounded-2xl border border-neutral-200 bg-white px-5 py-3 text-neutral-900 focus:border-blue-500 focus:ring-0 transition-all"
+                                            value={formData.duration_minutes}
+                                            onChange={(e) => setFormData({ ...formData, duration_minutes: e.target.value })}
+                                        />
+                                        <p className="text-xs font-medium text-neutral-500 mt-2">Duração média para que os clientes saibam quanto tempo reservar.</p>
+                                    </div>
+                                )}
+                                {formData.service_type === 'recurring' && (
+                                    <div>
+                                        <label className="block text-sm font-bold text-neutral-700 mb-2">Cobrado a cada</label>
+                                        <select
+                                            className="w-full rounded-2xl border border-neutral-200 bg-white px-5 py-3 text-neutral-900 focus:border-green-500 focus:ring-0 transition-all appearance-none"
+                                            value={formData.billing_cycle}
+                                            onChange={(e) => setFormData({ ...formData, billing_cycle: e.target.value as any })}
+                                        >
+                                            <option value="weekly">Semana</option>
+                                            <option value="biweekly">Quinzena</option>
+                                            <option value="monthly">Mês</option>
+                                        </select>
+                                        <p className="text-xs font-medium text-neutral-500 mt-2">O valor de R$ {formData.price || '0,00'} será acordado para o ciclo escolhido.</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </section>

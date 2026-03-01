@@ -16,7 +16,9 @@ import {
   Trash2,
   Power,
   Package,
-  Loader2
+  Loader2,
+  Zap,
+  Repeat
 } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { supabase } from '../lib/supabase';
@@ -37,6 +39,10 @@ interface ServiceRow {
   name: string;
   price: number;
   is_active: boolean;
+  service_type?: 'immediate' | 'scheduled' | 'recurring';
+  duration_mins?: number;
+  response_time_mins?: number;
+  billing_cycle?: string;
 }
 
 export const ServiceAdmin: React.FC = () => {
@@ -93,7 +99,7 @@ export const ServiceAdmin: React.FC = () => {
         // 3. Busca Meus Serviços
         const { data: svcsData, error: svcErr } = await supabase
           .from('services')
-          .select('id, name, price, is_active')
+          .select('id, name, price, is_active, service_type, duration_mins, response_time_mins, billing_cycle')
           .eq('provider_id', provData.id)
           .order('created_at', { ascending: false });
 
@@ -383,9 +389,29 @@ export const ServiceAdmin: React.FC = () => {
                 {services.map((svc) => (
                   <div key={svc.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 md:p-6 hover:bg-neutral-50 transition-colors">
                     <div className="flex-1">
-                      <h4 className="font-bold text-neutral-900">{svc.name}</h4>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="font-bold text-neutral-900">{svc.name}</h4>
+                        {svc.service_type === 'immediate' && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600 uppercase tracking-widest">
+                            <Zap size={10} /> Imediato
+                          </span>
+                        )}
+                        {svc.service_type === 'scheduled' && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-600 uppercase tracking-widest">
+                            <Calendar size={10} /> Agendado
+                          </span>
+                        )}
+                        {svc.service_type === 'recurring' && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-bold text-green-600 uppercase tracking-widest">
+                            <Repeat size={10} /> Plano
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm font-black text-neutral-600 mt-1">
-                        R$ {svc.price.toFixed(2)} <span className="text-xs font-medium text-neutral-400 font-normal">/ hora</span>
+                        R$ {svc.price.toFixed(2)}
+                        {svc.service_type === 'recurring' && <span className="text-xs font-medium text-neutral-400 font-normal"> / {svc.billing_cycle === 'weekly' ? 'semana' : svc.billing_cycle === 'biweekly' ? 'quinzena' : 'mês'}</span>}
+                        {svc.service_type === 'scheduled' && <span className="text-xs font-medium text-neutral-400 font-normal"> / sessāo ({svc.duration_mins}m)</span>}
+                        {svc.service_type === 'immediate' && <span className="text-xs font-medium text-neutral-400 font-normal"> (Até {svc.response_time_mins}m)</span>}
                       </p>
                     </div>
 
