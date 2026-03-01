@@ -6,10 +6,12 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Logo } from '../components/Logo';
 import { AvatarUploader } from '../components/AvatarUploader';
+import { useLocationScope } from '../context/LocationContext';
 
 export const ServiceSetup: React.FC = () => {
     const navigate = useNavigate();
     const { user, signOut } = useAuth();
+    const { location } = useLocationScope();
     const [name, setName] = useState('');
     const [username, setUsername] = useState('');
     const [bio, setBio] = useState('');
@@ -126,6 +128,8 @@ export const ServiceSetup: React.FC = () => {
                 bio: bio.trim() || null,
                 avatar_url: avatarUrl,
                 cover_url: coverUrl,
+                city: location?.city || null,
+                neighborhood: location?.neighborhood === 'Bairro Desconhecido' ? null : (location?.neighborhood || null),
             };
 
             let result;
