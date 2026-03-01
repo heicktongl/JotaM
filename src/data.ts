@@ -20,6 +20,10 @@ export interface Service {
   image: string;
   category: string;
   distance: string;
+  service_type?: 'immediate' | 'scheduled' | 'recurring';
+  duration_mins?: number;
+  response_time_mins?: number;
+  billing_cycle?: string;
 }
 
 export const MOCK_PRODUCTS: Product[] = [

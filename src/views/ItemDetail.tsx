@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ChevronLeft, MapPin, Star, ShieldCheck, Clock, Minus, Plus, ShoppingBag, ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronLeft, MapPin, Star, ShieldCheck, Clock, Minus, Plus, ShoppingBag, ChevronRight, Loader2, Zap, Calendar, Repeat } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { supabase } from '../lib/supabase';
 import { ItemType } from '../components/ItemCard';
@@ -93,7 +93,11 @@ export const ItemDetail: React.FC = () => {
               distance: '–',
               description: data.description || '',
               target_type: 'service',
-              created_at: data.created_at
+              created_at: data.created_at,
+              service_type: data.service_type,
+              duration_mins: data.duration_mins,
+              response_time_mins: data.response_time_mins,
+              billing_cycle: data.billing_cycle
             } as any);
           } else {
             console.error('Serviço não encontrado ou erro PostgREST:', error);
@@ -167,9 +171,26 @@ export const ItemDetail: React.FC = () => {
           </button>
 
           <div className="absolute bottom-6 left-6 right-6">
-            <span className="mb-2 inline-flex items-center rounded-full bg-orange-600 px-3 py-1 text-xs font-bold text-white shadow-sm">
-              {item.category}
-            </span>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="inline-flex items-center rounded-full bg-orange-600 px-3 py-1 text-xs font-bold text-white shadow-sm">
+                {item.category}
+              </span>
+              {!isProduct && (item as any).service_type === 'immediate' && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-red-600/90 text-white px-3 py-1 text-[10px] font-bold uppercase tracking-widest backdrop-blur-md shadow-sm">
+                  <Zap size={12} /> Imediato
+                </span>
+              )}
+              {!isProduct && (item as any).service_type === 'scheduled' && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-600/90 text-white px-3 py-1 text-[10px] font-bold uppercase tracking-widest backdrop-blur-md shadow-sm">
+                  <Calendar size={12} /> Agendado
+                </span>
+              )}
+              {!isProduct && (item as any).service_type === 'recurring' && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-green-600/90 text-white px-3 py-1 text-[10px] font-bold uppercase tracking-widest backdrop-blur-md shadow-sm">
+                  <Repeat size={12} /> Plano Ativo
+                </span>
+              )}
+            </div>
             <h1 className="font-display text-3xl font-extrabold tracking-tight text-white shadow-sm">
               {item.name}
             </h1>
@@ -182,7 +203,20 @@ export const ItemDetail: React.FC = () => {
             <div>
               <p className="text-3xl font-black text-neutral-900">
                 R$ {price?.toFixed(2) || '0.00'}
-                {!isProduct && <span className="text-sm font-medium text-neutral-500"> /hora</span>}
+                {!isProduct && (item as any).service_type === 'immediate' && (
+                  <span className="text-sm font-medium text-neutral-500"> / fixo (Até {(item as any).response_time_mins}m)</span>
+                )}
+                {!isProduct && (item as any).service_type === 'scheduled' && (
+                  <span className="text-sm font-medium text-neutral-500"> / sessão ({(item as any).duration_mins}m)</span>
+                )}
+                {!isProduct && (item as any).service_type === 'recurring' && (
+                  <span className="text-sm font-medium text-neutral-500">
+                    {' / ' + ((item as any).billing_cycle === 'weekly' ? 'semana' : (item as any).billing_cycle === 'biweekly' ? 'quinzena' : 'mês')}
+                  </span>
+                )}
+                {!isProduct && !(item as any).service_type && (
+                  <span className="text-sm font-medium text-neutral-500"> /hora</span>
+                )}
               </p>
               <div className="mt-2 flex items-center gap-2 text-sm font-medium text-neutral-500">
                 <MapPin size={16} className="text-orange-500" />
@@ -249,13 +283,47 @@ export const ItemDetail: React.FC = () => {
               </div>
             )}
 
-            <button
-              onClick={handleAddToCart}
-              className="flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-orange-600 px-6 font-bold text-white shadow-lg shadow-orange-600/30 transition-all hover:bg-orange-700 active:scale-[0.98]"
-            >
-              <ShoppingBag size={20} />
-              Adicionar • R$ {((price || 0) * quantity).toFixed(2)}
-            </button>
+            {isProduct ? (
+              <button
+                onClick={handleAddToCart}
+                className="flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-orange-600 px-6 font-bold text-white shadow-lg shadow-orange-600/30 transition-all hover:bg-orange-700 active:scale-[0.98]"
+              >
+                <ShoppingBag size={20} />
+                Adicionar • R$ {((price || 0) * quantity).toFixed(2)}
+              </button>
+            ) : (item as any).service_type === 'immediate' ? (
+              <button
+                onClick={handleAddToCart}
+                className="flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-red-600 px-6 font-bold text-white shadow-lg shadow-red-600/30 transition-all hover:bg-red-700 active:scale-[0.98] animate-pulse"
+              >
+                <Zap size={20} className="fill-white" />
+                Solicitar Agora (Urgência)
+              </button>
+            ) : (item as any).service_type === 'scheduled' ? (
+              <button
+                onClick={handleAddToCart}
+                className="flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 font-bold text-white shadow-lg shadow-blue-600/30 transition-all hover:bg-blue-700 active:scale-[0.98]"
+              >
+                <Calendar size={20} />
+                Escolher Horário • R$ {(price || 0).toFixed(2)}
+              </button>
+            ) : (item as any).service_type === 'recurring' ? (
+              <button
+                onClick={handleAddToCart}
+                className="flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-6 font-bold text-white shadow-lg shadow-emerald-600/30 transition-all hover:bg-emerald-700 active:scale-[0.98]"
+              >
+                <Repeat size={20} />
+                Assinar Plano • R$ {(price || 0).toFixed(2)}
+              </button>
+            ) : (
+              <button
+                onClick={handleAddToCart}
+                className="flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-orange-600 px-6 font-bold text-white shadow-lg shadow-orange-600/30 transition-all hover:bg-orange-700 active:scale-[0.98]"
+              >
+                <ShoppingBag size={20} />
+                Adicionar • R$ {((price || 0) * quantity).toFixed(2)}
+              </button>
+            )}
           </div>
         </div>
       </div>

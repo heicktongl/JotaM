@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { MapPin, ShoppingBag, Star, ArrowRight } from 'lucide-react';
+import { MapPin, ShoppingBag, Star, ArrowRight, Zap, Calendar, Repeat } from 'lucide-react';
 import { Product, Service } from '../data';
 import { Link } from 'react-router-dom';
 
@@ -34,10 +34,25 @@ export const ItemCard: React.FC<CardProps> = ({ item, type }) => {
           />
 
           {/* Top Badges */}
-          <div className="absolute top-3 left-3 flex items-center gap-2">
+          <div className="absolute top-3 left-3 flex flex-col items-start gap-1.5">
             <span className="inline-flex items-center rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-neutral-900 backdrop-blur-md shadow-sm">
               {item.category}
             </span>
+            {!isProduct && service.service_type === 'immediate' && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-600/90 text-white px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest backdrop-blur-md shadow-sm">
+                <Zap size={10} /> Imediato
+              </span>
+            )}
+            {!isProduct && service.service_type === 'scheduled' && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-blue-600/90 text-white px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest backdrop-blur-md shadow-sm">
+                <Calendar size={10} /> Agenda
+              </span>
+            )}
+            {!isProduct && service.service_type === 'recurring' && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-600/90 text-white px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest backdrop-blur-md shadow-sm">
+                <Repeat size={10} /> Plano
+              </span>
+            )}
           </div>
           <div className="absolute top-3 right-3">
             <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-neutral-700 backdrop-blur-md shadow-sm">
@@ -63,7 +78,14 @@ export const ItemCard: React.FC<CardProps> = ({ item, type }) => {
           <div className="mt-auto flex items-end justify-between pt-4 border-t border-neutral-100">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-0.5">
-                {isProduct ? 'Preço' : 'Por hora'}
+                {isProduct
+                  ? 'Preço'
+                  : service.service_type === 'recurring' && service.billing_cycle === 'monthly' ? 'Por Mês'
+                    : service.service_type === 'recurring' && service.billing_cycle === 'biweekly' ? 'Por Quinzena'
+                      : service.service_type === 'recurring' && service.billing_cycle === 'weekly' ? 'Por Semana'
+                        : service.service_type === 'scheduled' ? 'Por Sessão'
+                          : service.service_type === 'immediate' ? 'Valor Fixo'
+                            : 'Por hora'}
               </span>
               <span className="text-2xl font-black text-neutral-900 leading-none flex items-baseline gap-1">
                 <span className="text-sm font-bold text-neutral-400">R$</span>
