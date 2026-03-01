@@ -12,51 +12,34 @@ export const SearchPage: React.FC = () => {
   const { location, scope } = useLocationScope();
 
   useEffect(() => {
-    // Evita busca vazia, buscará os mais recentes se estiver vazio
     const fetchResults = async () => {
       setIsSearching(true);
       try {
-        const buildQuery = (table: 'products' | 'services', filterMode: 'neighborhood' | 'city' | 'none') => {
-          let q = supabase.from(table).select('*').eq('is_active', true).limit(20);
+        // DIRETRIZ MÁXIMA HIPER-LOCAL: filtrar APENAS pelo bairro do usuário.
+        // Se scope for 'city' (bairro desconhecido), filtra por cidade.
+        // Em nenhuma hipótese expande além desse escopo. Sem fallback.
+        let prodsQuery = supabase.from('products').select('*').eq('is_active', true).limit(20);
+        let servsQuery = supabase.from('services').select('*').eq('is_active', true).limit(20);
 
-          if (filterMode === 'neighborhood' && location?.neighborhood) {
-            q = q.ilike('neighborhood', `%${location.neighborhood}%`);
-          } else if (filterMode === 'city' && location?.city) {
-            q = q.ilike('city', `%${location.city}%`);
+        if (location) {
+          if (scope === 'city' && location.city) {
+            prodsQuery = prodsQuery.ilike('city', `%${location.city}%`);
+            servsQuery = servsQuery.ilike('city', `%${location.city}%`);
+          } else if (location.neighborhood && location.neighborhood !== 'Bairro Desconhecido') {
+            prodsQuery = prodsQuery.ilike('neighborhood', `%${location.neighborhood}%`);
+            servsQuery = servsQuery.ilike('neighborhood', `%${location.neighborhood}%`);
           }
-          // filterMode 'none' só é usado quando não há location configurada
-
-          if (query.trim().length > 0) {
-            q = q.or(`name.ilike.%${query}%,description.ilike.%${query}%`);
-          }
-
-          return q;
-        };
-
-        // Escopo inicial do usuário
-        const initialMode: 'neighborhood' | 'city' | 'none' = !location
-          ? 'none'
-          : scope === 'city'
-            ? 'city'
-            : 'neighborhood';
-
-        let [prodsRes, servsRes] = await Promise.all([
-          buildQuery('products', initialMode),
-          buildQuery('services', initialMode),
-        ]);
-
-        let pData = prodsRes.data || [];
-        let sData = servsRes.data || [];
-
-        // Tentativa 2: se era por bairro e achou pouco, expande para cidade (SEM sair da cidade)
-        if (initialMode === 'neighborhood' && pData.length + sData.length < 3 && location?.city) {
-          const [p2, s2] = await Promise.all([
-            buildQuery('products', 'city'),
-            buildQuery('services', 'city'),
-          ]);
-          pData = p2.data || [];
-          sData = s2.data || [];
         }
+
+        if (query.trim().length > 0) {
+          prodsQuery = prodsQuery.or(`name.ilike.%${query}%,description.ilike.%${query}%`);
+          servsQuery = servsQuery.or(`name.ilike.%${query}%,description.ilike.%${query}%`);
+        }
+
+        const [prodsRes, servsRes] = await Promise.all([prodsQuery, servsQuery]);
+
+        const pData = prodsRes.data || [];
+        const sData = servsRes.data || [];
 
         const formattedProducts: ItemType[] = pData.map((p: any) => ({
           id: p.id,
@@ -86,7 +69,7 @@ export const SearchPage: React.FC = () => {
           created_at: s.created_at,
         }));
 
-        // Mesclar
+        // Mesclar e ordenar por mais recente
         const merged = [...formattedProducts, ...formattedServices].sort((a, b) => {
           return new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime();
         });
@@ -101,10 +84,10 @@ export const SearchPage: React.FC = () => {
 
     const timeoutId = setTimeout(() => {
       fetchResults();
-    }, 500); // Debounce leve de 500ms
+    }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [query]);
+  }, [query, location, scope]);
 
   return (
     <div className="min-h-screen pb-24 bg-neutral-50">
@@ -133,7 +116,7 @@ export const SearchPage: React.FC = () => {
       <main className="mx-auto max-w-7xl px-6 pt-8">
         <div className="mb-6 flex items-center justify-between">
           <h2 className="font-display text-xl font-bold text-neutral-900">
-            {query.length > 0 ? `Resultados para "${query}"` : 'Recentes na sua área'}
+            {query.length > 0 ? `Resultados para "${query}"` : 'Recentes no seu bairro'}
           </h2>
           <span className="text-sm font-medium text-orange-600">
             {results.length} encontrado{results.length !== 1 && 's'}

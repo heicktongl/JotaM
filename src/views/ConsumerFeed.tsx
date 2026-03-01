@@ -43,51 +43,29 @@ export const ConsumerFeed: React.FC = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const buildQuery = (
-          table: 'products' | 'services',
-          selectFields: string,
-          filterMode: 'neighborhood' | 'city' | 'none'
-        ) => {
-          let q = supabase.from(table).select(selectFields).eq('is_active', true).limit(30);
-
-          if (filterMode === 'neighborhood' && location?.neighborhood) {
-            q = q.ilike('neighborhood', `%${location.neighborhood}%`);
-          } else if (filterMode === 'city' && location?.city) {
-            q = q.ilike('city', `%${location.city}%`);
-          }
-          // filterMode === 'none' nunca é usado no feed: a escada para no nível cidade.
-
-          return q;
-        };
-
         const prodSelect = 'id, name, price, image_url, category_id, sellers(store_name, username)';
         const svcSelect = 'id, name, price, image_url, category_id, service_providers(name, rating)';
 
-        // Tentativa 1: escopo atual do usuário (bairro ou cidade)
-        const initialMode: 'neighborhood' | 'city' =
-          scope === 'city' ? 'city' : 'neighborhood';
+        // DIRETRIZ MÁXIMA HIPER-LOCAL: filtrar APENAS pelo bairro do usuário.
+        // Se scope for 'city' (bairro desconhecido), usa cidade.
+        // Em nenhuma hipótese expande para além desse escopo.
+        let prodQuery = supabase.from('products').select(prodSelect).eq('is_active', true).limit(30);
+        let svcQuery = supabase.from('services').select(svcSelect).eq('is_active', true).limit(30);
 
-        let [prodResult, svcResult] = await Promise.all([
-          buildQuery('products', prodSelect, initialMode),
-          buildQuery('services', svcSelect, initialMode),
-        ]);
-
-        let prods = (prodResult.data ?? []) as unknown as FeedProduct[];
-        let svcs = (svcResult.data ?? []) as unknown as FeedService[];
-
-        // Tentativa 2: se era por bairro e achou pouco/nada, expande para cidade
-        // MAS não vai além disso — outra cidade é bloqueada.
-        if (initialMode === 'neighborhood' && prods.length + svcs.length < 4 && location?.city) {
-          const [p2, s2] = await Promise.all([
-            buildQuery('products', prodSelect, 'city'),
-            buildQuery('services', svcSelect, 'city'),
-          ]);
-          prods = (p2.data ?? []) as unknown as FeedProduct[];
-          svcs = (s2.data ?? []) as unknown as FeedService[];
+        if (location) {
+          if (scope === 'city' && location.city) {
+            prodQuery = prodQuery.ilike('city', `%${location.city}%`);
+            svcQuery = svcQuery.ilike('city', `%${location.city}%`);
+          } else if (location.neighborhood && location.neighborhood !== 'Bairro Desconhecido') {
+            prodQuery = prodQuery.ilike('neighborhood', `%${location.neighborhood}%`);
+            svcQuery = svcQuery.ilike('neighborhood', `%${location.neighborhood}%`);
+          }
         }
 
-        setProducts(prods);
-        setServices(svcs);
+        const [prodResult, svcResult] = await Promise.all([prodQuery, svcQuery]);
+
+        setProducts((prodResult.data ?? []) as unknown as FeedProduct[]);
+        setServices((svcResult.data ?? []) as unknown as FeedService[]);
       } catch (err) {
         console.error('Erro ao carregar feed:', err);
       } finally {
