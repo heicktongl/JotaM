@@ -13,9 +13,11 @@ import {
     CheckCircle2,
     XCircle,
     Navigation,
+    Camera
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { AvatarUploader } from '../components/AvatarUploader';
 
 interface StoreLocation {
     label: string;
@@ -70,6 +72,10 @@ export const SellerSetup: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [isChecking, setIsChecking] = useState(true);
     const [error, setError] = useState('');
+    const [existingSellerId, setExistingSellerId] = useState<string | null>(null);
+
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+    const [coverUrl, setCoverUrl] = useState<string | null>(null);
 
     // Verifica se o usuário já é vendedor
     useEffect(() => {
@@ -83,15 +89,46 @@ export const SellerSetup: React.FC = () => {
 
             const { data } = await supabase
                 .from('sellers')
-                .select('id')
+                .select('*')
                 .eq('user_id', user.id)
                 .maybeSingle();
 
             if (data) {
-                navigate('/admin/products');
-            } else {
-                setIsChecking(false);
+                setExistingSellerId(data.id);
+                setStoreName(data.store_name || '');
+                setUsername(data.username || '');
+                setAvatarUrl(data.avatar_url || null);
+                setCoverUrl(data.cover_url || null);
+                // Busca localizações se existir
+                const { data: locs } = await supabase
+                    .from('store_locations')
+                    .select('*')
+                    .eq('seller_id', data.id)
+                    .order('is_primary', { ascending: false });
+
+                if (locs && locs.length > 0) {
+                    setLocations(locs.map(l => ({
+                        label: l.label,
+                        zip_code: l.zip_code,
+                        street: l.street || '',
+                        number: l.number || '',
+                        complement: l.complement || '',
+                        neighborhood: l.neighborhood || '',
+                        city: l.city || '',
+                        state: l.state || '',
+                        is_primary: l.is_primary,
+                        latitude: l.latitude,
+                        longitude: l.longitude,
+                        cepLoading: false,
+                        cepError: '',
+                        cepSuccess: true,
+                        neighborhoodStatus: 'idle',
+                        neighborhoodEditable: false,
+                        gpsAccuracy: null
+                    })));
+                }
             }
+            setIsChecking(false);
         };
 
         checkExistingSeller();
@@ -366,61 +403,92 @@ export const SellerSetup: React.FC = () => {
         }
 
         try {
-            // 1. Cria a loja
-            const { data: sellerData, error: insertError } = await supabase
-                .from('sellers')
-                .insert({
-                    user_id: user.id,
-                    store_name: storeName.trim(),
-                    username: cleanUsername,
-                })
-                .select('id')
-                .single();
+            if (existingSellerId) {
+                // Atualiza
+                const { error: updateError } = await supabase
+                    .from('sellers')
+                    .update({
+                        store_name: storeName.trim(),
+                        username: cleanUsername,
+                    })
+                    .eq('id', existingSellerId);
 
-            if (insertError) {
-                if (insertError.code === '23505') {
-                    setError('Esse nome de usuário já está em uso por outra loja.');
-                } else {
-                    setError(insertError.message);
+                if (updateError) throw updateError;
+
+                // Deleta locs antigas
+                await supabase.from('store_locations').delete().eq('seller_id', existingSellerId);
+
+                // Insere as novas
+                const locationInserts = locations.map(loc => ({
+                    seller_id: existingSellerId,
+                    label: loc.label.trim() || 'Principal',
+                    zip_code: loc.zip_code.replace(/\D/g, ''),
+                    street: loc.street,
+                    number: loc.number || null,
+                    complement: loc.complement || null,
+                    neighborhood: loc.neighborhood,
+                    city: loc.city,
+                    state: loc.state,
+                    latitude: loc.latitude ?? null,
+                    longitude: loc.longitude ?? null,
+                    is_primary: loc.is_primary,
+                }));
+                await supabase.from('store_locations').insert(locationInserts);
+
+                navigate('/profile');
+            } else {
+                // Cria loja e locs
+                const { data: sellerData, error: insertError } = await supabase
+                    .from('sellers')
+                    .insert({
+                        user_id: user.id,
+                        store_name: storeName.trim(),
+                        username: cleanUsername,
+                    })
+                    .select('id')
+                    .single();
+
+                if (insertError) {
+                    if (insertError.code === '23505') {
+                        setError('Esse nome de usuário já está em uso por outra loja.');
+                    } else {
+                        setError(insertError.message);
+                    }
+                    setIsLoading(false);
+                    return;
                 }
-                setIsLoading(false);
-                return;
-            }
 
-            // 2. Insere as localizações
-            const locationInserts = locations.map(loc => ({
-                seller_id: sellerData.id,
-                label: loc.label.trim() || 'Principal',
-                zip_code: loc.zip_code.replace(/\D/g, ''),
-                street: loc.street,
-                number: loc.number || null,
-                complement: loc.complement || null,
-                neighborhood: loc.neighborhood,
-                city: loc.city,
-                state: loc.state,
-                latitude: loc.latitude ?? null,    // GPS real (null se veio só pelo CEP)
-                longitude: loc.longitude ?? null,  // GPS real (null se veio só pelo CEP)
-                is_primary: loc.is_primary,
-            }));
+                const locationInserts = locations.map(loc => ({
+                    seller_id: sellerData.id,
+                    label: loc.label.trim() || 'Principal',
+                    zip_code: loc.zip_code.replace(/\D/g, ''),
+                    street: loc.street,
+                    number: loc.number || null,
+                    complement: loc.complement || null,
+                    neighborhood: loc.neighborhood,
+                    city: loc.city,
+                    state: loc.state,
+                    latitude: loc.latitude ?? null,
+                    longitude: loc.longitude ?? null,
+                    is_primary: loc.is_primary,
+                }));
 
-            const { error: locError } = await supabase.from('store_locations').insert(locationInserts);
+                const { error: locError } = await supabase.from('store_locations').insert(locationInserts);
 
-            if (locError) {
-                if (locError.code === '23505') {
-                    setError('Você já tem um ponto de venda nesse bairro. Escolha bairros diferentes.');
-                } else {
-                    setError('Erro ao salvar localizações: ' + locError.message);
+                if (locError) {
+                    if (locError.code === '23505') {
+                        setError('Você já tem um ponto de venda nesse bairro. Escolha bairros diferentes.');
+                    } else {
+                        setError('Erro ao salvar localizações: ' + locError.message);
+                    }
+                    await supabase.from('sellers').delete().eq('id', sellerData.id);
+                    setIsLoading(false);
+                    return;
                 }
-                // Desfaz a criação da loja se localizações falharem
-                await supabase.from('sellers').delete().eq('id', sellerData.id);
-                setIsLoading(false);
-                return;
+                navigate('/profile');
             }
-
-            // Tudo certo!
-            navigate('/profile');
         } catch {
-            setError('Ocorreu um erro ao criar a loja.');
+            setError('Ocorreu um erro ao salvar a loja.');
             setIsLoading(false);
         }
     };
@@ -478,6 +546,38 @@ export const SellerSetup: React.FC = () => {
                 )}
 
                 <form onSubmit={handleCreateStore} className="space-y-6">
+                    {/* Visualização de Fotos (Capa + Perfil) usando AvatarUploader */}
+                    {existingSellerId && (
+                        <div className="relative mb-12">
+                            <div className="h-40 w-full rounded-2xl overflow-hidden bg-neutral-200">
+                                <AvatarUploader
+                                    currentUrl={coverUrl}
+                                    fallbackUrl={`https://picsum.photos/seed/${username}cover/800/400`}
+                                    onUploadSuccess={(url) => {
+                                        setCoverUrl(url);
+                                        supabase.from('sellers').update({ cover_url: url }).eq('id', existingSellerId).then();
+                                    }}
+                                    uid={user?.id || ''}
+                                    folder="covers"
+                                    size="cover"
+                                />
+                            </div>
+                            <div className="absolute -bottom-10 left-6">
+                                <AvatarUploader
+                                    currentUrl={avatarUrl}
+                                    fallbackUrl={`https://picsum.photos/seed/${username}profile/200/200`}
+                                    onUploadSuccess={(url) => {
+                                        setAvatarUrl(url);
+                                        supabase.from('sellers').update({ avatar_url: url }).eq('id', existingSellerId).then();
+                                    }}
+                                    uid={user?.id || ''}
+                                    folder="stores"
+                                    size="lg"
+                                />
+                            </div>
+                        </div>
+                    )}
+
                     {/* Nome da Loja */}
                     <div>
                         <label className="block text-sm font-bold text-neutral-900 mb-2">Nome da Loja</label>
@@ -785,7 +885,7 @@ export const SellerSetup: React.FC = () => {
                         disabled={isLoading || !storeName || !username || !allLocationsValid}
                         className="w-full flex h-14 items-center justify-center rounded-2xl bg-orange-600 px-6 font-bold text-white shadow-lg shadow-orange-600/30 transition-all hover:bg-orange-700 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed mt-4"
                     >
-                        {isLoading ? <Loader2 size={24} className="animate-spin" /> : 'Abrir minha Loja'}
+                        {isLoading ? <Loader2 size={24} className="animate-spin" /> : (existingSellerId ? 'Salvar Alterações' : 'Abrir minha Loja')}
                     </button>
                 </form>
             </main>

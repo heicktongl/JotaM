@@ -5,6 +5,7 @@ import { ChevronLeft, Briefcase, Loader2, LogOut, FileText, Pickaxe, CheckCircle
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Logo } from '../components/Logo';
+import { AvatarUploader } from '../components/AvatarUploader';
 
 export const ServiceSetup: React.FC = () => {
     const navigate = useNavigate();
@@ -17,23 +18,15 @@ export const ServiceSetup: React.FC = () => {
     const [error, setError] = useState('');
     const [existingProviderId, setExistingProviderId] = useState<string | null>(null);
 
-    // Avatar (foto de perfil)
-    const [avatarFile, setAvatarFile] = useState<File | null>(null);
-    const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-    const avatarInputRef = useRef<HTMLInputElement>(null);
+    // Avatar e Capa
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+    const [coverUrl, setCoverUrl] = useState<string | null>(null);
 
     // Fotos do serviço (portfólio)
     const [servicePhotos, setServicePhotos] = useState<{ file: File; preview: string }[]>([]);
     const servicePhotosInputRef = useRef<HTMLInputElement>(null);
 
-    const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setAvatarFile(file);
-        const reader = new FileReader();
-        reader.onloadend = () => setAvatarPreview(reader.result as string);
-        reader.readAsDataURL(file);
-    };
+
 
     const handleServicePhotosSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
@@ -73,7 +66,8 @@ export const ServiceSetup: React.FC = () => {
                     setName(data.name || '');
                     setUsername(data.username || '');
                     setBio(data.bio || '');
-                    setAvatarPreview(data.avatar_url || null);
+                    setAvatarUrl(data.avatar_url || null);
+                    setCoverUrl(data.cover_url || null);
                     setExistingProviderId(data.id);
                 }
             } catch (err) {
@@ -122,13 +116,7 @@ export const ServiceSetup: React.FC = () => {
         }
 
         try {
-            // 1) Upload avatar se tiver
-            let avatarUrl = avatarPreview; // Mantém o atual se não mudar
-            if (avatarFile) {
-                const ext = avatarFile.name.split('.').pop();
-                const path = `${user.id}/avatar_${Date.now()}.${ext}`;
-                avatarUrl = await uploadFile(avatarFile, path);
-            }
+
 
             // 2) Criar ou Atualizar perfil
             const profileData = {
@@ -137,6 +125,7 @@ export const ServiceSetup: React.FC = () => {
                 username: username.trim().toLowerCase(),
                 bio: bio.trim() || null,
                 avatar_url: avatarUrl,
+                cover_url: coverUrl,
             };
 
             let result;
@@ -240,34 +229,38 @@ export const ServiceSetup: React.FC = () => {
                             </div>
                         )}
 
-                        {/* ====== FOTO DE PERFIL ====== */}
-                        <div className="flex flex-col items-center">
-                            <input
-                                ref={avatarInputRef}
-                                type="file"
-                                accept="image/*"
-                                className="hidden"
-                                onChange={handleAvatarSelect}
-                            />
-                            <button
-                                type="button"
-                                onClick={() => avatarInputRef.current?.click()}
-                                className="group relative w-28 h-28 rounded-full bg-neutral-100 border-4 border-white shadow-lg overflow-hidden transition-all hover:shadow-xl"
-                            >
-                                {avatarPreview ? (
-                                    <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
-                                ) : (
-                                    <div className="w-full h-full flex flex-col items-center justify-center text-neutral-400">
-                                        <Camera size={28} />
-                                    </div>
-                                )}
-                                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                    <Camera size={24} className="text-white" />
-                                </div>
-                            </button>
-                            <p className="text-xs font-bold text-neutral-400 mt-2 uppercase tracking-widest">
-                                Foto de Perfil
-                            </p>
+                        {/* ====== FOTO DE CAPA E PERFIL ====== */}
+                        <div className="relative mb-8">
+                            <div className="h-40 w-full rounded-2xl overflow-hidden bg-neutral-200">
+                                <AvatarUploader
+                                    currentUrl={coverUrl}
+                                    fallbackUrl={`https://picsum.photos/seed/${username}cover/800/400`}
+                                    onUploadSuccess={(url) => {
+                                        setCoverUrl(url);
+                                        if (existingProviderId) {
+                                            supabase.from('service_providers').update({ cover_url: url }).eq('id', existingProviderId).then();
+                                        }
+                                    }}
+                                    uid={user?.id || ''}
+                                    folder="covers"
+                                    size="cover"
+                                />
+                            </div>
+                            <div className="absolute -bottom-10 left-6">
+                                <AvatarUploader
+                                    currentUrl={avatarUrl}
+                                    fallbackUrl={`https://picsum.photos/seed/${username}profile/200/200`}
+                                    onUploadSuccess={(url) => {
+                                        setAvatarUrl(url);
+                                        if (existingProviderId) {
+                                            supabase.from('service_providers').update({ avatar_url: url }).eq('id', existingProviderId).then();
+                                        }
+                                    }}
+                                    uid={user?.id || ''}
+                                    folder="providers"
+                                    size="lg"
+                                />
+                            </div>
                         </div>
 
                         <div className="bg-white p-6 rounded-3xl border border-neutral-100 shadow-sm space-y-6">

@@ -256,11 +256,21 @@ export const ProfilePage: React.FC = () => {
                         <ChevronRight size={18} className="text-neutral-400" />
                       </button>
                       <button
+                        onClick={() => navigate('/seller-setup')}
+                        className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-xl bg-neutral-100 text-neutral-600"><Settings size={18} /></div>
+                          <span className="font-bold text-neutral-900">Configurar Minha Vitrine</span>
+                        </div>
+                        <ChevronRight size={18} className="text-neutral-400" />
+                      </button>
+                      <button
                         onClick={() => navigate(`/${roles.sellerData!.username}`)}
                         className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-blue-50 text-blue-600"><Store size={18} /></div>
+                          <div className="p-2 rounded-xl bg-orange-50 text-orange-600"><Store size={18} /></div>
                           <div className="text-left">
                             <span className="font-bold text-neutral-900 block">Ver Minha Vitrine</span>
                             <span className="text-xs text-neutral-500">@{roles.sellerData.username}</span>

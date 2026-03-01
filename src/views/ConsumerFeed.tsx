@@ -43,39 +43,42 @@ export const ConsumerFeed: React.FC = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        let prodQuery = supabase
-          .from('products')
-          .select('id, name, price, image_url, category_id, sellers(store_name, username)')
-          .eq('is_active', true)
-          .limit(30);
-
-        let svcQuery = supabase
-          .from('services')
-          .select('id, name, price, image_url, category_id, service_providers(name, rating)')
-          .eq('is_active', true)
-          .limit(30);
-
-        // Aplicação da Cerca Geográfica (Scope) com fallback para itens sem localização
-        if (location) {
-          if (scope === 'city' && location.city) {
-            prodQuery = prodQuery.or(`city.ilike.%${location.city}%,city.is.null`);
-            svcQuery = svcQuery.or(`city.ilike.%${location.city}%,city.is.null`);
-          } else if (scope === 'neighborhood' && location.neighborhood) {
-            prodQuery = prodQuery.or(`neighborhood.ilike.%${location.neighborhood}%,neighborhood.is.null`);
-            svcQuery = svcQuery.or(`neighborhood.ilike.%${location.neighborhood}%,neighborhood.is.null`);
-          } else if (scope === 'condo' && location.neighborhood) {
-            prodQuery = prodQuery.or(`neighborhood.ilike.%${location.neighborhood}%,neighborhood.is.null`);
-            svcQuery = svcQuery.or(`neighborhood.ilike.%${location.neighborhood}%,neighborhood.is.null`);
+        const buildQuery = (table: 'products' | 'services', selectFields: string, useLocationFiler: boolean) => {
+          let q = supabase.from(table).select(selectFields).eq('is_active', true).limit(30);
+          if (useLocationFiler && location) {
+            if (scope === 'city' && location.city) {
+              q = q.or(`city.ilike.%${location.city}%,city.is.null`);
+            } else if ((scope === 'neighborhood' || scope === 'condo') && location.neighborhood) {
+              q = q.or(`neighborhood.ilike.%${location.neighborhood}%,neighborhood.is.null`);
+            }
           }
-        }
+          return q;
+        };
 
-        const [prodResult, svcResult] = await Promise.all([
-          prodQuery,
-          svcQuery,
+        const prodSelect = 'id, name, price, image_url, category_id, sellers(store_name, username)';
+        const svcSelect = 'id, name, price, image_url, category_id, service_providers(name, rating)';
+
+        // Tentativa 1: Busca Hiperlocal (com filtro de location)
+        let [prodResult, svcResult] = await Promise.all([
+          buildQuery('products', prodSelect, true),
+          buildQuery('services', svcSelect, true),
         ]);
 
-        if (prodResult.data) setProducts(prodResult.data as unknown as FeedProduct[]);
-        if (svcResult.data) setServices(svcResult.data as unknown as FeedService[]);
+        let prods = prodResult.data as unknown as FeedProduct[] || [];
+        let svcs = svcResult.data as unknown as FeedService[] || [];
+
+        // Fallback: Se não retornou quase nada do bairro/cidade exata (ex: teste em localhost com GPS impreciso)
+        if (prods.length + svcs.length < 4) {
+          const [p2, s2] = await Promise.all([
+            buildQuery('products', prodSelect, false),
+            buildQuery('services', svcSelect, false),
+          ]);
+          prods = p2.data as unknown as FeedProduct[] || [];
+          svcs = s2.data as unknown as FeedService[] || [];
+        }
+
+        setProducts(prods);
+        setServices(svcs);
       } catch (err) {
         console.error('Erro ao carregar feed:', err);
       } finally {

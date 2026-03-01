@@ -16,28 +16,44 @@ export const SearchPage: React.FC = () => {
     const fetchResults = async () => {
       setIsSearching(true);
       try {
-        let prodsQuery = supabase.from('products').select('*').eq('is_active', true).limit(20);
-        let servsQuery = supabase.from('services').select('*').eq('is_active', true).limit(20);
+        const buildQuery = (table: 'products' | 'services', useLocationFilter: boolean) => {
+          let q = supabase.from(table).select('*').eq('is_active', true).limit(20);
 
-        // Filtro da Cerca Geográfica (Scope)
-        if (location) {
-          if (scope === 'city' && location.city) {
-            prodsQuery = prodsQuery.ilike('city', `%${location.city}%`);
-            servsQuery = servsQuery.ilike('city', `%${location.city}%`);
-          } else if ((scope === 'neighborhood' || scope === 'condo') && location.neighborhood) {
-            prodsQuery = prodsQuery.ilike('neighborhood', `%${location.neighborhood}%`);
-            servsQuery = servsQuery.ilike('neighborhood', `%${location.neighborhood}%`);
+          if (useLocationFilter && location) {
+            if (scope === 'city' && location.city) {
+              q = q.ilike('city', `%${location.city}%`);
+            } else if ((scope === 'neighborhood' || scope === 'condo') && location.neighborhood) {
+              q = q.ilike('neighborhood', `%${location.neighborhood}%`);
+            }
           }
+
+          if (query.trim().length > 0) {
+            q = q.or(`name.ilike.%${query}%,description.ilike.%${query}%`);
+          }
+
+          return q;
+        };
+
+        // 1: Busca Hiperlocal
+        let [prodsRes, servsRes] = await Promise.all([
+          buildQuery('products', true),
+          buildQuery('services', true),
+        ]);
+
+        let pData = prodsRes.data || [];
+        let sData = servsRes.data || [];
+
+        // Fallback: Se não achou na área exata e tem pouco resultado, tenta busca global
+        if (pData.length + sData.length < 3) {
+          const [p2, s2] = await Promise.all([
+            buildQuery('products', false),
+            buildQuery('services', false),
+          ]);
+          pData = p2.data || [];
+          sData = s2.data || [];
         }
 
-        if (query.trim().length > 0) {
-          prodsQuery = prodsQuery.or(`name.ilike.%${query}%,description.ilike.%${query}%`);
-          servsQuery = servsQuery.or(`name.ilike.%${query}%,description.ilike.%${query}%`);
-        }
-
-        const [prodsRes, servsRes] = await Promise.all([prodsQuery, servsQuery]);
-
-        const formattedProducts: ItemType[] = (prodsRes.data || []).map((p: any) => ({
+        const formattedProducts: ItemType[] = pData.map((p: any) => ({
           id: p.id,
           name: p.name,
           price: p.price,
@@ -51,7 +67,7 @@ export const SearchPage: React.FC = () => {
           created_at: p.created_at,
         }));
 
-        const formattedServices: ItemType[] = (servsRes.data || []).map((s: any) => ({
+        const formattedServices: ItemType[] = sData.map((s: any) => ({
           id: s.id,
           name: s.name,
           pricePerHour: s.price,

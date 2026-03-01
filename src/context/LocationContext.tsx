@@ -25,21 +25,45 @@ interface LocationContextType {
 
 const LocationContext = createContext<LocationContextType | undefined>(undefined);
 
+const LOCATION_STORAGE_KEY = 'jotam_location_v1';
+const SCOPE_STORAGE_KEY = 'jotam_scope_v1';
+
+const readCachedLocation = (): LocationData | null => {
+  try {
+    const raw = localStorage.getItem(LOCATION_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as LocationData) : null;
+  } catch {
+    return null;
+  }
+};
+
+const readCachedScope = (): Scope => {
+  try {
+    const raw = localStorage.getItem(SCOPE_STORAGE_KEY);
+    return (raw as Scope) || 'neighborhood';
+  } catch {
+    return 'neighborhood';
+  }
+};
+
 export const LocationProvider = ({ children }: { children: ReactNode }) => {
-  const [scope, setScope] = useState<Scope>('neighborhood');
-  const [location, setLocation] = useState<LocationData | null>(null);
+  const [scope, setScope] = useState<Scope>(readCachedScope);
+  const [location, setLocation] = useState<LocationData | null>(readCachedLocation);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleLocationUpdate = async (loc: LocationData) => {
     setLocation(loc);
 
+    // Persistência imediata no localStorage para eliminar glitch de carregamento futuro
+    try {
+      localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(loc));
+    } catch { /* storage cheio, ignora */ }
+
     // Se a localização veio com "Bairro Desconhecido", rebaixamos o escopo graciosamente para a cidade.
-    if (loc.neighborhood === 'Bairro Desconhecido') {
-      setScope('city');
-    } else {
-      setScope('neighborhood');
-    }
+    const newScope: Scope = loc.neighborhood === 'Bairro Desconhecido' ? 'city' : 'neighborhood';
+    setScope(newScope);
+    try { localStorage.setItem(SCOPE_STORAGE_KEY, newScope); } catch { /* ignore */ }
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -62,7 +86,13 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
 
     const updatedLocation = { ...location, neighborhood: newName.trim() };
     setLocation(updatedLocation);
-    setScope('neighborhood'); // Volta o escopo para bairro, já que agora é preciso
+    setScope('neighborhood');
+
+    // Persistir override manual de bairro
+    try {
+      localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(updatedLocation));
+      localStorage.setItem(SCOPE_STORAGE_KEY, 'neighborhood');
+    } catch { /* ignore */ }
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
