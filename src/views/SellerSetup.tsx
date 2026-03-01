@@ -418,7 +418,7 @@ export const SellerSetup: React.FC = () => {
             }
 
             // Tudo certo!
-            navigate('/admin/products');
+            navigate('/profile');
         } catch {
             setError('Ocorreu um erro ao criar a loja.');
             setIsLoading(false);

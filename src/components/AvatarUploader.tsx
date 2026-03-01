@@ -153,33 +153,44 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
                 <button
                   type="button"
                   onClick={cancelPreview}
-                  className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-full shadow-lg transition-transform hover:scale-110"
+                  className={`flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white font-bold transition-transform hover:scale-105 shadow-lg ${isCover ? 'px-6 py-3 rounded-2xl text-base' : 'p-3 rounded-full'
+                    }`}
                   title="Cancelar"
                 >
-                  <XIcon size={isCover ? 24 : 16} strokeWidth={3} />
+                  <XIcon size={isCover ? 20 : 18} strokeWidth={3} />
+                  {isCover && <span>Cancelar</span>}
                 </button>
                 <button
                   type="button"
                   onClick={confirmUpload}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-white p-2 rounded-full shadow-lg transition-transform hover:scale-110"
+                  className={`flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold transition-transform hover:scale-105 shadow-lg ${isCover ? 'px-6 py-3 rounded-2xl text-base' : 'p-3 rounded-full'
+                    }`}
                   title="Salvar"
                 >
-                  <Check size={isCover ? 24 : 16} strokeWidth={3} />
+                  <Check size={isCover ? 20 : 18} strokeWidth={3} />
+                  {isCover && <span>Salvar Capa</span>}
                 </button>
               </>
             )}
           </motion.div>
         ) : (
           <div
-            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 z-10"
+            className={isCover
+              ? "absolute bottom-4 right-4 flex items-center gap-3 z-10"
+              : "absolute bottom-0 inset-x-0 h-[30%] bg-black/50 backdrop-blur-sm flex items-center justify-center gap-4 z-10"
+            }
           >
             <button
               type="button"
               onClick={() => !isDeleting && inputRef.current?.click()}
-              className="bg-white/20 hover:bg-white/40 backdrop-blur-md text-white p-3 rounded-full transition-colors"
-              title="Alterar imagem"
+              className={isCover
+                ? "flex items-center gap-2 bg-white/90 hover:bg-white text-neutral-900 px-4 py-2 rounded-2xl shadow-lg backdrop-blur-md transition-colors font-bold text-sm"
+                : "text-white hover:text-orange-400 transition-colors p-1"
+              }
+              title={isCover ? "Alterar Capa" : "Alterar Foto"}
             >
-              <Camera size={isCover ? 28 : 20} className="drop-shadow-md" />
+              <Camera size={isCover ? 18 : 20} className={!isCover ? "drop-shadow-md" : ""} />
+              {isCover && <span>Editar Capa</span>}
             </button>
 
             {showDelete && (
@@ -187,10 +198,13 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
                 type="button"
                 onClick={deletePhoto}
                 disabled={isDeleting}
-                className="bg-red-500/80 hover:bg-red-500 backdrop-blur-md text-white p-3 rounded-full transition-colors"
-                title="Excluir imagem atual"
+                className={isCover
+                  ? "flex items-center justify-center bg-red-500/90 hover:bg-red-500 text-white h-9 w-9 rounded-2xl shadow-lg backdrop-blur-md transition-colors"
+                  : "text-white hover:text-red-400 transition-colors p-1"
+                }
+                title="Excluir imagem"
               >
-                {isDeleting ? <Loader2 size={isCover ? 28 : 20} className="animate-spin" /> : <Trash2 size={isCover ? 28 : 20} />}
+                {isDeleting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={isCover ? 18 : 20} className={!isCover ? "drop-shadow-md" : ""} />}
               </button>
             )}
           </div>

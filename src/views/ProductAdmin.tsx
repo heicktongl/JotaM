@@ -10,7 +10,9 @@ import {
   DollarSign,
   Users,
   ArrowUpRight,
-  ChevronLeft
+  ChevronLeft,
+  Trash2,
+  Power
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -75,6 +77,44 @@ export const ProductAdmin: React.FC = () => {
     };
     load();
   }, [user]);
+
+  const handleToggleActive = async (id: string, currentStatus: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ is_active: !currentStatus })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setProducts(prev => prev.map(p =>
+        p.id === id ? { ...p, is_active: !currentStatus } : p
+      ));
+    } catch (err) {
+      console.error('Erro ao alterar status:', err);
+      alert('Não foi possível alterar o status do produto.');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja apagar este produto definitivamente?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setProducts(prev => prev.filter(p => p.id !== id));
+    } catch (err) {
+      console.error('Erro ao excluir produto:', err);
+      alert('Não foi possível excluir o produto.');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-neutral-50 flex">
@@ -208,11 +248,23 @@ export const ProductAdmin: React.FC = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 md:hidden">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${product.is_active ? 'bg-orange-50 text-orange-600' : 'bg-neutral-100 text-neutral-400'
-                        }`}>
-                        {product.is_active ? 'Ativo' : 'Inativo'}
-                      </span>
-                      <button className="text-neutral-400 hover:text-neutral-900 p-2"><MoreVertical size={18} /></button>
+                      <button
+                        onClick={() => handleToggleActive(product.id, product.is_active)}
+                        title={product.is_active ? "Desativar" : "Ativar"}
+                        className={`p-2 rounded-xl transition-colors ${product.is_active
+                            ? 'text-orange-500 hover:bg-orange-50 bg-neutral-100'
+                            : 'text-neutral-400 hover:bg-neutral-200 bg-neutral-100'
+                          }`}
+                      >
+                        <Power size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(product.id)}
+                        title="Excluir"
+                        className="p-2 rounded-xl text-red-500 hover:bg-red-50 bg-neutral-100 transition-colors"
+                      >
+                        <Trash2 size={18} />
+                      </button>
                     </div>
                   </div>
                   <div className="hidden md:block col-span-2 font-medium text-neutral-600">{product.stock} unidades</div>
@@ -223,8 +275,24 @@ export const ProductAdmin: React.FC = () => {
                       {product.is_active ? 'Em estoque' : 'Inativo'}
                     </span>
                   </div>
-                  <div className="hidden md:flex col-span-1 justify-end">
-                    <button className="text-neutral-400 hover:text-neutral-900"><MoreVertical size={18} /></button>
+                  <div className="hidden md:flex col-span-1 justify-end gap-2">
+                    <button
+                      onClick={() => handleToggleActive(product.id, product.is_active)}
+                      title={product.is_active ? "Ocultar / Desativar" : "Mostrar / Ativar"}
+                      className={`p-2 rounded-xl transition-colors ${product.is_active
+                          ? 'text-orange-500 hover:bg-orange-50 bg-neutral-50'
+                          : 'text-neutral-400 hover:bg-neutral-200 bg-neutral-50'
+                        }`}
+                    >
+                      <Power size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(product.id)}
+                      title="Excluir Produto"
+                      className="p-2 rounded-xl text-red-500 hover:bg-red-50 bg-neutral-50 transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
                   </div>
                 </div>
               ))

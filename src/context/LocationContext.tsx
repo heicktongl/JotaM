@@ -19,6 +19,7 @@ interface LocationContextType {
   error: string | null;
   requestLocation: () => void;
   searchManualLocation: (query: string) => Promise<void>;
+  editNeighborhood: (newName: string) => void;
   displayLocation: string;
 }
 
@@ -32,6 +33,14 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
 
   const handleLocationUpdate = async (loc: LocationData) => {
     setLocation(loc);
+
+    // Se a localização veio com "Bairro Desconhecido", rebaixamos o escopo graciosamente para a cidade.
+    if (loc.neighborhood === 'Bairro Desconhecido') {
+      setScope('city');
+    } else {
+      setScope('neighborhood');
+    }
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
@@ -45,6 +54,29 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
       }
     } catch (err) {
       console.error('Erro ao salvar histórico de localização:', err);
+    }
+  };
+
+  const editNeighborhood = async (newName: string) => {
+    if (!location || !newName.trim()) return;
+
+    const updatedLocation = { ...location, neighborhood: newName.trim() };
+    setLocation(updatedLocation);
+    setScope('neighborhood'); // Volta o escopo para bairro, já que agora é preciso
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await supabase.from('location_history').insert({
+          user_id: session.user.id,
+          lat: updatedLocation.lat,
+          lng: updatedLocation.lng,
+          city: updatedLocation.city,
+          neighborhood: updatedLocation.neighborhood
+        });
+      }
+    } catch (err) {
+      console.error('Erro ao salvar override de bairro:', err);
     }
   };
 
@@ -231,7 +263,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     : 'Definir localização';
 
   return (
-    <LocationContext.Provider value={{ scope, setScope, location, isLoading, error, requestLocation, searchManualLocation, displayLocation }}>
+    <LocationContext.Provider value={{ scope, setScope, location, isLoading, error, requestLocation, searchManualLocation, editNeighborhood, displayLocation }}>
       {children}
     </LocationContext.Provider>
   );

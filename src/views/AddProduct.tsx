@@ -4,13 +4,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, Plus, X, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { useLocationScope } from '../context/LocationContext';
 import { Logo } from '../components/Logo';
 
 export const AddProduct: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { location } = useLocationScope();
   const [images, setImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
@@ -89,19 +87,30 @@ export const AddProduct: React.FC = () => {
     }
     setSaving(true);
     try {
-      // Buscar o seller_id do usuário logado
+      // 1. Buscar o perfil de vendedor do usuário logado
       const { data: sellerData, error: sellerErr } = await supabase
         .from('sellers')
         .select('id')
         .eq('user_id', user.id)
         .single();
+
       if (sellerErr || !sellerData) {
         alert('Perfil de vendedor não encontrado. Crie sua loja primeiro.');
         setSaving(false);
         return;
       }
 
-      // Upload da foto principal da mercadoria
+      // 2. Buscar a localização OFICIAL da loja (is_primary = true)
+      //    Isso é crítico: o produto deve ser indexado pela localização da LOJA,
+      //    e não pelo GPS momentâneo do dispositivo do vendedor.
+      const { data: storeLocation } = await supabase
+        .from('store_locations')
+        .select('neighborhood, city')
+        .eq('seller_id', sellerData.id)
+        .eq('is_primary', true)
+        .maybeSingle();
+
+      // 3. Upload da foto principal do produto
       let mainImageUrl: string | null = null;
       if (images.length > 0) {
         const file = images[0];
@@ -110,6 +119,7 @@ export const AddProduct: React.FC = () => {
         mainImageUrl = await uploadFile(file, path);
       }
 
+      // 4. Inserir o produto com a localização correta da loja
       const { error } = await supabase.from('products').insert({
         seller_id: sellerData.id,
         category_id: formData.category_id || null,
@@ -119,12 +129,15 @@ export const AddProduct: React.FC = () => {
         stock: parseInt(formData.stock, 10),
         image_url: mainImageUrl,
         is_active: true,
-        neighborhood: location?.neighborhood || null,
-        city: location?.city || null,
+        neighborhood: storeLocation?.neighborhood || null,
+        city: storeLocation?.city || null,
       });
+
       if (error) throw error;
+
       alert('Produto cadastrado com sucesso!');
-      navigate('/admin/products');
+      // Redireciona para o hub de perfil evitando fluxo de "voltar, voltar, voltar"
+      navigate('/profile');
     } catch (err: unknown) {
       console.error('Erro ao salvar produto:', err);
       alert('Erro ao salvar produto. Tente novamente.');

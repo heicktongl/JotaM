@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Briefcase, Loader2, LogOut, FileText, Pickaxe, CheckCircle2, Camera, ImagePlus, X } from 'lucide-react';
+import { ChevronLeft, Briefcase, Loader2, LogOut, FileText, Pickaxe, CheckCircle2, Camera, ImagePlus, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Logo } from '../components/Logo';
@@ -200,7 +200,15 @@ export const ServiceSetup: React.FC = () => {
     return (
         <div className="min-h-screen bg-neutral-50 flex flex-col">
             <header className="p-6 border-b border-neutral-100 bg-white shadow-sm flex items-center justify-between sticky top-0 z-10">
-                <Logo variant="orange" />
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={() => navigate(-1)}
+                        className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 transition-colors hover:bg-neutral-200"
+                    >
+                        <ChevronLeft size={20} />
+                    </button>
+                    <Logo variant="orange" />
+                </div>
                 <button
                     onClick={handleLogout}
                     className="flex items-center gap-2 text-sm font-bold text-neutral-500 hover:text-red-500 transition-colors"

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Settings, Heart, Clock, ChevronRight, LogOut, Store, Bike, Briefcase,
-  ChevronDown, DollarSign, Package, TrendingUp, Plus, MapPin, Calendar,
+  ChevronDown, DollarSign, Package, Plus, MapPin,
   Star, Loader2
 } from 'lucide-react';
 import { BottomNav } from '../components/BottomNav';
@@ -45,7 +45,6 @@ export const ProfilePage: React.FC = () => {
   const [roles, setRoles] = useState<UserRoles | null>(null);
   const [loadingRoles, setLoadingRoles] = useState(true);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
-
 
   useEffect(() => {
     if (!user) {
@@ -346,6 +345,7 @@ export const ProfilePage: React.FC = () => {
                       </div>
                     </div>
 
+
                     <div className="border-t border-neutral-100">
                       <button
                         onClick={() => navigate('/admin/services')}
@@ -378,16 +378,14 @@ export const ProfilePage: React.FC = () => {
                         <ChevronRight size={18} className="text-neutral-400" />
                       </button>
                       <button
-                        onClick={() => roles.serviceData?.username ? navigate(`/@${roles.serviceData.username}`) : alert('Configure sua vitrine primeiro!')}
+                        onClick={() => navigate(`/${roles.serviceData!.username}`)}
                         className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-purple-50 text-purple-600"><Briefcase size={18} /></div>
+                          <div className="p-2 rounded-xl bg-purple-50 text-purple-600"><Store size={18} /></div>
                           <div className="text-left">
                             <span className="font-bold text-neutral-900 block">Ver Minha Vitrine</span>
-                            <span className="text-xs text-neutral-500">
-                              {roles.serviceData.username ? `@${roles.serviceData.username}` : 'Link não configurado'}
-                            </span>
+                            <span className="text-xs text-neutral-500">@{roles.serviceData.username}</span>
                           </div>
                         </div>
                         <ChevronRight size={18} className="text-neutral-400" />

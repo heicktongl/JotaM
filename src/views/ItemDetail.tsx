@@ -195,7 +195,7 @@ export const ItemDetail: React.FC = () => {
 
         <div className="py-6">
           <button
-            onClick={() => navigate(`/@${(item as any).username || ''}`)}
+            onClick={() => navigate(`/${(item as any).username || ''}`)}
             className="w-full flex items-center gap-4 rounded-3xl bg-white p-4 shadow-sm border border-neutral-100 hover:border-orange-200 hover:shadow-md transition-all text-left group"
           >
             <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-xl group-hover:scale-105 transition-transform">

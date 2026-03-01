@@ -158,23 +158,48 @@ export const SellerProfile: React.FC = () => {
       setProducts(productsData);
       setServices(servicesData);
 
-      // Se for Seller, puxa followers e locs
+      // Buscar seguidores e locations apenas para sellers
       if (targetType === 'seller') {
-        const { count } = await supabase.from('followers').select('*', { count: 'exact', head: true }).eq('seller_id', targetId);
-        setFollowersCount(count ?? 0);
-
         const { data: locData } = await supabase.from('store_locations').select('*').eq('seller_id', targetId).order('is_primary', { ascending: false });
         setStoreLocations(locData ?? []);
-      } else {
-        setFollowersCount(Math.floor(Math.random() * 50) + 10); // Fake count por enquanto para UX
       }
 
       // Check de isOwner (logado auth == userId do dono)
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setIsOwner(user.id === targetUserId);
+
         if (targetType === 'seller') {
-          const { data: followRow } = await supabase.from('followers').select('id').eq('follower_id', user.id).eq('seller_id', targetId).maybeSingle();
+          // Buscar contagem de seguidores do seller no banco
+          const { count: sellerFollowCount } = await supabase
+            .from('followers')
+            .select('*', { count: 'exact', head: true })
+            .eq('seller_id', targetId);
+          setFollowersCount(sellerFollowCount ?? 0);
+
+          // Checar se o usuário logado já segue
+          const { data: followRow } = await supabase
+            .from('followers')
+            .select('id')
+            .eq('follower_id', user.id)
+            .eq('seller_id', targetId)
+            .maybeSingle();
+          setIsFollowing(!!followRow);
+        } else if (targetType === 'provider') {
+          // Buscar contagem de seguidores do provider no banco
+          const { count: providerFollowCount } = await supabase
+            .from('followers')
+            .select('*', { count: 'exact', head: true })
+            .eq('provider_id', targetId);
+          setFollowersCount(providerFollowCount ?? 0);
+
+          // Checar se o usuário logado já segue o provider
+          const { data: followRow } = await supabase
+            .from('followers')
+            .select('id')
+            .eq('follower_id', user.id)
+            .eq('provider_id', targetId)
+            .maybeSingle();
           setIsFollowing(!!followRow);
         }
       }
@@ -193,19 +218,34 @@ export const SellerProfile: React.FC = () => {
 
   const handleFollow = async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user || profileType !== 'seller' || !profileId) return; // Follow system atualmente atrelado apenas a seller_id
+    if (!user || !profileId || !profileType) return;
 
     setIsFollowLoading(true);
-    if (isFollowing) {
-      await supabase.from('followers').delete().eq('follower_id', user.id).eq('seller_id', profileId);
-      setIsFollowing(false);
-      setFollowersCount(prev => Math.max(0, prev - 1));
-    } else {
-      await supabase.from('followers').insert({ follower_id: user.id, seller_id: profileId });
-      setIsFollowing(true);
-      setFollowersCount(prev => prev + 1);
+    try {
+      if (isFollowing) {
+        // Desseguir
+        if (profileType === 'seller') {
+          await supabase.from('followers').delete().eq('follower_id', user.id).eq('seller_id', profileId);
+        } else {
+          await supabase.from('followers').delete().eq('follower_id', user.id).eq('provider_id', profileId);
+        }
+        setIsFollowing(false);
+        setFollowersCount(prev => Math.max(0, prev - 1));
+      } else {
+        // Seguir
+        if (profileType === 'seller') {
+          await supabase.from('followers').insert({ follower_id: user.id, seller_id: profileId });
+        } else {
+          await supabase.from('followers').insert({ follower_id: user.id, provider_id: profileId });
+        }
+        setIsFollowing(true);
+        setFollowersCount(prev => prev + 1);
+      }
+    } catch (err) {
+      console.error('Erro ao seguir/desseguir:', err);
+    } finally {
+      setIsFollowLoading(false);
     }
-    setIsFollowLoading(false);
   };
 
   const handleShare = () => {
@@ -342,13 +382,16 @@ export const SellerProfile: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-3">
-                {profileType === 'seller' && (
+                {/* Botão Seguir: visível para todos os tipos EXCETO o próprio dono */}
+                {!isOwner && (
                   <button
                     onClick={handleFollow}
                     disabled={isFollowLoading}
                     className={`flex-1 md:flex-none px-6 py-2.5 rounded-2xl font-bold transition-all flex items-center gap-2 justify-center ${isFollowing
-                      ? 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300'
-                      : 'bg-neutral-900 text-white shadow-lg hover:bg-neutral-800'
+                        ? 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300'
+                        : profileType === 'provider'
+                          ? 'bg-purple-600 text-white shadow-lg hover:bg-purple-700'
+                          : 'bg-neutral-900 text-white shadow-lg hover:bg-neutral-800'
                       }`}
                   >
                     {isFollowLoading ? (
@@ -385,7 +428,7 @@ export const SellerProfile: React.FC = () => {
                 <span className="text-neutral-500">Avaliação Geral</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-neutral-900">{profileType === 'seller' ? followersCount : '—'}</span>
+                <span className="font-bold text-neutral-900">{followersCount}</span>
                 <span className="text-neutral-500">seguidores</span>
               </div>
               <div className="flex items-center gap-2">

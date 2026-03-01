@@ -1,12 +1,13 @@
 import React, { useState, KeyboardEvent } from 'react';
-import { MapPin, ChevronDown, Crosshair, Building2, Map, Globe2, Search, Loader2 } from 'lucide-react';
+import { MapPin, ChevronDown, Crosshair, Building2, Map, Globe2, Search, Loader2, Check } from 'lucide-react';
 import { useLocationScope } from '../context/LocationContext';
 import { motion, AnimatePresence } from 'motion/react';
 
 export const LocationSelector: React.FC = () => {
-  const { scope, setScope, location, isLoading, requestLocation, searchManualLocation, displayLocation, error } = useLocationScope();
+  const { scope, setScope, location, isLoading, requestLocation, searchManualLocation, editNeighborhood, displayLocation, error } = useLocationScope();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [editingNeighborhood, setEditingNeighborhood] = useState('');
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -102,16 +103,53 @@ export const LocationSelector: React.FC = () => {
                       </div>
                     </button>
 
-                    <button
-                      onClick={() => { setScope('neighborhood'); setIsOpen(false); }}
-                      className={`w-full flex items-center gap-3 p-3 rounded-2xl transition-all ${scope === 'neighborhood' ? 'bg-orange-50 text-orange-600' : 'hover:bg-neutral-50 text-neutral-600'}`}
+                    <div
+                      className={`w-full flex items-start gap-3 p-3 rounded-2xl transition-all ${scope === 'neighborhood' ? 'bg-orange-50 text-orange-600' : 'hover:bg-neutral-50 text-neutral-600'}`}
                     >
-                      <Map size={18} />
-                      <div className="text-left overflow-hidden">
-                        <p className="text-sm font-bold">Bairro</p>
-                        <p className="text-xs opacity-80 truncate">{location.neighborhood}</p>
+                      <Map size={18} className="mt-0.5" />
+                      <div className="flex-1 text-left overflow-hidden">
+                        <p
+                          className="text-sm font-bold cursor-pointer"
+                          onClick={() => { setScope('neighborhood'); setIsOpen(false); }}
+                        >
+                          Bairro
+                        </p>
+                        {location.neighborhood === 'Bairro Desconhecido' ? (
+                          <div className="flex items-center gap-2 mt-1">
+                            <input
+                              type="text"
+                              value={editingNeighborhood}
+                              onChange={(e) => setEditingNeighborhood(e.target.value)}
+                              placeholder="Digite o nome..."
+                              className="flex-1 text-xs px-2 py-1.5 rounded-lg border border-orange-200 bg-white text-neutral-900 focus:outline-none focus:border-orange-500 shadow-sm"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && editingNeighborhood.trim()) {
+                                  editNeighborhood(editingNeighborhood);
+                                }
+                              }}
+                            />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (editingNeighborhood.trim()) editNeighborhood(editingNeighborhood);
+                              }}
+                              className="p-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50"
+                              disabled={!editingNeighborhood.trim()}
+                            >
+                              <Check size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <p
+                            className="text-xs opacity-80 truncate cursor-pointer"
+                            onClick={() => { setScope('neighborhood'); setIsOpen(false); }}
+                          >
+                            {location.neighborhood}
+                          </p>
+                        )}
                       </div>
-                    </button>
+                    </div>
 
                     <button
                       onClick={() => { setScope('city'); setIsOpen(false); }}

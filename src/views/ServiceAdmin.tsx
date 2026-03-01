@@ -12,8 +12,11 @@ import {
   CheckCircle2,
   XCircle,
   ChevronLeft,
-  Loader2,
-  User as UserIcon
+  User as UserIcon,
+  Trash2,
+  Power,
+  Package,
+  Loader2
 } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { supabase } from '../lib/supabase';
@@ -29,11 +32,20 @@ interface AppointmentRow {
   consumer_id: string;
 }
 
+interface ServiceRow {
+  id: string;
+  name: string;
+  price: number;
+  is_active: boolean;
+}
+
 export const ServiceAdmin: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [provider, setProvider] = useState<any>(null);
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
+  const [services, setServices] = useState<ServiceRow[]>([]);
+  const [activeTab, setActiveTab] = useState<'agenda' | 'services'>('agenda');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -78,6 +90,17 @@ export const ServiceAdmin: React.FC = () => {
 
         setAppointments(formatted);
 
+        // 3. Busca Meus Serviços
+        const { data: svcsData, error: svcErr } = await supabase
+          .from('services')
+          .select('id, name, price, is_active')
+          .eq('provider_id', provData.id)
+          .order('created_at', { ascending: false });
+
+        if (!svcErr && svcsData) {
+          setServices(svcsData);
+        }
+
       } catch (err) {
         console.error('Erro ao carregar Dashboard de Serviços:', err);
       } finally {
@@ -108,6 +131,44 @@ export const ServiceAdmin: React.FC = () => {
   };
 
   const pendingCount = appointments.filter(a => a.status === 'pending').length;
+
+  const handleToggleServiceActive = async (id: string, currentStatus: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('services')
+        .update({ is_active: !currentStatus })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setServices(prev => prev.map(s =>
+        s.id === id ? { ...s, is_active: !currentStatus } : s
+      ));
+    } catch (err) {
+      console.error('Erro ao alterar status:', err);
+      alert('Não foi possível alterar o status do serviço.');
+    }
+  };
+
+  const handleDeleteService = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja apagar este serviço? Essa ação não pode ser desfeita.')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('services')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setServices(prev => prev.filter(s => s.id !== id));
+    } catch (err) {
+      console.error('Erro ao excluir serviço:', err);
+      alert('Não foi possível excluir o serviço. Verifique se há agendamentos vinculados.');
+    }
+  };
 
   if (loading) {
     return (
@@ -145,11 +206,19 @@ export const ServiceAdmin: React.FC = () => {
         </div>
 
         <nav className="space-y-2 flex-1">
-          <button className="flex w-full items-center gap-3 rounded-xl bg-orange-50 px-4 py-3 text-sm font-bold text-orange-600">
+          <button
+            onClick={() => setActiveTab('agenda')}
+            className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all ${activeTab === 'agenda' ? 'bg-orange-50 text-orange-600' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900'
+              }`}
+          >
             <Calendar size={18} />
             Agenda
           </button>
-          <button className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900 transition-all">
+          <button
+            onClick={() => setActiveTab('services')}
+            className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold transition-all ${activeTab === 'services' ? 'bg-orange-50 text-orange-600' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900'
+              }`}
+          >
             <Briefcase size={18} />
             Meus Serviços
           </button>
@@ -194,9 +263,14 @@ export const ServiceAdmin: React.FC = () => {
               <ChevronLeft size={20} />
             </button>
             <div>
-              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Sua Agenda</h1>
+              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+                {activeTab === 'agenda' ? 'Sua Agenda' : 'Meus Serviços'}
+              </h1>
               <p className="text-sm md:text-base text-neutral-400">
-                {pendingCount === 0 ? 'Nenhum agendamento pendente.' : `Você tem ${pendingCount} agendamento${pendingCount !== 1 ? 's' : ''} pendente${pendingCount !== 1 ? 's' : ''}.`}
+                {activeTab === 'agenda'
+                  ? (pendingCount === 0 ? 'Nenhum agendamento pendente.' : `Você tem ${pendingCount} agendamento${pendingCount !== 1 ? 's' : ''} pendente${pendingCount !== 1 ? 's' : ''}.`)
+                  : (services.length === 0 ? 'Nenhum serviço cadastrado.' : `${services.length} serviço${services.length !== 1 ? 's' : ''} cadastrado${services.length !== 1 ? 's' : ''}.`)
+                }
               </p>
             </div>
           </div>
@@ -221,79 +295,145 @@ export const ServiceAdmin: React.FC = () => {
         </header>
 
         {/* Upcoming Appointments */}
-        <div className="grid grid-cols-1 gap-4 md:gap-6 mb-6 md:mb-10">
-          <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Compromissos</h3>
+        {activeTab === 'agenda' ? (
+          <div className="grid grid-cols-1 gap-4 md:gap-6 mb-6 md:mb-10">
+            <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Compromissos</h3>
 
-          {appointments.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-12 bg-white rounded-3xl border border-neutral-100 text-center">
-              <Calendar size={48} className="text-neutral-200 mb-4" />
-              <p className="text-neutral-500 font-medium">Sua agenda está livre por enquanto.</p>
+            {appointments.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-12 bg-white rounded-3xl border border-neutral-100 text-center">
+                <Calendar size={48} className="text-neutral-200 mb-4" />
+                <p className="text-neutral-500 font-medium">Sua agenda está livre por enquanto.</p>
+              </div>
+            ) : (
+              appointments.map((app, i) => {
+                const dateObj = new Date(app.scheduled_at);
+                const formattedDate = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+                const formattedTime = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+                return (
+                  <motion.div
+                    key={app.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.1 }}
+                    className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-3xl bg-white p-6 border border-neutral-100 shadow-sm hover:shadow-md transition-all"
+                  >
+                    <div className="flex items-center gap-6">
+                      <div className="flex flex-col items-center justify-center h-16 w-16 rounded-2xl bg-orange-50 text-orange-600 shrink-0">
+                        <Clock size={24} />
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-neutral-900">{app.users.name}</p>
+                        <p className="text-sm text-neutral-500">{app.services?.name || 'Serviço Removido'}</p>
+                        <p className="text-xs font-bold text-orange-600 mt-1">{formattedDate} às {formattedTime}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 sm:ml-auto">
+                      {app.status === 'pending' ? (
+                        <>
+                          <button
+                            onClick={() => updateStatus(app.id, 'confirmed')}
+                            className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-600 text-white hover:bg-orange-700 transition-all shadow-sm"
+                            title="Confirmar Agendamento"
+                          >
+                            <CheckCircle2 size={20} />
+                          </button>
+                          <button
+                            onClick={() => updateStatus(app.id, 'cancelled')}
+                            className="flex h-12 w-12 items-center justify-center rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-all"
+                            title="Recusar"
+                          >
+                            <XCircle size={20} />
+                          </button>
+                        </>
+                      ) : (
+                        <span className={`rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-widest ${app.status === 'confirmed' ? 'bg-orange-50 text-orange-600' :
+                          app.status === 'completed' ? 'bg-emerald-50 text-emerald-600' :
+                            'bg-red-50 text-red-600'
+                          }`}>
+                          {app.status === 'confirmed' ? 'Confirmado' : app.status === 'completed' ? 'Concluído' : 'Cancelado'}
+                        </span>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:gap-6 mb-6 md:mb-10">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Serviços Ativos</h3>
             </div>
-          ) : (
-            appointments.map((app, i) => {
-              const dateObj = new Date(app.scheduled_at);
-              const formattedDate = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-              const formattedTime = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-              return (
-                <motion.div
-                  key={app.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="group flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-3xl bg-white p-6 border border-neutral-100 shadow-sm hover:shadow-md transition-all"
+            {services.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-12 bg-white rounded-3xl border border-neutral-100 text-center">
+                <Package size={48} strokeWidth={1} className="text-neutral-200 mb-4" />
+                <p className="text-neutral-500 font-medium mb-1">Você não possui serviços listados.</p>
+                <button
+                  onClick={() => navigate('/admin/services/new')}
+                  className="text-sm font-bold text-orange-600 hover:underline"
                 >
-                  <div className="flex items-center gap-6">
-                    <div className="flex flex-col items-center justify-center h-16 w-16 rounded-2xl bg-orange-50 text-orange-600 shrink-0">
-                      <Clock size={24} />
+                  Cadastrar agora
+                </button>
+              </div>
+            ) : (
+              <div className="divide-y divide-neutral-100 rounded-3xl bg-white shadow-sm border border-neutral-100 overflow-hidden">
+                {services.map((svc) => (
+                  <div key={svc.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 md:p-6 hover:bg-neutral-50 transition-colors">
+                    <div className="flex-1">
+                      <h4 className="font-bold text-neutral-900">{svc.name}</h4>
+                      <p className="text-sm font-black text-neutral-600 mt-1">
+                        R$ {svc.price.toFixed(2)} <span className="text-xs font-medium text-neutral-400 font-normal">/ hora</span>
+                      </p>
                     </div>
-                    <div>
-                      <p className="text-lg font-bold text-neutral-900">{app.users.name}</p>
-                      <p className="text-sm text-neutral-500">{app.services?.name || 'Serviço Removido'}</p>
-                      <p className="text-xs font-bold text-orange-600 mt-1">{formattedDate} às {formattedTime}</p>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-3 sm:ml-auto">
-                    {app.status === 'pending' ? (
-                      <>
-                        <button
-                          onClick={() => updateStatus(app.id, 'confirmed')}
-                          className="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-600 text-white hover:bg-orange-700 transition-all shadow-sm"
-                          title="Confirmar Agendamento"
-                        >
-                          <CheckCircle2 size={20} />
-                        </button>
-                        <button
-                          onClick={() => updateStatus(app.id, 'cancelled')}
-                          className="flex h-12 w-12 items-center justify-center rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-all"
-                          title="Recusar"
-                        >
-                          <XCircle size={20} />
-                        </button>
-                      </>
-                    ) : (
-                      <span className={`rounded-full px-4 py-1.5 text-xs font-bold uppercase tracking-widest ${app.status === 'confirmed' ? 'bg-orange-50 text-orange-600' :
-                        app.status === 'completed' ? 'bg-emerald-50 text-emerald-600' :
-                          'bg-red-50 text-red-600'
-                        }`}>
-                        {app.status === 'confirmed' ? 'Confirmado' : app.status === 'completed' ? 'Concluído' : 'Cancelado'}
+                    <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto mt-2 sm:mt-0">
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${svc.is_active ? 'bg-orange-50 text-orange-600' : 'bg-neutral-100 text-neutral-400'}`}>
+                        {svc.is_active ? 'Ativo' : 'Inativo'}
                       </span>
-                    )}
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleToggleServiceActive(svc.id, svc.is_active)}
+                          title={svc.is_active ? "Ocultar / Desativar" : "Mostrar / Ativar"}
+                          className={`p-2 rounded-xl transition-colors ${svc.is_active
+                            ? 'text-orange-500 hover:bg-orange-50 bg-neutral-100'
+                            : 'text-neutral-400 hover:bg-neutral-200 bg-neutral-100'
+                            }`}
+                        >
+                          <Power size={18} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteService(svc.id)}
+                          title="Excluir Serviço"
+                          className="p-2 rounded-xl text-red-500 hover:bg-red-50 bg-neutral-100 transition-colors"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </motion.div>
-              );
-            })
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Mobile Bottom Nav */}
         <div className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-neutral-200 bg-white px-6 py-4 lg:hidden pb-safe">
-          <button className="flex flex-col items-center gap-1 text-orange-600">
+          <button
+            onClick={() => setActiveTab('agenda')}
+            className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'agenda' ? 'text-orange-600' : 'text-neutral-400 hover:text-neutral-900'}`}
+          >
             <Calendar size={20} />
             <span className="text-[10px] font-bold">Agenda</span>
           </button>
-          <button className="flex flex-col items-center gap-1 text-neutral-400 hover:text-neutral-900 transition-colors">
+          <button
+            onClick={() => setActiveTab('services')}
+            className={`flex flex-col items-center gap-1 transition-colors ${activeTab === 'services' ? 'text-orange-600' : 'text-neutral-400 hover:text-neutral-900'}`}
+          >
             <Briefcase size={20} />
             <span className="text-[10px] font-bold">Serviços</span>
           </button>

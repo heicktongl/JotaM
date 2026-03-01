@@ -55,17 +55,17 @@ export const ConsumerFeed: React.FC = () => {
           .eq('is_active', true)
           .limit(30);
 
-        // Aplicação da Cerca Geográfica (Scope)
+        // Aplicação da Cerca Geográfica (Scope) com fallback para itens sem localização
         if (location) {
           if (scope === 'city' && location.city) {
-            prodQuery = prodQuery.ilike('city', `%${location.city}%`);
-            svcQuery = svcQuery.ilike('city', `%${location.city}%`);
+            prodQuery = prodQuery.or(`city.ilike.%${location.city}%,city.is.null`);
+            svcQuery = svcQuery.or(`city.ilike.%${location.city}%,city.is.null`);
           } else if (scope === 'neighborhood' && location.neighborhood) {
-            prodQuery = prodQuery.ilike('neighborhood', `%${location.neighborhood}%`);
-            svcQuery = svcQuery.ilike('neighborhood', `%${location.neighborhood}%`);
+            prodQuery = prodQuery.or(`neighborhood.ilike.%${location.neighborhood}%,neighborhood.is.null`);
+            svcQuery = svcQuery.or(`neighborhood.ilike.%${location.neighborhood}%,neighborhood.is.null`);
           } else if (scope === 'condo' && location.neighborhood) {
-            prodQuery = prodQuery.ilike('neighborhood', `%${location.neighborhood}%`);
-            svcQuery = svcQuery.ilike('neighborhood', `%${location.neighborhood}%`);
+            prodQuery = prodQuery.or(`neighborhood.ilike.%${location.neighborhood}%,neighborhood.is.null`);
+            svcQuery = svcQuery.or(`neighborhood.ilike.%${location.neighborhood}%,neighborhood.is.null`);
           }
         }
 
@@ -83,7 +83,7 @@ export const ConsumerFeed: React.FC = () => {
       }
     };
     fetchData();
-  }, [location]);
+  }, [location, scope]);
 
   return (
     <div className="min-h-screen pb-24">
