@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ChevronLeft, MapPin, Star, ShieldCheck, Clock, Minus, Plus, ShoppingBag, ChevronRight, Loader2, Zap, Calendar, Repeat } from 'lucide-react';
+import { ChevronLeft, MapPin, Star, ShieldCheck, Clock, Minus, Plus, ShoppingBag, ChevronRight, Loader2, Zap, Calendar, Repeat, X } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { supabase } from '../lib/supabase';
 import { ItemType } from '../components/ItemCard';
@@ -17,6 +17,11 @@ export const ItemDetail: React.FC = () => {
   // Estado de localização do item para o LocationGuard
   const [itemCity, setItemCity] = useState<string | null>(null);
   const [itemNeighborhood, setItemNeighborhood] = useState<string | null>(null);
+
+  // Estados para Modal de Agendamento (MVP Fase 3)
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [selectedTurn, setSelectedTurn] = useState<'morning' | 'afternoon' | 'night' | ''>('');
 
   useEffect(() => {
     const fetchItem = async () => {
@@ -68,7 +73,8 @@ export const ItemDetail: React.FC = () => {
               service_providers (
                 name,
                 username,
-                rating
+                rating,
+                phone
               )
             `)
             .eq('id', id)
@@ -78,6 +84,7 @@ export const ItemDetail: React.FC = () => {
             const bizName = data.service_providers?.name || 'Prestador Desconhecido';
             const username = data.service_providers?.username || '';
             const rating = data.service_providers?.rating || 5.0;
+            const phone = data.service_providers?.phone || '';
             // Captura localização para o LocationGuard
             setItemCity(data.city ?? null);
             setItemNeighborhood(data.neighborhood ?? null);
@@ -97,7 +104,8 @@ export const ItemDetail: React.FC = () => {
               service_type: data.service_type,
               duration_mins: data.duration_mins,
               response_time_mins: data.response_time_mins,
-              billing_cycle: data.billing_cycle
+              billing_cycle: data.billing_cycle,
+              providerPhone: phone
             } as any);
           } else {
             console.error('Serviço não encontrado ou erro PostgREST:', error);
@@ -141,9 +149,43 @@ export const ItemDetail: React.FC = () => {
   const sellerName = isProduct ? (item as any).seller : (item as any).provider;
 
   const handleAddToCart = () => {
-    // A tipagem do addToCart pede o 'item' inteiro. O Contexto do Carrinho não se importa com Mocks desde que tenha .id e .price/.pricePerHour.
     addToCart(item as any, type as 'product' | 'service', quantity);
     navigate('/cart');
+  };
+
+  const openWhatsApp = (msg: string) => {
+    const phoneNumber = (item as any).providerPhone;
+    if (!phoneNumber) {
+      alert('Prestador não possui telefone cadastrado.');
+      return;
+    }
+    // Remove tudo que não for número
+    const cleanPhone = phoneNumber.replace(/\D/g, '');
+    const url = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  };
+
+  const handleImmediateOrder = () => {
+    const msg = `🚨 Olá! Preciso AGORA de um serviço: *${item?.name}*.\nVi no JotaM que o tempo médio de resposta é de ${(item as any).response_time_mins} min. Podemos fechar?`;
+    openWhatsApp(msg);
+  };
+
+  const handleRecurringOrder = () => {
+    const cycleMap: Record<string, string> = { 'weekly': 'por semana', 'biweekly': 'por quinzena', 'monthly': 'por mês' };
+    const cycleText = cycleMap[(item as any).billing_cycle] || 'recorrente';
+    const msg = `🔄 Olá! Gostaria de assinar o plano do seu serviço: *${item?.name}*.\nVi no JotaM que o valor é R$ ${(price || 0).toFixed(2)} ${cycleText}.\nPodemos combinar?`;
+    openWhatsApp(msg);
+  };
+
+  const confirmSchedule = () => {
+    if (!selectedDate || !selectedTurn) {
+      alert('Selecione uma data e um turno preferencial!');
+      return;
+    }
+    const turnMap = { 'morning': 'Manhã', 'afternoon': 'Tarde', 'night': 'Noite' };
+    const msg = `📅 Olá! Gostaria de agendar um horário para: *${item?.name}*.\nTenho preferência pelo dia *${selectedDate.split('-').reverse().join('/')}*, no turno da *${turnMap[selectedTurn]}*.\nPodemos confirmar a disponibilidade detalhada?`;
+    openWhatsApp(msg);
+    setShowScheduleModal(false);
   };
 
   return (
@@ -293,7 +335,7 @@ export const ItemDetail: React.FC = () => {
               </button>
             ) : (item as any).service_type === 'immediate' ? (
               <button
-                onClick={handleAddToCart}
+                onClick={handleImmediateOrder}
                 className="flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-red-600 px-6 font-bold text-white shadow-lg shadow-red-600/30 transition-all hover:bg-red-700 active:scale-[0.98] animate-pulse"
               >
                 <Zap size={20} className="fill-white" />
@@ -301,7 +343,7 @@ export const ItemDetail: React.FC = () => {
               </button>
             ) : (item as any).service_type === 'scheduled' ? (
               <button
-                onClick={handleAddToCart}
+                onClick={() => setShowScheduleModal(true)}
                 className="flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 font-bold text-white shadow-lg shadow-blue-600/30 transition-all hover:bg-blue-700 active:scale-[0.98]"
               >
                 <Calendar size={20} />
@@ -309,7 +351,7 @@ export const ItemDetail: React.FC = () => {
               </button>
             ) : (item as any).service_type === 'recurring' ? (
               <button
-                onClick={handleAddToCart}
+                onClick={handleRecurringOrder}
                 className="flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-6 font-bold text-white shadow-lg shadow-emerald-600/30 transition-all hover:bg-emerald-700 active:scale-[0.98]"
               >
                 <Repeat size={20} />
@@ -317,15 +359,71 @@ export const ItemDetail: React.FC = () => {
               </button>
             ) : (
               <button
-                onClick={handleAddToCart}
+                onClick={handleImmediateOrder}
                 className="flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl bg-orange-600 px-6 font-bold text-white shadow-lg shadow-orange-600/30 transition-all hover:bg-orange-700 active:scale-[0.98]"
               >
-                <ShoppingBag size={20} />
-                Adicionar • R$ {((price || 0) * quantity).toFixed(2)}
+                <Zap size={20} />
+                Solicitar
               </button>
             )}
           </div>
         </div>
+
+        {/* Modal de Agendamento (MVP) */}
+        {showScheduleModal && (
+          <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center">
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              className="w-full rounded-t-3xl bg-white p-6 pb-safe sm:max-w-md sm:rounded-3xl"
+            >
+              <div className="mb-6 flex items-center justify-between">
+                <h3 className="text-xl font-extrabold text-neutral-900">Agendar Melhor Data</h3>
+                <button onClick={() => setShowScheduleModal(false)} className="rounded-full bg-neutral-100 p-2 text-neutral-500 hover:bg-neutral-200">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <p className="mb-6 text-sm text-neutral-500">
+                Selecione uma data e um turno preferencial. O prestador irá confirmar o horário exato com você em seguida via WhatsApp.
+              </p>
+
+              <div className="mb-4">
+                <label className="mb-2 block text-sm font-bold text-neutral-700">Qual dia?</label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 font-medium text-neutral-900 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
+              <div className="mb-8">
+                <label className="mb-2 block text-sm font-bold text-neutral-700">Qual turno preferencial?</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button onClick={() => setSelectedTurn('morning')} className={`rounded-xl py-3 text-sm font-bold border transition-colors ${selectedTurn === 'morning' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-neutral-200 text-neutral-500 hover:bg-neutral-50'}`}>
+                    Manhã
+                  </button>
+                  <button onClick={() => setSelectedTurn('afternoon')} className={`rounded-xl py-3 text-sm font-bold border transition-colors ${selectedTurn === 'afternoon' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-neutral-200 text-neutral-500 hover:bg-neutral-50'}`}>
+                    Tarde
+                  </button>
+                  <button onClick={() => setSelectedTurn('night')} className={`rounded-xl py-3 text-sm font-bold border transition-colors ${selectedTurn === 'night' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-neutral-200 text-neutral-500 hover:bg-neutral-50'}`}>
+                    Noite
+                  </button>
+                </div>
+              </div>
+
+              <button
+                onClick={confirmSchedule}
+                className="w-full flex h-14 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-6 font-bold text-white shadow-lg shadow-blue-600/30 transition-all hover:bg-blue-700 active:scale-[0.98]"
+              >
+                Solicitar Reserva
+              </button>
+            </motion.div>
+          </div>
+        )}
       </div>
     </LocationGuard>
   );

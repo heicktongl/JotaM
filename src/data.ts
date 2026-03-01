@@ -24,6 +24,7 @@ export interface Service {
   duration_mins?: number;
   response_time_mins?: number;
   billing_cycle?: string;
+  providerPhone?: string;
 }
 
 export const MOCK_PRODUCTS: Product[] = [
