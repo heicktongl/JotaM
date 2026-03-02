@@ -74,7 +74,8 @@ export const ItemDetail: React.FC = () => {
                 name,
                 username,
                 rating,
-                phone
+                phone,
+                whatsapp
               )
             `)
             .eq('id', id)
@@ -84,7 +85,8 @@ export const ItemDetail: React.FC = () => {
             const bizName = data.service_providers?.name || 'Prestador Desconhecido';
             const username = data.service_providers?.username || '';
             const rating = data.service_providers?.rating || 5.0;
-            const phone = data.service_providers?.phone || '';
+            // Tenta pegar o whatsapp primeiro, depois o phone comercial, e por fim vazio
+            const phone = data.service_providers?.whatsapp || data.service_providers?.phone || '';
             // Captura localização para o LocationGuard
             setItemCity(data.city ?? null);
             setItemNeighborhood(data.neighborhood ?? null);

@@ -128,12 +128,18 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
         className="hidden"
       />
 
-      <img
-        src={activeSrc}
-        alt="Foto"
-        className={`h-full w-full ${isDeleting ? 'opacity-50 grayscale' : ''} object-cover`}
-        referrerPolicy="no-referrer"
-      />
+      {activeSrc ? (
+        <img
+          src={activeSrc}
+          alt="Foto"
+          className={`h-full w-full ${isDeleting ? 'opacity-50 grayscale' : ''} object-cover`}
+          referrerPolicy="no-referrer"
+        />
+      ) : (
+        <div className={`h-full w-full flex items-center justify-center bg-neutral-200 ${isDeleting ? 'opacity-50' : ''}`}>
+          <Camera size={isCover ? 32 : 24} className="text-neutral-400" />
+        </div>
+      )}
 
       <AnimatePresence>
         {previewFile ? (

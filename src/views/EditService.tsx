@@ -7,7 +7,10 @@ import { useAuth } from '../hooks/useAuth';
 import { useLocationScope } from '../context/LocationContext';
 import { Logo } from '../components/Logo';
 
-export const AddService: React.FC = () => {
+import { useParams } from 'react-router-dom';
+
+export const EditService: React.FC = () => {
+    const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const { user } = useAuth();
     const { location } = useLocationScope();
@@ -18,6 +21,7 @@ export const AddService: React.FC = () => {
 
     const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
     const [saving, setSaving] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [formData, setFormData] = useState({
         name: '',
         description: '',
@@ -44,6 +48,30 @@ export const AddService: React.FC = () => {
             end: '18:00',
         }))
     );
+
+    
+    useEffect(() => {
+        if (!id) return;
+        supabase.from('services').select('*').eq('id', id).single().then(({ data, error }) => {
+            if (data && !error) {
+                setFormData({
+                    name: data.name,
+                    description: data.description || '',
+                    price: data.price.toString(),
+                    service_type: data.service_type as any,
+                    response_time_mins: data.response_time_mins?.toString() || '30',
+                    duration_minutes: data.duration_mins?.toString() || '60',
+                    billing_cycle: (data.billing_cycle || 'monthly') as any,
+                    category_id: data.category_id || '',
+                });
+                setHomeService(data.is_home_service || false);
+                if (data.image_url) {
+                   setImagePreviews([data.image_url]); 
+                }
+            }
+            setLoading(false);
+        });
+    }, [id]);
 
     useEffect(() => {
         // Buscar categorias do tipo "service"
@@ -103,7 +131,7 @@ export const AddService: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (images.length === 0) {
+        if (images.length === 0 && imagePreviews.length === 0) {
             alert('Por favor, adicione pelo menos uma foto para o serviço.');
             return;
         }
@@ -128,8 +156,8 @@ export const AddService: React.FC = () => {
             }
 
             // Upload da imagem principal (na tabela public.services só há 1 coluna image_url atualmente)
-            let mainImageUrl: string | null = null;
-            if (images.length > 0) {
+            let mainImageUrl: string | null = imagePreviews.length > 0 && imagePreviews[0].startsWith("http") ? imagePreviews[0] : null;
+            if (images.length > 0 && !(imagePreviews[0] && imagePreviews[0].startsWith('http'))) {
                 const file = images[0];
                 const ext = file.name.split('.').pop();
                 const path = `services/${user.id}/${Date.now()}_main.${ext}`;
@@ -173,6 +201,14 @@ export const AddService: React.FC = () => {
         }
     };
 
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+                <Loader2 className="animate-spin text-orange-500" size={32} />
+            </div>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-neutral-50 pb-24 lg:pb-8">
             {/* Header */}
@@ -185,7 +221,7 @@ export const AddService: React.FC = () => {
                         >
                             <ChevronLeft size={20} />
                         </button>
-                        <h1 className="text-xl font-bold text-neutral-900">Novo Serviço</h1>
+                        <h1 className="text-xl font-bold text-neutral-900">Editar Serviço</h1>
                     </div>
                     <Logo variant="orange" className="scale-75 hidden sm:block" />
                 </div>

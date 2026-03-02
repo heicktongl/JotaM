@@ -368,7 +368,7 @@ export const ProfilePage: React.FC = () => {
                         <ChevronRight size={18} className="text-neutral-400" />
                       </button>
                       <button
-                        onClick={() => navigate('/admin/services/availability')}
+                        onClick={() => navigate('/admin/services/new')}
                         className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100"
                       >
                         <div className="flex items-center gap-3">

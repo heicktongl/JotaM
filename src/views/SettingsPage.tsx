@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, LogOut, Loader2, ShieldCheck, Mail, Phone, Hash, User } from 'lucide-react';
+import { ChevronLeft, LogOut, Loader2, ShieldCheck, Mail, Phone, Hash, User, Save, MessageCircle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { AvatarUploader } from '../components/AvatarUploader';
@@ -9,12 +9,30 @@ export const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
 
-  // Como é só visual pra próxima feature de "Edit Profile", deixaremos states preparados
   const [name, setName] = useState(user?.user_metadata?.name || '');
   const [email] = useState(user?.email || '');
-  const [phone] = useState(user?.user_metadata?.phone || '');
-  const [cpf] = useState(user?.user_metadata?.cpf || '');
+  const [whatsapp, setWhatsapp] = useState(user?.user_metadata?.whatsapp || '');
+  const [cpf, setCpf] = useState(user?.user_metadata?.cpf || '');
   const [isUpdatingUser, setIsUpdatingUser] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Máscara de telefone: (XX) XXXXX-XXXX
+  const formatPhone = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 11);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  };
+
+  // Máscara de CPF: XXX.XXX.XXX-XX
+  const formatCpf = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 11);
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+    if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+  };
 
   const handleAvatarUpdate = async (newUrl: string | null) => {
     if (!user) return;
@@ -24,11 +42,47 @@ export const SettingsPage: React.FC = () => {
         data: { avatar_url: newUrl }
       });
       if (error) throw error;
-      // Sessão já é atualizada no auth listener no useAuth, refletirá em todo app.
     } catch (err) {
       console.error('Erro ao atualizar URL no auth.users:', err);
     } finally {
       setIsUpdatingUser(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!user) return;
+    setIsSaving(true);
+    setSaveSuccess(false);
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          name: name.trim(),
+          phone: whatsapp.replace(/\D/g, ''),
+          whatsapp: whatsapp.replace(/\D/g, ''),
+          cpf: cpf.replace(/\D/g, ''),
+        }
+      });
+
+      if (error) throw error;
+
+      // Sincroniza telefones nos perfis públicos (ignora erros de não existir)
+      await supabase.from('service_providers').update({
+        phone: whatsapp.replace(/\D/g, ''),
+        whatsapp: whatsapp.replace(/\D/g, '')
+      }).eq('user_id', user.id);
+
+      await supabase.from('sellers').update({
+        whatsapp: whatsapp.replace(/\D/g, '')
+      }).eq('user_id', user.id);
+
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error('Erro ao salvar dados pessoais:', err);
+      alert('Erro ao salvar. Tente novamente.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -99,15 +153,17 @@ export const SettingsPage: React.FC = () => {
           </p>
         </section>
 
-        {/* Formulário Dados Pessoais (Read Only Visual Block) */}
+        {/* Formulário Dados Pessoais (Editável) */}
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">
               Dados Pessoais
             </h2>
-            <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-full">
-              Edição em breve
-            </span>
+            {saveSuccess && (
+              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full animate-pulse">
+                ✓ Salvo com sucesso
+              </span>
+            )}
           </div>
 
           <div className="bg-white rounded-[2rem] p-6 space-y-5 shadow-sm border border-neutral-100">
@@ -123,16 +179,18 @@ export const SettingsPage: React.FC = () => {
                 <input
                   type="text"
                   value={name}
-                  readOnly
-                  className="w-full rounded-2xl bg-neutral-50 border border-neutral-100 py-3.5 pl-12 pr-4 text-sm font-bold text-neutral-900 focus:outline-none transition-all opacity-80 cursor-not-allowed"
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Seu nome completo"
+                  className="w-full rounded-2xl bg-neutral-50 border border-neutral-200 py-3.5 pl-12 pr-4 text-sm font-bold text-neutral-900 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all"
                 />
               </div>
             </div>
 
-            {/* Input Email */}
+            {/* Input Email (somente leitura - vinculado ao login) */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest pl-2">
+              <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest pl-2 flex items-center gap-2">
                 E-mail
+                <span className="text-[9px] font-bold text-neutral-300 bg-neutral-100 px-1.5 py-0.5 rounded">vinculado ao login</span>
               </label>
               <div className="relative">
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400">
@@ -142,49 +200,64 @@ export const SettingsPage: React.FC = () => {
                   type="email"
                   value={email}
                   readOnly
-                  className="w-full rounded-2xl bg-neutral-50 border border-neutral-100 py-3.5 pl-12 pr-4 text-sm font-bold text-neutral-900 focus:outline-none transition-all opacity-80 cursor-not-allowed"
+                  className="w-full rounded-2xl bg-neutral-50 border border-neutral-100 py-3.5 pl-12 pr-4 text-sm font-bold text-neutral-900 focus:outline-none transition-all opacity-60 cursor-not-allowed"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {/* Input Telefone */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest pl-2">
-                  Celular
-                </label>
-                <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400">
-                    <Phone size={18} />
-                  </div>
-                  <input
-                    type="text"
-                    value={phone || 'Não informado'}
-                    readOnly
-                    className="w-full rounded-2xl bg-neutral-50 border border-neutral-100 py-3.5 pl-12 pr-4 text-sm font-bold text-neutral-900 focus:outline-none transition-all opacity-80 cursor-not-allowed"
-                  />
+            {/* Input WhatsApp */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest pl-2 flex items-center gap-2">
+                <MessageCircle size={12} className="text-emerald-500" />
+                WhatsApp
+              </label>
+              <div className="relative">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500">
+                  <Phone size={18} />
                 </div>
+                <input
+                  type="tel"
+                  value={whatsapp}
+                  onChange={(e) => setWhatsapp(formatPhone(e.target.value))}
+                  placeholder="(XX) XXXXX-XXXX"
+                  className="w-full rounded-2xl bg-neutral-50 border border-neutral-200 py-3.5 pl-12 pr-4 text-sm font-bold text-neutral-900 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+                />
               </div>
+              <p className="text-[11px] text-neutral-400 pl-2">Usado para contato direto por clientes e confirmações de serviço.</p>
+            </div>
 
-              {/* Input CPF */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest pl-2">
-                  CPF
-                </label>
-                <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400">
-                    <Hash size={18} />
-                  </div>
-                  <input
-                    type="text"
-                    value={cpf || 'Não informado'}
-                    readOnly
-                    className="w-full rounded-2xl bg-neutral-50 border border-neutral-100 py-3.5 pl-12 pr-4 text-sm font-bold text-neutral-900 focus:outline-none transition-all opacity-80 cursor-not-allowed"
-                  />
+            {/* Input CPF */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest pl-2">
+                CPF
+              </label>
+              <div className="relative">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400">
+                  <Hash size={18} />
                 </div>
+                <input
+                  type="text"
+                  value={cpf}
+                  onChange={(e) => setCpf(formatCpf(e.target.value))}
+                  placeholder="000.000.000-00"
+                  className="w-full rounded-2xl bg-neutral-50 border border-neutral-200 py-3.5 pl-12 pr-4 text-sm font-bold text-neutral-900 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all"
+                />
               </div>
             </div>
 
+            {/* Botão Salvar */}
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving}
+              className="w-full flex items-center justify-center gap-2 rounded-2xl bg-orange-600 py-4 text-sm font-bold text-white shadow-lg shadow-orange-600/20 hover:bg-orange-700 transition-all active:scale-[0.98] disabled:opacity-60 disabled:pointer-events-none mt-2"
+            >
+              {isSaving ? (
+                <><Loader2 size={18} className="animate-spin" /> Salvando...</>
+              ) : (
+                <><Save size={18} /> Salvar Alterações</>
+              )}
+            </button>
           </div>
         </section>
 

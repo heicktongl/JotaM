@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'motion/react';
-import { ChevronLeft, Briefcase, Loader2, LogOut, FileText, Pickaxe, CheckCircle2, Camera, ImagePlus, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { ChevronLeft, Briefcase, Loader2, LogOut, FileText, Pickaxe, CheckCircle2, Camera, ImagePlus, X, Clock, Copy, Zap, Calendar } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Logo } from '../components/Logo';
@@ -26,8 +26,18 @@ export const ServiceSetup: React.FC = () => {
 
     // Fotos do serviço (portfólio)
     const [servicePhotos, setServicePhotos] = useState<{ file: File; preview: string }[]>([]);
-    const servicePhotosInputRef = useRef<HTMLInputElement>(null);
 
+    // Horários de atendimento (grade semanal)
+    const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+    const [availability, setAvailability] = useState(
+        DAYS.map((day, i) => ({
+            day,
+            dayIndex: i,
+            enabled: i < 5, // Seg-Sex habilitado por padrão
+            start: '09:00',
+            end: '18:00',
+        }))
+    );
 
 
     const handleServicePhotosSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -71,6 +81,28 @@ export const ServiceSetup: React.FC = () => {
                     setAvatarUrl(data.avatar_url || null);
                     setCoverUrl(data.cover_url || null);
                     setExistingProviderId(data.id);
+
+                    // Carregar horários salvos
+                    const { data: avData } = await supabase
+                        .from('provider_availability')
+                        .select('*')
+                        .eq('provider_id', data.id)
+                        .order('day_of_week');
+
+                    if (avData && avData.length > 0) {
+                        setAvailability(prev => prev.map((slot, i) => {
+                            const saved = avData.find(a => a.day_of_week === i);
+                            if (saved) {
+                                return {
+                                    ...slot,
+                                    enabled: saved.is_enabled,
+                                    start: saved.start_time?.slice(0, 5) || '09:00',
+                                    end: saved.end_time?.slice(0, 5) || '18:00',
+                                };
+                            }
+                            return slot;
+                        }));
+                    }
                 }
             } catch (err) {
                 console.error("Erro ao carregar perfil existente:", err);
@@ -170,6 +202,20 @@ export const ServiceSetup: React.FC = () => {
                 await Promise.all(uploadPromises);
             }
 
+            // 4) Salvar horários de atendimento
+            const availabilityRows = availability.map((slot) => ({
+                provider_id: providerId,
+                day_of_week: slot.dayIndex,
+                is_enabled: slot.enabled,
+                start_time: slot.start,
+                end_time: slot.end,
+            }));
+
+            // Upsert: insere ou atualiza baseado na constraint unique(provider_id, day_of_week)
+            await supabase
+                .from('provider_availability')
+                .upsert(availabilityRows, { onConflict: 'provider_id,day_of_week' });
+
             navigate('/profile');
         } catch (err: any) {
             setError(err.message || 'Erro ao processar seu perfil profissional.');
@@ -238,7 +284,7 @@ export const ServiceSetup: React.FC = () => {
                             <div className="h-40 w-full rounded-2xl overflow-hidden bg-neutral-200">
                                 <AvatarUploader
                                     currentUrl={coverUrl}
-                                    fallbackUrl={`https://picsum.photos/seed/${username}cover/800/400`}
+                                    fallbackUrl=""
                                     onUploadSuccess={(url) => {
                                         setCoverUrl(url);
                                         if (existingProviderId) {
@@ -253,7 +299,7 @@ export const ServiceSetup: React.FC = () => {
                             <div className="absolute -bottom-10 left-6">
                                 <AvatarUploader
                                     currentUrl={avatarUrl}
-                                    fallbackUrl={`https://picsum.photos/seed/${username}profile/200/200`}
+                                    fallbackUrl={`https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'S')}&background=7C3AED&color=fff&size=128`}
                                     onUploadSuccess={(url) => {
                                         setAvatarUrl(url);
                                         if (existingProviderId) {
@@ -327,43 +373,168 @@ export const ServiceSetup: React.FC = () => {
 
                         {/* ====== FOTOS DO SERVIÇO (PORTFÓLIO) ====== */}
                         <div className="bg-white p-6 rounded-3xl border border-neutral-100 shadow-sm">
-                            <label className="block text-xs font-bold text-neutral-500 mb-4 uppercase tracking-widest">
-                                Fotos dos seus Serviços (Opcional)
-                            </label>
-                            <p className="text-xs text-neutral-400 mb-4">Adicione até 6 fotos mostrando o que você faz de melhor.</p>
-
-                            <input
-                                ref={servicePhotosInputRef}
-                                type="file"
-                                accept="image/*"
-                                multiple
-                                className="hidden"
-                                onChange={handleServicePhotosSelect}
-                            />
+                            <div className="flex items-center justify-between mb-1">
+                                <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
+                                    Fotos dos seus Serviços (Opcional)
+                                </h3>
+                                <span className="text-[10px] font-bold text-neutral-400 uppercase">{servicePhotos.length}/6 fotos</span>
+                            </div>
+                            <p className="text-xs text-neutral-400 mb-4">A primeira foto será a capa do seu portfólio.</p>
 
                             <div className="grid grid-cols-3 gap-3">
-                                {servicePhotos.map((photo, index) => (
-                                    <div key={index} className="relative aspect-square rounded-2xl overflow-hidden shadow-sm border border-neutral-100 group">
-                                        <img src={photo.preview} alt={`Serviço ${index + 1}`} className="w-full h-full object-cover" />
-                                        <button
-                                            type="button"
-                                            onClick={() => removeServicePhoto(index)}
-                                            className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+                                <AnimatePresence mode="popLayout">
+                                    {servicePhotos.map((photo, index) => (
+                                        <motion.div
+                                            key={index}
+                                            initial={{ opacity: 0, scale: 0.8 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0.8 }}
+                                            className="relative aspect-square rounded-2xl overflow-hidden shadow-sm border border-neutral-100 group"
                                         >
-                                            <X size={14} />
-                                        </button>
+                                            <img src={photo.preview} alt={`Serviço ${index + 1}`} className="w-full h-full object-cover" />
+                                            <button
+                                                type="button"
+                                                onClick={() => removeServicePhoto(index)}
+                                                className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                            {index === 0 && (
+                                                <div className="absolute bottom-0 left-0 right-0 bg-purple-600/90 py-1 text-center">
+                                                    <span className="text-[10px] font-bold text-white uppercase tracking-widest">Capa</span>
+                                                </div>
+                                            )}
+                                        </motion.div>
+                                    ))}
+                                </AnimatePresence>
+
+                                {servicePhotos.length < 6 && (
+                                    <label
+                                        htmlFor="portfolio-image-upload"
+                                        className="aspect-square rounded-2xl border-2 border-dashed border-neutral-200 bg-white flex flex-col items-center justify-center gap-2 text-neutral-400 hover:border-purple-500 hover:text-purple-500 transition-all cursor-pointer"
+                                    >
+                                        <input
+                                            id="portfolio-image-upload"
+                                            type="file"
+                                            accept="image/*"
+                                            multiple
+                                            className="hidden"
+                                            onChange={handleServicePhotosSelect}
+                                        />
+                                        <div className="p-2 rounded-full bg-neutral-50">
+                                            <ImagePlus size={22} />
+                                        </div>
+                                        <span className="text-[10px] font-bold text-center">Adicionar da<br />Galeria</span>
+                                    </label>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* ====== HORÁRIOS DE ATENDIMENTO ====== */}
+                        <div className="bg-white p-6 rounded-3xl border border-neutral-100 shadow-sm">
+                            <div className="flex items-center justify-between mb-1">
+                                <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest flex items-center gap-2">
+                                    <Clock size={14} />
+                                    Horários de Atendimento
+                                </h3>
+                                <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded-lg">Visível na vitrine</span>
+                            </div>
+                            <p className="text-xs text-neutral-400 mb-5">Seus serviços vão herdar esses horários automaticamente.</p>
+
+                            <div className="space-y-3">
+                                {availability.map((slot, idx) => (
+                                    <div
+                                        key={slot.day}
+                                        className={`rounded-2xl border transition-all ${slot.enabled
+                                                ? 'bg-white border-neutral-100 shadow-sm'
+                                                : 'bg-neutral-50 border-transparent opacity-50'
+                                            }`}
+                                    >
+                                        <div className="p-4 flex items-center gap-3">
+                                            {/* Toggle do dia */}
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const updated = [...availability];
+                                                    updated[idx].enabled = !updated[idx].enabled;
+                                                    setAvailability(updated);
+                                                }}
+                                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ${slot.enabled ? 'bg-purple-600' : 'bg-neutral-300'
+                                                    }`}
+                                            >
+                                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${slot.enabled ? 'translate-x-6' : 'translate-x-1'
+                                                    }`} />
+                                            </button>
+
+                                            {/* Nome do dia */}
+                                            <span className={`text-sm font-bold flex-1 ${slot.enabled ? 'text-neutral-900' : 'text-neutral-400'
+                                                }`}>
+                                                {slot.day}
+                                            </span>
+
+                                            {/* Inputs de horário */}
+                                            {slot.enabled && (
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="time"
+                                                        value={slot.start}
+                                                        onChange={(e) => {
+                                                            const updated = [...availability];
+                                                            updated[idx].start = e.target.value;
+                                                            setAvailability(updated);
+                                                        }}
+                                                        className="w-[90px] rounded-xl border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs font-bold text-neutral-700 focus:border-purple-500 focus:ring-0 transition-all"
+                                                    />
+                                                    <span className="text-neutral-300 text-xs">—</span>
+                                                    <input
+                                                        type="time"
+                                                        value={slot.end}
+                                                        onChange={(e) => {
+                                                            const updated = [...availability];
+                                                            updated[idx].end = e.target.value;
+                                                            setAvailability(updated);
+                                                        }}
+                                                        className="w-[90px] rounded-xl border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-xs font-bold text-neutral-700 focus:border-purple-500 focus:ring-0 transition-all"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
-                                {servicePhotos.length < 6 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => servicePhotosInputRef.current?.click()}
-                                        className="aspect-square rounded-2xl border-2 border-dashed border-neutral-200 flex flex-col items-center justify-center text-neutral-400 hover:border-purple-400 hover:text-purple-500 transition-all hover:bg-purple-50"
-                                    >
-                                        <ImagePlus size={24} />
-                                        <span className="text-[10px] font-bold mt-1">Adicionar</span>
-                                    </button>
-                                )}
+                            </div>
+
+                            {/* Atalhos */}
+                            <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-neutral-100">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setAvailability(prev => prev.map((s, i) => ({
+                                            ...s,
+                                            enabled: i < 5,
+                                            start: '08:00',
+                                            end: '18:00',
+                                        })));
+                                    }}
+                                    className="text-[10px] font-bold px-3 py-1.5 rounded-full bg-neutral-100 text-neutral-600 hover:bg-purple-50 hover:text-purple-600 transition-colors flex items-center gap-1"
+                                >
+                                    <Zap size={10} />
+                                    Comercial (Seg-Sex 08-18h)
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setAvailability(prev => prev.map(s => ({
+                                            ...s,
+                                            enabled: true,
+                                            start: '09:00',
+                                            end: '22:00',
+                                        })));
+                                    }}
+                                    className="text-[10px] font-bold px-3 py-1.5 rounded-full bg-neutral-100 text-neutral-600 hover:bg-purple-50 hover:text-purple-600 transition-colors flex items-center gap-1"
+                                >
+                                    <Calendar size={10} />
+                                    Todos os dias (09-22h)
+                                </button>
                             </div>
                         </div>
 

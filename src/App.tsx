@@ -8,6 +8,7 @@ import { ProductAdmin } from './views/ProductAdmin';
 import { AddProduct } from './views/AddProduct';
 import { ServiceAdmin } from './views/ServiceAdmin';
 import { AddService } from './views/AddService';
+import { EditService } from './views/EditService';
 import { ServiceAvailability } from './views/ServiceAvailability';
 import { DeliveryAdmin } from './views/DeliveryAdmin';
 import { DeliveryAreaSettings } from './views/DeliveryAreaSettings';
@@ -174,6 +175,15 @@ export default function App() {
                   exit={{ opacity: 0, y: -20 }}
                 >
                   <AddService />
+                </motion.div>
+              } />
+              <Route path="/admin/services/:id/edit" element={
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                >
+                  <EditService />
                 </motion.div>
               } />
               <Route path="/admin/services/availability" element={

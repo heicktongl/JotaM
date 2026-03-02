@@ -163,6 +163,20 @@ export interface Database {
                 Insert: Omit<Database['public']['Tables']['service_availability']['Row'], 'id' | 'created_at'>;
                 Update: Partial<Database['public']['Tables']['service_availability']['Insert']>;
             };
+            provider_availability: {
+                Row: {
+                    id: string;
+                    provider_id: string;
+                    day_of_week: number; // 0=Segunda ... 6=Domingo
+                    is_enabled: boolean;
+                    start_time: string; // HH:MM
+                    end_time: string;   // HH:MM
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: Omit<Database['public']['Tables']['provider_availability']['Row'], 'id' | 'created_at' | 'updated_at'>;
+                Update: Partial<Database['public']['Tables']['provider_availability']['Insert']>;
+            };
             reviews: {
                 Row: {
                     id: string;

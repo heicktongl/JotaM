@@ -8,6 +8,7 @@ import {
   MapPin,
   Share2,
   MessageCircle,
+  MessageSquare,
   Instagram,
   Users,
   Eye,
@@ -16,6 +17,9 @@ import {
   Loader2,
   AlertCircle,
   Heart,
+  Clock,
+  CheckCircle2,
+  ArrowRight
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
@@ -27,6 +31,7 @@ import { LocationGuard } from '../components/LocationGuard';
 type Product = Database['public']['Tables']['products']['Row'];
 type Service = Database['public']['Tables']['services']['Row'];
 type StoreLocation = Database['public']['Tables']['store_locations']['Row'];
+type Availability = Database['public']['Tables']['provider_availability']['Row'];
 
 type ActiveTab = 'all' | 'products' | 'services';
 
@@ -60,6 +65,7 @@ export const SellerProfile: React.FC = () => {
   const [services, setServices] = useState<Service[]>([]);
   const [followersCount, setFollowersCount] = useState(0);
   const [storeLocations, setStoreLocations] = useState<StoreLocation[]>([]);
+  const [availability, setAvailability] = useState<Availability[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -131,7 +137,7 @@ export const SellerProfile: React.FC = () => {
           setBio(providerData.bio || '');
           setAvatarUrl(providerData.avatar_url);
           setCoverUrl(providerData.cover_url || null);
-          setWhatsapp('');
+          setWhatsapp(providerData.whatsapp || providerData.phone || '');
           setInstagram('');
           setIsVerified(true);
           setViews(0);
@@ -161,6 +167,10 @@ export const SellerProfile: React.FC = () => {
       } else {
         const { data } = await supabase.from('services').select('*').eq('is_active', true).eq('provider_id', targetId).order('created_at', { ascending: false });
         servicesData = data ?? [];
+
+        // Buscar horários do prestador
+        const { data: availData } = await supabase.from('provider_availability').select('*').eq('provider_id', targetId).order('day_of_week', { ascending: true });
+        setAvailability(availData ?? []);
       }
 
       setProducts(productsData);
@@ -338,102 +348,126 @@ export const SellerProfile: React.FC = () => {
           </div>
         </div>
 
-        <main className="mx-auto max-w-7xl px-6">
+        <main className="mx-auto max-w-7xl px-4 sm:px-6 relative z-10">
           {/* Header do perfil */}
-          <div className="relative -mt-16 mb-8 flex flex-col md:flex-row md:items-end gap-6">
+          <div className="relative -mt-16 mb-8 flex flex-col items-center">
+
+            {/* Avatar Centralizado com Borda Gradiente */}
             <div className="relative z-20">
-              <div className="h-32 w-32 rounded-full border-4 border-neutral-50 bg-white overflow-hidden shadow-lg relative">
-                <img
-                  src={avatarUrl ?? `https://picsum.photos/seed/${avatarSeed}profile/200/200`}
-                  alt={displayName}
-                  className="h-full w-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
+              <div className="p-1 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 shadow-xl">
+                <div className="h-32 w-32 rounded-full border-4 border-white bg-white overflow-hidden relative">
+                  <img
+                    src={avatarUrl ?? `https://picsum.photos/seed/${avatarSeed}profile/200/200`}
+                    alt={displayName}
+                    className="h-full w-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
               </div>
               {isVerified && (
-                <div className="absolute bottom-2 right-2 h-8 w-8 bg-emerald-500 rounded-full border-2 border-white flex items-center justify-center text-white shadow-sm z-20" title="Verificado Profissionalmente">
-                  <ShieldCheck size={16} />
+                <div className="absolute bottom-1 right-1 h-8 w-8 bg-emerald-500 rounded-full border-[3px] border-white flex items-center justify-center text-white shadow-sm z-30" title="Verificado Profissionalmente">
+                  <CheckCircle2 size={16} />
                 </div>
               )}
             </div>
 
-            <div className="flex-1 pb-2">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <h1 className="font-display text-3xl font-extrabold tracking-tight text-neutral-900 flex items-center gap-2">
-                    {displayName}
-                    {profileType === 'provider' && <span className="text-xs bg-purple-100 text-purple-700 font-bold px-2 py-1 rounded-full align-middle">Serviços</span>}
-                  </h1>
-                  <p className="text-sm font-bold text-neutral-400">@{normalizedUsername}</p>
-                </div>
+            {/* Informações de Texto */}
+            <div className="mt-4 text-center px-4 w-full">
+              <h1 className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight text-neutral-900 flex items-center justify-center gap-2">
+                {displayName}
+                {profileType === 'provider' && (
+                  <span className="text-[10px] bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-full align-middle">
+                    Serviços
+                  </span>
+                )}
+              </h1>
+              <p className="text-sm font-bold text-neutral-400 mt-1">@{normalizedUsername}</p>
 
-                <div className="flex items-center gap-3">
-                  {/* Botão Seguir: visível para todos os tipos EXCETO o próprio dono */}
-                  {!isOwner && (
-                    <button
-                      onClick={handleFollow}
-                      disabled={isFollowLoading}
-                      className={`flex-1 md:flex-none px-6 py-2.5 rounded-2xl font-bold transition-all flex items-center gap-2 justify-center ${isFollowing
-                        ? 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300'
-                        : profileType === 'provider'
-                          ? 'bg-purple-600 text-white shadow-lg hover:bg-purple-700'
-                          : 'bg-neutral-900 text-white shadow-lg hover:bg-neutral-800'
-                        }`}
-                    >
-                      {isFollowLoading ? (
-                        <Loader2 size={16} className="animate-spin" />
-                      ) : (
-                        <>
-                          <Heart size={16} className={isFollowing ? 'fill-current' : ''} />
-                          {isFollowing ? 'Seguindo' : 'Seguir'}
-                        </>
-                      )}
-                    </button>
-                  )}
-                  {whatsapp && (
-                    <a
-                      href={`https://wa.me/${whatsapp.replace(/[^0-9]/g, '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center h-11 w-11 rounded-2xl bg-green-50 text-green-600 hover:bg-green-100 transition-colors"
-                    >
-                      <MessageCircle size={20} />
-                    </a>
-                  )}
-                </div>
-              </div>
-
-              <p className="mt-4 text-neutral-600 max-w-2xl leading-relaxed">
+              <p className="mt-3 text-neutral-600 max-w-md mx-auto leading-relaxed text-sm">
                 {bio ? bio : (profileType === 'provider' ? 'Especialista profissional e de alta qualidade do jotaM.' : 'Especialista em produtos locais e de alta qualidade do jotaM.')}
               </p>
+            </div>
 
-              <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <Star size={16} className="text-amber-500" fill="currentColor" />
-                  <span className="font-bold text-neutral-900">{rating}</span>
-                  <span className="text-neutral-500">Avaliação Geral</span>
+            {/* Métricas (Avaliação, Itens, Seguidores) */}
+            <div className="mt-8 flex items-center justify-center w-full max-w-sm mx-auto divide-x divide-neutral-200/60">
+              <div className="flex flex-col items-center justify-center px-4 sm:px-6">
+                <div className="flex items-center gap-1.5">
+                  <Star size={18} className="text-amber-500" fill="currentColor" />
+                  <span className="font-black text-neutral-900 text-lg sm:text-xl">{rating}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-neutral-900">{followersCount}</span>
-                  <span className="text-neutral-500">seguidores</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-neutral-900">{totalItems}</span>
-                  <span className="text-neutral-500">itens expostos</span>
-                </div>
-                {instagram && (
-                  <a
-                    href={`https://instagram.com/${instagram.replace('@', '')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-pink-600 hover:underline"
-                  >
-                    <Instagram size={14} />
-                    {instagram}
-                  </a>
-                )}
+                <span className="text-[9px] font-bold text-neutral-400 tracking-widest uppercase mt-1">
+                  Avaliação
+                </span>
+              </div>
+
+              <div className="flex flex-col items-center justify-center px-4 sm:px-6">
+                <span className="font-black text-neutral-900 text-lg sm:text-xl">{totalItems}</span>
+                <span className="text-[9px] font-bold text-neutral-400 tracking-widest uppercase mt-1">
+                  {totalItems === 1 ? 'Item' : 'Itens'}
+                </span>
+              </div>
+
+              <div className="flex flex-col items-center justify-center px-4 sm:px-6">
+                <span className="font-black text-neutral-900 text-lg sm:text-xl">{followersCount}</span>
+                <span className="text-[9px] font-bold text-neutral-400 tracking-widest uppercase mt-1">
+                  Seguidores
+                </span>
               </div>
             </div>
+
+            {/* Botões de Ação */}
+            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3 w-full max-w-md mx-auto px-4">
+              {whatsapp ? (
+                <a
+                  href={`https://wa.me/${whatsapp.replace(/[^0-9]/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 w-full flex items-center justify-center gap-2 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white py-3.5 px-6 rounded-full font-bold shadow-[0_8px_20px_rgba(139,92,246,0.25)] transition-all"
+                >
+                  <MessageSquare size={18} fill="currentColor" />
+                  Contato
+                </a>
+              ) : (
+                <button
+                  disabled
+                  className="flex-1 w-full flex items-center justify-center gap-2 bg-neutral-200 text-neutral-400 py-3.5 px-6 rounded-full font-bold cursor-not-allowed"
+                >
+                  <MessageSquare size={18} fill="currentColor" />
+                  Contato
+                </button>
+              )}
+
+              <button
+                onClick={handleShare}
+                className="flex-1 w-full flex items-center justify-center gap-2 bg-white border border-neutral-200/80 hover:bg-neutral-50 text-neutral-700 py-3.5 px-6 rounded-full font-bold shadow-sm transition-all"
+              >
+                <Share2 size={18} />
+                Compartilhar
+              </button>
+            </div>
+
+            {/* Botão Seguir Condicional */}
+            {!isOwner && (
+              <div className="mt-4 w-full max-w-md mx-auto px-4">
+                <button
+                  onClick={handleFollow}
+                  disabled={isFollowLoading}
+                  className={`w-full py-3 rounded-full font-bold transition-all flex items-center gap-2 justify-center ${isFollowing
+                    ? 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 border border-neutral-200/80'
+                    : 'bg-neutral-900 text-white shadow-lg shadow-neutral-900/20 hover:bg-neutral-800'
+                    }`}
+                >
+                  {isFollowLoading ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <>
+                      <Heart size={18} className={isFollowing ? 'fill-current text-pink-500' : ''} />
+                      {isFollowing ? 'Seguindo Perfil' : 'Seguir Perfil'}
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
 
 
@@ -478,12 +512,48 @@ export const SellerProfile: React.FC = () => {
             )
           }
 
-          {/* Componentizado o Grid de Itens Renderizados (Mock-free, Database real) */}
           <div className="space-y-10">
+            {/* Bloco de Horários: Renderiza apenas se for Prestador E tiver horários cadastrados */}
+            {profileType === 'provider' && availability.length > 0 && (
+              <section>
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-1.5 h-6 bg-[#8b5cf6] rounded-full"></div>
+                  <h2 className="text-xl font-bold text-neutral-900">Horário de Atendimento</h2>
+                </div>
+                <div className="bg-white rounded-[32px] border border-neutral-100 p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow">
+                  <div className="flex flex-col gap-3">
+                    {(() => {
+                      const DAY_NAMES = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo'];
+                      return availability.map((slot) => (
+                        <div key={slot.id} className="flex items-center justify-between group">
+                          <span className="text-[15px] font-medium text-neutral-500 group-hover:text-neutral-700 transition-colors">
+                            {DAY_NAMES[slot.day_of_week] ?? `Dia ${slot.day_of_week}`}
+                          </span>
+                          <div className="flex-1 border-b border-dashed border-neutral-200 mx-4 opacity-50 relative top-2 invisible sm:visible"></div>
+                          {slot.is_enabled ? (
+                            <span className="text-[15px] font-bold text-neutral-900">
+                              {(slot.start_time || '').slice(0, 5)} às {(slot.end_time || '').slice(0, 5)}
+                            </span>
+                          ) : (
+                            <span className="text-[15px] font-medium text-neutral-400">
+                              Fechado
+                            </span>
+                          )}
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              </section>
+            )}
+
             {(activeTab === 'all' || activeTab === 'products') && products.length > 0 && (
               <section>
-                <h2 className="text-xl font-black text-neutral-900 mb-6 border-l-4 border-orange-500 pl-3">Catalogo de Produtos</h2>
-                <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-1.5 h-6 bg-orange-500 rounded-full"></div>
+                  <h2 className="text-xl font-bold text-neutral-900">Catálogo de Produtos</h2>
+                </div>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {products.map(product => (
                     <ItemCard
                       key={product.id}
@@ -507,25 +577,50 @@ export const SellerProfile: React.FC = () => {
 
             {(activeTab === 'all' || activeTab === 'services') && services.length > 0 && (
               <section>
-                <h2 className="text-xl font-black text-neutral-900 mb-6 border-l-4 border-purple-500 pl-3">Catálogo de Serviços</h2>
-                <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-1.5 h-6 bg-[#8b5cf6] rounded-full"></div>
+                  <h2 className="text-xl font-bold text-neutral-900">Catálogo de Serviços</h2>
+                </div>
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {services.map(service => (
-                    <ItemCard
-                      key={service.id}
-                      type="service"
-                      item={{
-                        id: service.id,
-                        name: service.name,
-                        pricePerHour: service.price,
-                        image: service.image_url || 'https://picsum.photos/seed/' + service.id + '/800/1000',
-                        category: service.category_id || 'Serviço',
-                        provider: displayName,
-                        username: normalizedUsername,
-                        rating: rating,
-                        description: service.description || '',
-                        distance: '–',
-                      } as ItemType}
-                    />
+                    <div key={service.id} className="relative bg-white rounded-[32px] p-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-neutral-50 flex flex-col group hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow">
+
+                      {/* Top badges */}
+                      <div className="flex justify-between items-center absolute w-[calc(100%-2rem)] left-4 top-4 z-10">
+                        <span className="bg-neutral-100/90 text-[#8b5cf6] text-[10px] uppercase font-black px-3 py-1.5 rounded-xl tracking-wider backdrop-blur-md">
+                          SERVIÇO
+                        </span>
+                        <span className="bg-white text-neutral-600 text-[10px] font-bold px-3 py-1.5 rounded-full border border-neutral-100 flex items-center gap-1 shadow-sm">
+                          <MapPin size={10} className="text-orange-500" /> -
+                        </span>
+                      </div>
+
+                      {/* Image Area */}
+                      <div className="relative mt-12 w-full pt-[100%] max-w-[220px] mx-auto bg-amber-100/50 rounded-[32px] overflow-hidden mb-2">
+                        <img
+                          src={service.image_url || `https://picsum.photos/seed/${service.id}/800/800`}
+                          alt={service.name}
+                          className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex flex-col gap-1 mt-6 px-2">
+                        <h3 className="font-bold text-neutral-900 text-lg leading-tight group-hover:text-[#8b5cf6] transition-colors">{service.name}</h3>
+                        <p className="text-sm text-neutral-500 line-clamp-2 leading-relaxed h-10 mt-1">{service.description}</p>
+                      </div>
+
+                      {/* Footer */}
+                      <div className="flex items-center justify-between mt-auto px-2 pb-2 pt-4">
+                        <span className="text-[#8b5cf6] font-extrabold text-xl">
+                          R$ {service.price.toFixed(2)}
+                        </span>
+                        <button onClick={() => navigate(`/item/service/${service.id}`)} className="bg-neutral-100 hover:bg-neutral-200 text-neutral-900 w-10 h-10 flex items-center justify-center rounded-full transition-colors">
+                          <ArrowRight size={18} />
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </section>

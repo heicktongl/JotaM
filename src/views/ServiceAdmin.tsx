@@ -18,7 +18,8 @@ import {
   Package,
   Loader2,
   Zap,
-  Repeat
+  Repeat,
+  Edit2
 } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { supabase } from '../lib/supabase';
@@ -291,12 +292,6 @@ export const ServiceAdmin: React.FC = () => {
             >
               Novo Serviço
             </button>
-            <button
-              onClick={() => navigate('/admin/services/availability')}
-              className="flex-1 md:flex-none rounded-2xl bg-neutral-900 px-6 py-3 text-sm font-bold text-white shadow-lg hover:bg-neutral-800 transition-all text-center whitespace-nowrap hidden sm:block"
-            >
-              Disponibilidade
-            </button>
           </div>
         </header>
 
@@ -421,6 +416,13 @@ export const ServiceAdmin: React.FC = () => {
                       </span>
 
                       <div className="flex gap-2">
+                        <button
+                          onClick={() => navigate(`/admin/services/${svc.id}/edit`)}
+                          title="Editar Serviço"
+                          className="p-2 rounded-xl text-blue-500 hover:bg-blue-50 bg-neutral-100 transition-colors"
+                        >
+                          <Edit2 size={18} />
+                        </button>
                         <button
                           onClick={() => handleToggleServiceActive(svc.id, svc.is_active)}
                           title={svc.is_active ? "Ocultar / Desativar" : "Mostrar / Ativar"}
