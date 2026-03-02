@@ -118,8 +118,8 @@ export const SellerProfile: React.FC = () => {
         setCreatedAt(sellerData.created_at);
         setPinnedProductId(sellerData.pinned_product_id);
 
-        // Dispara aumento de views fire & forget
-        supabase.from('sellers').update({ views: sellerData.views + 1 }).eq('id', sellerData.id).then();
+        // Dispara aumento de views fire & forget (RPC bulará RLS para visitantes)
+        supabase.rpc('increment_seller_views', { seller_uuid: sellerData.id }).then();
       } else {
         // 2. Tenta buscar em Service Providers
         const { data: providerData, error: providerErr } = await supabase
@@ -523,16 +523,53 @@ export const SellerProfile: React.FC = () => {
                 <div className="bg-white rounded-[32px] border border-neutral-100 p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow">
                   <div className="flex flex-col gap-3">
                     {(() => {
-                      const DAY_NAMES = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo'];
-                      return availability.map((slot) => (
-                        <div key={slot.id} className="flex items-center justify-between group">
+                      const DAY_NAMES = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+
+                      const formatDays = (start: number, end: number) => {
+                        if (start === end) return DAY_NAMES[start];
+                        if (end === start + 1) return `${DAY_NAMES[start]} e ${DAY_NAMES[end]}`;
+                        return `${DAY_NAMES[start]} à ${DAY_NAMES[end]}`;
+                      };
+
+                      const grouped = [];
+                      let current = null;
+
+                      for (const slot of availability) {
+                        const isOpen = slot.is_enabled;
+                        const startT = (slot.start_time || '').slice(0, 5);
+                        const endT = (slot.end_time || '').slice(0, 5);
+
+                        if (!current) {
+                          current = { startDay: slot.day_of_week, endDay: slot.day_of_week, isOpen, startT, endT };
+                        } else {
+                          const isContinuous = slot.day_of_week === current.endDay + 1;
+                          const isSameSchedule = current.isOpen === isOpen && (!isOpen || (current.startT === startT && current.endT === endT));
+
+                          if (isContinuous && isSameSchedule) {
+                            current.endDay = slot.day_of_week;
+                          } else {
+                            grouped.push(current);
+                            current = { startDay: slot.day_of_week, endDay: slot.day_of_week, isOpen, startT, endT };
+                          }
+                        }
+                      }
+                      if (current) grouped.push(current);
+
+                      // Ocultar dias fechados caso tudo não seja fechado
+                      const onlyClosed = grouped.every(g => !g.isOpen);
+                      const displayGroups = onlyClosed ? grouped.slice(0, 1) : grouped.filter(g => g.isOpen);
+
+                      if (displayGroups.length === 0) return null;
+
+                      return displayGroups.map((g, idx) => (
+                        <div key={idx} className="flex items-center justify-between group">
                           <span className="text-[15px] font-medium text-neutral-500 group-hover:text-neutral-700 transition-colors">
-                            {DAY_NAMES[slot.day_of_week] ?? `Dia ${slot.day_of_week}`}
+                            {formatDays(g.startDay, g.endDay)}
                           </span>
                           <div className="flex-1 border-b border-dashed border-neutral-200 mx-4 opacity-50 relative top-2 invisible sm:visible"></div>
-                          {slot.is_enabled ? (
+                          {g.isOpen ? (
                             <span className="text-[15px] font-bold text-neutral-900">
-                              {(slot.start_time || '').slice(0, 5)} às {(slot.end_time || '').slice(0, 5)}
+                              {g.startT} às {g.endT}
                             </span>
                           ) : (
                             <span className="text-[15px] font-medium text-neutral-400">
@@ -637,10 +674,12 @@ export const SellerProfile: React.FC = () => {
 
           {/* Footer */}
           <div className="mt-16 pt-8 border-t border-neutral-200 flex justify-center gap-8 text-neutral-400">
-            <div className="flex items-center gap-2">
-              <Eye size={16} />
-              <span className="text-xs font-bold">{views} acessos totais do público</span>
-            </div>
+            {isOwner && (
+              <div className="flex items-center gap-2">
+                <Eye size={16} />
+                <span className="text-xs font-bold">{views} acessos totais do público</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <Users size={16} />
               <span className="text-xs font-bold">

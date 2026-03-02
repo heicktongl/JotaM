@@ -49,7 +49,7 @@ export const EditService: React.FC = () => {
         }))
     );
 
-    
+
     useEffect(() => {
         if (!id) return;
         supabase.from('services').select('*').eq('id', id).single().then(({ data, error }) => {
@@ -66,7 +66,7 @@ export const EditService: React.FC = () => {
                 });
                 setHomeService(data.is_home_service || false);
                 if (data.image_url) {
-                   setImagePreviews([data.image_url]); 
+                    setImagePreviews([data.image_url]);
                 }
             }
             setLoading(false);
@@ -82,10 +82,14 @@ export const EditService: React.FC = () => {
             .then(({ data }) => {
                 if (data && data.length > 0) {
                     setCategories(data);
-                    setFormData(f => ({ ...f, category_id: data[0].id }));
+                    // Só define o padrão se for criação (sem id).
+                    // Em edição o useEffect acima já carregou o category_id correto.
+                    if (!id) {
+                        setFormData(f => ({ ...f, category_id: data[0].id }));
+                    }
                 }
             });
-    }, []);
+    }, [id]);
 
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
@@ -184,14 +188,26 @@ export const EditService: React.FC = () => {
                     ? { response_time_mins: null, duration_mins: parseInt(formData.duration_minutes, 10), billing_cycle: null }
                     : { response_time_mins: null, duration_mins: null, billing_cycle: formData.billing_cycle };
 
-            const { error } = await supabase.from('services').insert({
-                ...basePayload,
-                ...typePayload,
-            });
+            // ── UPDATE (edição) ou INSERT (criação nova) ──────────────
+            let dbError;
+            if (id) {
+                // EDITAR: atualiza o registro existente pelo id
+                const { error } = await supabase
+                    .from('services')
+                    .update({ ...basePayload, ...typePayload })
+                    .eq('id', id);
+                dbError = error;
+            } else {
+                // CRIAR: insere novo registro
+                const { error } = await supabase
+                    .from('services')
+                    .insert({ ...basePayload, ...typePayload });
+                dbError = error;
+            }
 
-            if (error) throw error;
+            if (dbError) throw dbError;
 
-            alert('Serviço cadastrado com sucesso!');
+            alert(id ? 'Serviço atualizado com sucesso!' : 'Serviço cadastrado com sucesso!');
             navigate('/admin/services');
         } catch (err: unknown) {
             console.error('Erro ao salvar serviço:', err);

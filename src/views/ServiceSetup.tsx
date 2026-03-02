@@ -280,7 +280,7 @@ export const ServiceSetup: React.FC = () => {
                         )}
 
                         {/* ====== FOTO DE CAPA E PERFIL ====== */}
-                        <div className="relative mb-8">
+                        <div className="relative mb-24">
                             <div className="h-40 w-full rounded-2xl overflow-hidden bg-neutral-200">
                                 <AvatarUploader
                                     currentUrl={coverUrl}
@@ -296,7 +296,8 @@ export const ServiceSetup: React.FC = () => {
                                     size="cover"
                                 />
                             </div>
-                            <div className="absolute -bottom-10 left-6">
+                            {/* Avatar circular com espaço para chips abaixo */}
+                            <div className="absolute -bottom-20 left-6">
                                 <AvatarUploader
                                     currentUrl={avatarUrl}
                                     fallbackUrl={`https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'S')}&background=7C3AED&color=fff&size=128`}
@@ -312,6 +313,7 @@ export const ServiceSetup: React.FC = () => {
                                 />
                             </div>
                         </div>
+
 
                         <div className="bg-white p-6 rounded-3xl border border-neutral-100 shadow-sm space-y-6">
                             <div>
@@ -446,8 +448,8 @@ export const ServiceSetup: React.FC = () => {
                                     <div
                                         key={slot.day}
                                         className={`rounded-2xl border transition-all ${slot.enabled
-                                                ? 'bg-white border-neutral-100 shadow-sm'
-                                                : 'bg-neutral-50 border-transparent opacity-50'
+                                            ? 'bg-white border-neutral-100 shadow-sm'
+                                            : 'bg-neutral-50 border-transparent opacity-50'
                                             }`}
                                     >
                                         <div className="p-4 flex items-center gap-3">

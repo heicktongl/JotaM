@@ -11,7 +11,7 @@ import { LocationSelector } from '../components/LocationSelector';
 import { useAuth } from '../hooks/useAuth';
 import { Logo } from '../components/Logo';
 import { supabase } from '../lib/supabase';
-import { AvatarUploader } from '../components/AvatarUploader';
+
 
 interface UserRoles {
   isSeller: boolean;
@@ -44,7 +44,6 @@ export const ProfilePage: React.FC = () => {
   const { user, signOut, loading } = useAuth();
   const [roles, setRoles] = useState<UserRoles | null>(null);
   const [loadingRoles, setLoadingRoles] = useState(true);
-  const [userAvatar, setUserAvatar] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -61,7 +60,6 @@ export const ProfilePage: React.FC = () => {
           supabase.from('service_providers').select('*').eq('user_id', user.id).maybeSingle(),
         ]);
 
-        if (user.user_metadata?.avatar_url) setUserAvatar(user.user_metadata.avatar_url);
 
         const seller = sellerRes.data;
         const delivery = deliveryRes.data;
@@ -176,23 +174,24 @@ export const ProfilePage: React.FC = () => {
     <div className="min-h-screen pb-24 bg-neutral-50">
       <header className="pt-12 pb-6 px-6 bg-white border-b border-neutral-100">
         <div className="mx-auto max-w-7xl flex items-center gap-6">
-          <AvatarUploader
-            currentUrl={userAvatar}
-            fallbackUrl={`https://ui-avatars.com/api/?name=${user.user_metadata?.name || 'User'}&background=FFF7ED&color=EA580C`}
-            onUploadSuccess={async (url) => {
-              setUserAvatar(url);
-              const { error } = await supabase.auth.updateUser({
-                data: { avatar_url: url }
-              });
-              if (error) {
-                console.error("Erro Update User:", error);
-                alert("Sua foto foi enviada mas houve uma falha ao vincular com seu perfil. Erro: " + error.message);
-              }
-            }}
-            uid={user.id}
-            folder="users"
-            size="md"
-          />
+          {/* Foto somente leitura — edição centralizada em /settings */}
+          <div className="flex flex-col items-center gap-1.5 shrink-0">
+            <div className="h-20 w-20 rounded-full overflow-hidden border-4 border-white shadow-lg bg-neutral-100">
+              <img
+                src={user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${user.user_metadata?.name || 'User'}&background=FFF7ED&color=EA580C`}
+                alt="Foto de perfil"
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+            <button
+              onClick={() => navigate('/settings')}
+              className="flex items-center gap-1 text-[10px] font-bold text-neutral-400 hover:text-orange-500 transition-colors"
+            >
+              <Settings size={10} />
+              Editar foto
+            </button>
+          </div>
           <div>
             <h1 className="font-display text-2xl font-extrabold tracking-tighter text-neutral-900">
               {user.user_metadata?.name || 'Seu Nome'}

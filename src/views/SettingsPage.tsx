@@ -1,51 +1,80 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, LogOut, Loader2, ShieldCheck, Mail, Phone, Hash, User, Save, MessageCircle } from 'lucide-react';
+import { ChevronLeft, LogOut, Loader2, ShieldCheck, Mail, Phone, Hash, User, Save, MessageCircle, CheckCircle2, Sun, Moon, Monitor } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { AvatarUploader } from '../components/AvatarUploader';
+import { useTheme } from '../context/ThemeContext';
 
 export const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { mode, toggle } = useTheme();
 
   const [name, setName] = useState(user?.user_metadata?.name || '');
   const [email] = useState(user?.email || '');
-  const [whatsapp, setWhatsapp] = useState(user?.user_metadata?.whatsapp || '');
-  const [cpf, setCpf] = useState(user?.user_metadata?.cpf || '');
-  const [isUpdatingUser, setIsUpdatingUser] = useState(false);
+  const [whatsapp, setWhatsapp] = useState(
+    user?.user_metadata?.whatsapp
+      ? formatPhoneDisplay(user.user_metadata.whatsapp)
+      : ''
+  );
+  const [cpf, setCpf] = useState(
+    user?.user_metadata?.cpf
+      ? formatCpfDisplay(user.user_metadata.cpf)
+      : ''
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Re-sincroniza os campos sempre que o user mudar (ex: após updateUser disparar onAuthStateChange)
+  useEffect(() => {
+    if (!user) return;
+    setName(user.user_metadata?.name || '');
+    setWhatsapp(
+      user.user_metadata?.whatsapp
+        ? formatPhoneDisplay(user.user_metadata.whatsapp)
+        : ''
+    );
+    setCpf(
+      user.user_metadata?.cpf
+        ? formatCpfDisplay(user.user_metadata.cpf)
+        : ''
+    );
+  }, [user]);
+
+  // Formata telefone a partir de dígitos puros (para exibir dados vindos do banco)
+  function formatPhoneDisplay(digits: string): string {
+    const d = digits.replace(/\D/g, '').slice(0, 11);
+    if (d.length <= 2) return d;
+    if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  }
+
+  // Formata CPF a partir de dígitos puros (para exibir dados vindos do banco)
+  function formatCpfDisplay(digits: string): string {
+    const d = digits.replace(/\D/g, '').slice(0, 11);
+    if (d.length <= 3) return d;
+    if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+    if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+    return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+  }
+
   // Máscara de telefone: (XX) XXXXX-XXXX
-  const formatPhone = (value: string) => {
-    const digits = value.replace(/\D/g, '').slice(0, 11);
-    if (digits.length <= 2) return digits;
-    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-  };
+  const formatPhone = (value: string) => formatPhoneDisplay(value);
 
   // Máscara de CPF: XXX.XXX.XXX-XX
-  const formatCpf = (value: string) => {
-    const digits = value.replace(/\D/g, '').slice(0, 11);
-    if (digits.length <= 3) return digits;
-    if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
-    if (digits.length <= 9) return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
-    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
-  };
+  const formatCpf = (value: string) => formatCpfDisplay(value);
 
   const handleAvatarUpdate = async (newUrl: string | null) => {
     if (!user) return;
     try {
-      setIsUpdatingUser(true);
       const { error } = await supabase.auth.updateUser({
         data: { avatar_url: newUrl }
       });
       if (error) throw error;
     } catch (err) {
       console.error('Erro ao atualizar URL no auth.users:', err);
-    } finally {
-      setIsUpdatingUser(false);
     }
   };
 
@@ -55,7 +84,7 @@ export const SettingsPage: React.FC = () => {
     setSaveSuccess(false);
 
     try {
-      const { error } = await supabase.auth.updateUser({
+      const { data: updated, error } = await supabase.auth.updateUser({
         data: {
           name: name.trim(),
           phone: whatsapp.replace(/\D/g, ''),
@@ -65,6 +94,14 @@ export const SettingsPage: React.FC = () => {
       });
 
       if (error) throw error;
+
+      // Sincroniza imediatamente os estados locais com os dados recém-salvos
+      if (updated?.user?.user_metadata) {
+        const meta = updated.user.user_metadata;
+        setName(meta.name || '');
+        setWhatsapp(meta.whatsapp ? formatPhoneDisplay(meta.whatsapp) : '');
+        setCpf(meta.cpf ? formatCpfDisplay(meta.cpf) : '');
+      }
 
       // Sincroniza telefones nos perfis públicos (ignora erros de não existir)
       await supabase.from('service_providers').update({
@@ -77,7 +114,15 @@ export const SettingsPage: React.FC = () => {
       }).eq('user_id', user.id);
 
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+
+      const pendingPublish = sessionStorage.getItem('jotam_pending_publish');
+      if (pendingPublish) {
+        sessionStorage.removeItem('jotam_pending_publish');
+        // Redireciona de volta após um pequeno delay para mostrar a mensagem de sucesso
+        setTimeout(() => navigate(pendingPublish), 1500);
+      } else {
+        setTimeout(() => setSaveSuccess(false), 3000);
+      }
     } catch (err) {
       console.error('Erro ao salvar dados pessoais:', err);
       alert('Erro ao salvar. Tente novamente.');
@@ -101,6 +146,22 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-24">
+
+      {/* Toast de sucesso */}
+      <AnimatePresence>
+        {saveSuccess && (
+          <motion.div
+            initial={{ opacity: 0, y: -60 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -60 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-neutral-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl shadow-neutral-900/30 pointer-events-none"
+          >
+            <CheckCircle2 size={20} className="text-emerald-400 shrink-0" />
+            <span className="text-sm font-bold whitespace-nowrap">Dados salvos com sucesso!</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-neutral-100 pt-8 pb-4 px-6">
         <div className="mx-auto max-w-2xl flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -114,12 +175,20 @@ export const SettingsPage: React.FC = () => {
               Minha Conta
             </h1>
           </div>
+
+          {/* Toggle de tema — cicla entre system → dark → light */}
           <button
-            onClick={handleSignOut}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-600 transition-colors hover:bg-red-100"
-            title="Sair"
+            onClick={toggle}
+            title={mode === 'system' ? 'Modo do sistema' : mode === 'dark' ? 'Modo escuro' : 'Modo claro'}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 transition-all hover:bg-neutral-200 hover:scale-105 active:scale-95"
           >
-            <LogOut size={18} />
+            {mode === 'dark' ? (
+              <Moon size={18} className="text-indigo-500" />
+            ) : mode === 'light' ? (
+              <Sun size={18} className="text-amber-500" />
+            ) : (
+              <Monitor size={18} className="text-neutral-500" />
+            )}
           </button>
         </div>
       </header>
@@ -136,14 +205,9 @@ export const SettingsPage: React.FC = () => {
               fallbackUrl={`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name || 'User')}&backgroundColor=ea580c`}
               onUploadSuccess={handleAvatarUpdate}
               uid={user.id}
+              folder="users"
               size="lg"
             />
-            {isUpdatingUser && (
-              <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white px-3 py-1 rounded-full shadow border border-neutral-100 flex items-center gap-2">
-                <Loader2 size={12} className="animate-spin text-orange-500" />
-                <span className="text-[10px] font-bold text-neutral-500">Salvando...</span>
-              </div>
-            )}
           </div>
 
           <h2 className="text-xl font-black text-neutral-900 z-10">{name || 'Usuário JotaM'}</h2>
@@ -257,6 +321,20 @@ export const SettingsPage: React.FC = () => {
               ) : (
                 <><Save size={18} /> Salvar Alterações</>
               )}
+            </button>
+          </div>
+        </section>
+
+        {/* Sair da conta */}
+        <section className="mx-auto max-w-2xl px-6 pb-10">
+          <div className="border-t border-neutral-100 pt-6">
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="w-full flex items-center justify-center gap-2 rounded-2xl border border-red-100 bg-red-50 py-3.5 text-sm font-bold text-red-500 hover:bg-red-100 hover:border-red-200 transition-all active:scale-[0.98]"
+            >
+              <LogOut size={16} />
+              Sair da conta
             </button>
           </div>
         </section>

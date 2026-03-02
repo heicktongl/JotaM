@@ -18,6 +18,7 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { AvatarUploader } from '../components/AvatarUploader';
+import { getDetailedLocation } from '../utils/geolocation';
 
 interface StoreLocation {
     label: string;
@@ -231,54 +232,24 @@ export const SellerSetup: React.FC = () => {
                 }
 
                 try {
-                    // zoom=18 = nível de rua (máxima granularidade do Nominatim)
-                    const response = await fetch(
-                        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=pt-BR`,
-                        { headers: { 'User-Agent': 'JotaM-App/1.0' } }
-                    );
-                    const data = await response.json();
-                    const addr = data.address || {};
+                    const locData = await getDetailedLocation(latitude, longitude);
 
-                    // Prioridade de campos de bairro do Nominatim (do mais preciso ao menos)
-                    let neighborhood =
-                        addr.quarter ||
-                        addr.suburb ||
-                        addr.neighbourhood ||
-                        addr.city_district ||
-                        '';
+                    let neighborhood = locData.neighborhood;
+                    let city = locData.city;
+                    let street = locData.condo.split(',')[0] || '';
+                    let state = '';
+                    let zipCode = '';
 
-                    let city =
-                        addr.city ||
-                        addr.town ||
-                        addr.municipality ||
-                        addr.county ||
-                        '';
-
-                    let state =
-                        addr.state_code?.toUpperCase() ||
-                        addr.state?.slice(0, 2)?.toUpperCase() ||
-                        '';
-
-                    let street = addr.road || addr.pedestrian || addr.path || '';
-                    const zipCode = (addr.postcode || '').replace(/\D/g, '');
-
-                    // ENRIQUECIMENTO DE PRECISÃO COM VIACEP
-                    // Se o GPS encontrou um CEP válido, checamos na base oficial dos correios
-                    // Isso corrige distorções de nome de bairro que existem no OpenStreetMap
-                    if (zipCode.length === 8) {
-                        try {
-                            const viaCepRes = await fetch(`https://viacep.com.br/ws/${zipCode}/json/`);
-                            const viaCepData = await viaCepRes.json();
-                            if (!viaCepData.erro) {
-                                neighborhood = viaCepData.bairro || neighborhood;
-                                city = viaCepData.localidade || city;
-                                state = viaCepData.uf || state;
-                                street = viaCepData.logradouro || street;
-                            }
-                        } catch {
-                            // Se falhar o ViaCEP, usamos silenciosamente os dados do Nominatim como fallback
+                    // Busca CEP reverso apenas para preencher autocompletion de "state" e "zipCode" visual,
+                    // MAS sem sobrescrever o nome do bairro extraído com alta precisão pelo Google/Nominatim.
+                    try {
+                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=pt-BR`);
+                        const nmData = await res.json();
+                        if (nmData && nmData.address) {
+                            state = nmData.address.state_code?.toUpperCase() || nmData.address.state?.slice(0, 2)?.toUpperCase() || '';
+                            zipCode = (nmData.address.postcode || '').replace(/\D/g, '');
                         }
-                    }
+                    } catch (e) { /* ignore */ }
 
                     if (!city) {
                         updateLocation(index, {
@@ -548,7 +519,7 @@ export const SellerSetup: React.FC = () => {
                 <form onSubmit={handleCreateStore} className="space-y-6">
                     {/* Visualização de Fotos (Capa + Perfil) usando AvatarUploader */}
                     {existingSellerId && (
-                        <div className="relative mb-12">
+                        <div className="relative mb-24">
                             <div className="h-40 w-full rounded-2xl overflow-hidden bg-neutral-200">
                                 <AvatarUploader
                                     currentUrl={coverUrl}
@@ -562,7 +533,8 @@ export const SellerSetup: React.FC = () => {
                                     size="cover"
                                 />
                             </div>
-                            <div className="absolute -bottom-10 left-6">
+                            {/* Avatar circular posicionado com espaço para chips abaixo */}
+                            <div className="absolute -bottom-20 left-6">
                                 <AvatarUploader
                                     currentUrl={avatarUrl}
                                     fallbackUrl={`https://picsum.photos/seed/${username}profile/200/200`}
@@ -577,6 +549,7 @@ export const SellerSetup: React.FC = () => {
                             </div>
                         </div>
                     )}
+
 
                     {/* Nome da Loja */}
                     <div>

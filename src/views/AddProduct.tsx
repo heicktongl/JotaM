@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, Plus, X, Loader2 } from 'lucide-react';
+import { ChevronLeft, Plus, X, Loader2, Phone, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { Logo } from '../components/Logo';
 
 export const AddProduct: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [images, setImages] = useState<File[]>([]);
+  const [showPhoneGate, setShowPhoneGate] = useState(false);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -85,6 +87,14 @@ export const AddProduct: React.FC = () => {
       alert('Você precisa estar logado para cadastrar um produto.');
       return;
     }
+
+    // Gate MVP: exige número de WhatsApp cadastrado antes de publicar
+    const phone = (user.user_metadata?.whatsapp || '').replace(/\D/g, '');
+    if (phone.length < 10) {
+      setShowPhoneGate(true);
+      return;
+    }
+
     setSaving(true);
     try {
       // 1. Buscar o perfil de vendedor do usuário logado
@@ -146,8 +156,57 @@ export const AddProduct: React.FC = () => {
     }
   };
 
+  const handleGoToSettings = () => {
+    sessionStorage.setItem('jotam_pending_publish', location.pathname);
+    navigate('/settings');
+  };
+
   return (
     <div className="min-h-screen bg-neutral-50 pb-24 lg:pb-8">
+
+      {/* ===== GATE: Modal de Telefone Obrigatório ===== */}
+      <AnimatePresence>
+        {showPhoneGate && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowPhoneGate(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.85, opacity: 0, y: 24 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.85, opacity: 0, y: 24 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 26 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-white rounded-[32px] p-8 shadow-2xl text-center"
+            >
+              <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-5">
+                <Phone size={28} className="text-orange-600" />
+              </div>
+              <h2 className="text-xl font-extrabold text-neutral-900 mb-2">Número obrigatório para publicar</h2>
+              <p className="text-[15px] text-neutral-500 mb-8 leading-relaxed">
+                Para que seus clientes possam entrar em contato, cadastre seu <span className="font-bold text-neutral-700">WhatsApp</span> antes de criar sua primeira publicação.
+              </p>
+              <button
+                onClick={handleGoToSettings}
+                className="w-full flex items-center justify-center gap-2 h-14 rounded-2xl bg-orange-600 text-white font-bold text-[15px] hover:bg-orange-700 transition-colors shadow-lg shadow-orange-600/20 mb-3"
+              >
+                Cadastrar Número
+                <ArrowRight size={18} />
+              </button>
+              <button
+                onClick={() => setShowPhoneGate(false)}
+                className="w-full h-12 rounded-2xl text-neutral-500 font-bold text-sm hover:bg-neutral-100 transition-colors"
+              >
+                Agora não
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl pt-6 pb-4 px-6 shadow-sm border-b border-neutral-100">
         <div className="mx-auto max-w-3xl flex items-center justify-between">
