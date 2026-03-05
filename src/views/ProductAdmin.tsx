@@ -12,7 +12,11 @@ import {
   ArrowUpRight,
   ChevronLeft,
   Trash2,
-  Power
+  Power,
+  Eye,
+  ShoppingCart,
+  MessageCircle,
+  Activity,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
@@ -27,12 +31,38 @@ interface SellerProduct {
   is_active: boolean;
 }
 
+interface OlheiroEvent {
+  id: string;
+  event_type: 'view' | 'add_to_cart' | 'checkout_started' | 'whatsapp_sent';
+  created_at: string;
+  metadata: Record<string, unknown>;
+  product_id: string | null;
+}
+
+const EVENT_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+  view: { label: 'Visualizou o produto', icon: <Eye size={14} />, color: 'bg-blue-50 text-blue-600' },
+  add_to_cart: { label: 'Adicionou ao carrinho', icon: <ShoppingCart size={14} />, color: 'bg-amber-50 text-amber-600' },
+  checkout_started: { label: 'Iniciou o checkout', icon: <Activity size={14} />, color: 'bg-purple-50 text-purple-600' },
+  whatsapp_sent: { label: 'Enviou pedido via WhatsApp', icon: <MessageCircle size={14} />, color: 'bg-green-50 text-green-600' },
+};
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'agora mesmo';
+  if (m < 60) return `há ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `há ${h}h`;
+  return `há ${Math.floor(h / 24)}d`;
+}
+
 export const ProductAdmin: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [seller, setSeller] = React.useState<{ store_name: string; id: string } | null>(null);
   const [products, setProducts] = React.useState<SellerProduct[]>([]);
-  const [stats, setStats] = React.useState({ revenue: 0, customers: 0 });
+  const [stats, setStats] = React.useState({ revenue: 0, customers: 0, interactions: 0 });
+  const [olheiroEvents, setOlheiroEvents] = React.useState<OlheiroEvent[]>([]);
   const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
@@ -40,7 +70,6 @@ export const ProductAdmin: React.FC = () => {
     const load = async () => {
       setLoading(true);
       try {
-        // Buscar perfil do vendedor
         const { data: sellerData } = await supabase
           .from('sellers')
           .select('id, store_name')
@@ -49,7 +78,8 @@ export const ProductAdmin: React.FC = () => {
 
         if (sellerData) {
           setSeller(sellerData);
-          // Buscar produtos do vendedor
+
+          // Produtos
           const { data: prodData } = await supabase
             .from('products')
             .select('id, name, price, stock, image_url, is_active')
@@ -57,7 +87,7 @@ export const ProductAdmin: React.FC = () => {
             .order('created_at', { ascending: false });
           if (prodData) setProducts(prodData);
 
-          // Buscar total de pedidos (receita e clientes únicos)
+          // Receita e clientes
           const { data: ordersData } = await supabase
             .from('orders')
             .select('total, consumer_id')
@@ -66,7 +96,20 @@ export const ProductAdmin: React.FC = () => {
           if (ordersData) {
             const revenue = ordersData.reduce((acc, o) => acc + o.total, 0);
             const uniqueCustomers = new Set(ordersData.map(o => o.consumer_id)).size;
-            setStats({ revenue, customers: uniqueCustomers });
+            setStats(prev => ({ ...prev, revenue, customers: uniqueCustomers }));
+          }
+
+          // 👁️ Olheiro — interações e eventos recentes
+          const { data: eventsData } = await supabase
+            .from('olheiro_events')
+            .select('id, event_type, created_at, metadata, product_id')
+            .eq('seller_id', sellerData.id)
+            .order('created_at', { ascending: false })
+            .limit(15);
+
+          if (eventsData) {
+            setOlheiroEvents(eventsData as OlheiroEvent[]);
+            setStats(prev => ({ ...prev, interactions: eventsData.length }));
           }
         }
       } catch (err) {
@@ -84,12 +127,8 @@ export const ProductAdmin: React.FC = () => {
         .from('products')
         .update({ is_active: !currentStatus })
         .eq('id', id);
-
       if (error) throw error;
-
-      setProducts(prev => prev.map(p =>
-        p.id === id ? { ...p, is_active: !currentStatus } : p
-      ));
+      setProducts(prev => prev.map(p => p.id === id ? { ...p, is_active: !currentStatus } : p));
     } catch (err) {
       console.error('Erro ao alterar status:', err);
       alert('Não foi possível alterar o status do produto.');
@@ -97,18 +136,10 @@ export const ProductAdmin: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Tem certeza que deseja apagar este produto definitivamente?')) {
-      return;
-    }
-
+    if (!window.confirm('Tem certeza que deseja apagar este produto definitivamente?')) return;
     try {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', id);
-
+      const { error } = await supabase.from('products').delete().eq('id', id);
       if (error) throw error;
-
       setProducts(prev => prev.filter(p => p.id !== id));
     } catch (err) {
       console.error('Erro ao excluir produto:', err);
@@ -185,33 +216,33 @@ export const ProductAdmin: React.FC = () => {
         </header>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-3 mb-6 md:mb-10">
+        <div className="grid grid-cols-2 gap-4 md:gap-6 md:grid-cols-4 mb-6 md:mb-10">
           {[
             { label: 'Receita Total', value: `R$ ${stats.revenue.toFixed(2)}`, icon: DollarSign, color: 'bg-blue-50 text-blue-600' },
             { label: 'Clientes Únicos', value: String(stats.customers), icon: Users, color: 'bg-purple-50 text-purple-600' },
             { label: 'Produtos Ativos', value: String(products.filter(p => p.is_active).length), icon: ArrowUpRight, color: 'bg-orange-50 text-orange-600' },
+            { label: 'Interações (Olheiro)', value: String(stats.interactions), icon: Eye, color: 'bg-emerald-50 text-emerald-600' },
           ].map((stat, i) => (
-            <div key={i} className="rounded-3xl bg-white p-6 shadow-sm border border-neutral-100">
+            <div key={i} className="rounded-3xl bg-white p-5 shadow-sm border border-neutral-100">
               <div className="flex items-center justify-between mb-4">
                 <div className={`p-3 rounded-2xl ${stat.color}`}>
                   <stat.icon size={20} />
                 </div>
                 <button className="text-neutral-400"><MoreVertical size={16} /></button>
               </div>
-              <p className="text-sm font-bold text-neutral-400 uppercase tracking-widest">{stat.label}</p>
-              <p className="text-3xl font-black text-neutral-900 mt-1">{stat.value}</p>
+              <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">{stat.label}</p>
+              <p className="text-2xl font-black text-neutral-900 mt-1">{stat.value}</p>
             </div>
           ))}
         </div>
 
         {/* Product List */}
-        <div className="rounded-3xl bg-white shadow-sm border border-neutral-100 overflow-hidden">
+        <div className="rounded-3xl bg-white shadow-sm border border-neutral-100 overflow-hidden mb-6">
           <div className="p-4 md:p-6 border-b border-neutral-100 flex items-center justify-between">
             <h3 className="font-bold text-lg">Produtos Ativos</h3>
             <button className="text-sm font-bold text-orange-600">Ver todos</button>
           </div>
 
-          {/* Desktop Header */}
           <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 bg-neutral-50 text-xs font-bold text-neutral-400 uppercase tracking-widest border-b border-neutral-100">
             <div className="col-span-5">Produto</div>
             <div className="col-span-2">Estoque</div>
@@ -220,7 +251,6 @@ export const ProductAdmin: React.FC = () => {
             <div className="col-span-1"></div>
           </div>
 
-          {/* Responsive List */}
           <div className="divide-y divide-neutral-100">
             {loading ? (
               Array.from({ length: 3 }).map((_, i) => (
@@ -250,17 +280,12 @@ export const ProductAdmin: React.FC = () => {
                     <div className="flex items-center gap-2 md:hidden">
                       <button
                         onClick={() => handleToggleActive(product.id, product.is_active)}
-                        title={product.is_active ? "Desativar" : "Ativar"}
-                        className={`p-2 rounded-xl transition-colors ${product.is_active
-                            ? 'text-orange-500 hover:bg-orange-50 bg-neutral-100'
-                            : 'text-neutral-400 hover:bg-neutral-200 bg-neutral-100'
-                          }`}
+                        className={`p-2 rounded-xl transition-colors ${product.is_active ? 'text-orange-500 hover:bg-orange-50 bg-neutral-100' : 'text-neutral-400 hover:bg-neutral-200 bg-neutral-100'}`}
                       >
                         <Power size={18} />
                       </button>
                       <button
                         onClick={() => handleDelete(product.id)}
-                        title="Excluir"
                         className="p-2 rounded-xl text-red-500 hover:bg-red-50 bg-neutral-100 transition-colors"
                       >
                         <Trash2 size={18} />
@@ -270,25 +295,19 @@ export const ProductAdmin: React.FC = () => {
                   <div className="hidden md:block col-span-2 font-medium text-neutral-600">{product.stock} unidades</div>
                   <div className="hidden md:block col-span-2 font-bold text-neutral-900">R$ {product.price.toFixed(2)}</div>
                   <div className="hidden md:block col-span-2">
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${product.is_active ? 'bg-orange-50 text-orange-600' : 'bg-neutral-100 text-neutral-400'
-                      }`}>
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${product.is_active ? 'bg-orange-50 text-orange-600' : 'bg-neutral-100 text-neutral-400'}`}>
                       {product.is_active ? 'Em estoque' : 'Inativo'}
                     </span>
                   </div>
                   <div className="hidden md:flex col-span-1 justify-end gap-2">
                     <button
                       onClick={() => handleToggleActive(product.id, product.is_active)}
-                      title={product.is_active ? "Ocultar / Desativar" : "Mostrar / Ativar"}
-                      className={`p-2 rounded-xl transition-colors ${product.is_active
-                          ? 'text-orange-500 hover:bg-orange-50 bg-neutral-50'
-                          : 'text-neutral-400 hover:bg-neutral-200 bg-neutral-50'
-                        }`}
+                      className={`p-2 rounded-xl transition-colors ${product.is_active ? 'text-orange-500 hover:bg-orange-50 bg-neutral-50' : 'text-neutral-400 hover:bg-neutral-200 bg-neutral-50'}`}
                     >
                       <Power size={18} />
                     </button>
                     <button
                       onClick={() => handleDelete(product.id)}
-                      title="Excluir Produto"
                       className="p-2 rounded-xl text-red-500 hover:bg-red-50 bg-neutral-50 transition-colors"
                     >
                       <Trash2 size={18} />
@@ -299,6 +318,59 @@ export const ProductAdmin: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* 👁️ Olheiro — Atividade Recente */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="rounded-3xl bg-white shadow-sm border border-neutral-100 overflow-hidden"
+        >
+          <div className="p-4 md:p-6 border-b border-neutral-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+                <Eye size={18} />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg leading-none">Atividade Recente</h3>
+                <p className="text-xs text-neutral-400 mt-0.5">Sistema Olheiro — jornada do cliente</p>
+              </div>
+            </div>
+            <span className="text-xs font-bold text-neutral-400 bg-neutral-100 px-3 py-1 rounded-full">
+              {olheiroEvents.length} eventos
+            </span>
+          </div>
+
+          <div className="divide-y divide-neutral-100">
+            {loading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="h-14 m-4 rounded-2xl bg-neutral-100 animate-pulse" />
+              ))
+            ) : olheiroEvents.length === 0 ? (
+              <div className="py-12 text-center text-neutral-400">
+                <Eye size={32} className="mx-auto mb-3" strokeWidth={1} />
+                <p className="font-bold">Nenhuma interação ainda</p>
+                <p className="text-xs mt-1">Quando alguém visitar seus produtos, aparecerá aqui.</p>
+              </div>
+            ) : (
+              olheiroEvents.map((event) => {
+                const meta = EVENT_LABELS[event.event_type] || EVENT_LABELS['view'];
+                return (
+                  <div key={event.id} className="flex items-center gap-4 px-4 md:px-6 py-3.5 hover:bg-neutral-50 transition-colors">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold shrink-0 ${meta.color}`}>
+                      {meta.icon}
+                      {meta.label}
+                    </span>
+                    <span className="flex-1 text-xs text-neutral-400 truncate">
+                      {event.product_id ? `Produto ID: ${event.product_id.slice(0, 8)}` : 'Serviço'}
+                    </span>
+                    <span className="text-xs text-neutral-400 shrink-0">{timeAgo(event.created_at)}</span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </motion.div>
 
         {/* Mobile Bottom Nav */}
         <div className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-neutral-200 bg-white px-6 py-4 lg:hidden pb-safe">

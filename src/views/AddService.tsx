@@ -48,7 +48,37 @@ export const AddService: React.FC = () => {
     );
 
     useEffect(() => {
-        // Buscar categorias do tipo "service"
+        // 1. Carrega o rascunho IMEDIATAMENTE antes de qualquer request
+        let defaultCategoryId = '';
+        const draft = sessionStorage.getItem('jotam_service_draft');
+        if (draft) {
+            try {
+                const parsed = JSON.parse(draft);
+                if (parsed.formData) {
+                    setFormData(parsed.formData);
+                    defaultCategoryId = parsed.formData.category_id || '';
+                }
+                if (parsed.homeService !== undefined) setHomeService(parsed.homeService);
+                if (parsed.useCustomSchedule !== undefined) setUseCustomSchedule(parsed.useCustomSchedule);
+                if (parsed.customAvailability) setCustomAvailability(parsed.customAvailability);
+                // ╔══════════════════════════════════════════╗
+                // ║  LembreteZap — Restauração de Fotos     ║
+                // ╚══════════════════════════════════════════╝
+                if (parsed.imagePreviews && parsed.imagePreviews.length > 0) {
+                    setImagePreviews(parsed.imagePreviews);
+                    const filePromises = parsed.imagePreviews.map(async (b64: string, idx: number) => {
+                        const res = await fetch(b64);
+                        const blob = await res.blob();
+                        return new File([blob], `foto_${idx}.jpg`, { type: blob.type || 'image/jpeg' });
+                    });
+                    Promise.all(filePromises).then(files => setImages(files));
+                }
+            } catch (e) {
+                console.error('Erro ao ler draft:', e);
+            }
+        }
+
+        // 2. Buscar categorias em paralelo
         supabase
             .from('categories')
             .select('id, name')
@@ -56,7 +86,11 @@ export const AddService: React.FC = () => {
             .then(({ data }) => {
                 if (data && data.length > 0) {
                     setCategories(data);
-                    setFormData(f => ({ ...f, category_id: data[0].id }));
+                    // Se não havia rascunho preenchendo a categoria, força a primeira
+                    setFormData(f => ({
+                        ...f,
+                        category_id: f.category_id || defaultCategoryId || data[0].id
+                    }));
                 }
             });
     }, []);
@@ -165,14 +199,41 @@ export const AddService: React.FC = () => {
                     ? { response_time_mins: null, duration_mins: parseInt(formData.duration_minutes, 10), billing_cycle: null }
                     : { response_time_mins: null, duration_mins: null, billing_cycle: formData.billing_cycle };
 
-            const { error } = await supabase.from('services').insert({
+            const { data, error } = await supabase.from('services').insert({
                 ...basePayload,
                 ...typePayload,
-            });
+            }).select().single();
 
             if (error) throw error;
 
+            const serviceId = data.id;
+
+            // 1.5) Se for usar calendário customizado, salva em service_availability
+            if (useCustomSchedule) {
+                const availabilityRows = customAvailability.map((slot) => {
+                    const isValid = slot.enabled && slot.start && slot.end;
+                    return isValid ? {
+                        service_id: serviceId,
+                        day_of_week: slot.dayIndex,
+                        start_time: slot.start,
+                        end_time: slot.end,
+                    } : null;
+                }).filter(Boolean);
+
+                if (availabilityRows.length > 0) {
+                    const { error: avErr } = await supabase
+                        .from('service_availability')
+                        .insert(availabilityRows);
+
+                    if (avErr) {
+                        console.error('Erro ao salvar horários de disponibilidade:', avErr);
+                        // Não vamos bloquear a criação do serviço por isso, mas loga.
+                    }
+                }
+            }
+
             alert('Serviço cadastrado com sucesso!');
+            sessionStorage.removeItem('jotam_service_draft');
             navigate('/admin/services');
         } catch (err: unknown) {
             console.error('Erro ao salvar serviço:', err);
@@ -183,6 +244,18 @@ export const AddService: React.FC = () => {
     };
 
     const handleGoToSettings = () => {
+        // ╔══════════════════════════════════════════════╗
+        // ║   LembreteZap — Salvamento completo antes   ║
+        // ║   de redirecionar para cadastro do número   ║
+        // ╚══════════════════════════════════════════════╝
+        const draft = {
+            formData,
+            homeService,
+            useCustomSchedule,
+            customAvailability,
+            imagePreviews,   // base64 — sobrevive ao redirect
+        };
+        sessionStorage.setItem('jotam_service_draft', JSON.stringify(draft));
         sessionStorage.setItem('jotam_pending_publish', location.pathname);
         navigate('/settings');
     };

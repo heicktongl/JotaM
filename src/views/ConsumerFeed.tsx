@@ -43,7 +43,7 @@ export const ConsumerFeed: React.FC = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const prodSelect = 'id, name, price, image_url, category_id, sellers(store_name, username)';
+        const prodSelect = 'id, name, price, image_url, category_id, sellers!products_seller_id_fkey(store_name, username)';
         const svcSelect = 'id, name, price, image_url, category_id, service_providers(name, rating)';
 
         // DIRETRIZ MÁXIMA HIPER-LOCAL: filtrar APENAS pelo bairro do usuário.

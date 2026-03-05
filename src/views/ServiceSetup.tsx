@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, Briefcase, Loader2, LogOut, FileText, Pickaxe, CheckCircle2, Camera, ImagePlus, X, Clock, Copy, Zap, Calendar } from 'lucide-react';
+import { ChevronLeft, Briefcase, Loader2, LogOut, FileText, Pickaxe, CheckCircle2, Clock, Zap, Calendar, User, Building2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Logo } from '../components/Logo';
 import { AvatarUploader } from '../components/AvatarUploader';
+import { PortfolioUploader } from '../components/PortfolioUploader';
 import { useLocationScope } from '../context/LocationContext';
+import { ThemeSelector } from '../components/ThemeSelector';
 
 export const ServiceSetup: React.FC = () => {
     const navigate = useNavigate();
@@ -19,13 +21,15 @@ export const ServiceSetup: React.FC = () => {
     const [isFetchingOriginal, setIsFetchingOriginal] = useState(true);
     const [error, setError] = useState('');
     const [existingProviderId, setExistingProviderId] = useState<string | null>(null);
+    const [themeId, setThemeId] = useState<string>('sovix_default');
+    const [providerType, setProviderType] = useState<'autonomo' | 'empresa'>('autonomo');
 
     // Avatar e Capa
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
     const [coverUrl, setCoverUrl] = useState<string | null>(null);
 
-    // Fotos do serviço (portfólio)
-    const [servicePhotos, setServicePhotos] = useState<{ file: File; preview: string }[]>([]);
+    // URLs das fotos de portfólio capturadas pelo PortfolioUploader
+    const [portfolioUrls, setPortfolioUrls] = useState<string[]>([]);
 
     // Horários de atendimento (grade semanal)
     const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
@@ -39,29 +43,6 @@ export const ServiceSetup: React.FC = () => {
         }))
     );
 
-
-    const handleServicePhotosSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = Array.from(e.target.files || []);
-        if (files.length === 0) return;
-
-        const remaining = 6 - servicePhotos.length;
-        const toAdd = files.slice(0, remaining);
-
-        toAdd.forEach((file) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setServicePhotos((prev) => [...prev, { file, preview: reader.result as string }]);
-            };
-            reader.readAsDataURL(file as Blob);
-        });
-
-        // Limpa o input pra permitir re-selecionar o mesmo arquivo
-        e.target.value = '';
-    };
-
-    const removeServicePhoto = (index: number) => {
-        setServicePhotos((prev) => prev.filter((_, i) => i !== index));
-    };
 
     // Carregar dados existentes
     React.useEffect(() => {
@@ -80,7 +61,9 @@ export const ServiceSetup: React.FC = () => {
                     setBio(data.bio || '');
                     setAvatarUrl(data.avatar_url || null);
                     setCoverUrl(data.cover_url || null);
+                    if (data.theme_id) setThemeId(data.theme_id);
                     setExistingProviderId(data.id);
+                    if (data.provider_type) setProviderType(data.provider_type as 'autonomo' | 'empresa');
 
                     // Carregar horários salvos
                     const { data: avData } = await supabase
@@ -112,23 +95,6 @@ export const ServiceSetup: React.FC = () => {
         };
         loadExistingProfile();
     }, [user]);
-
-    const uploadFile = async (file: File, path: string): Promise<string | null> => {
-        const { error: uploadError } = await supabase.storage
-            .from('avatars')
-            .upload(path, file, { upsert: true });
-
-        if (uploadError) {
-            console.error('Upload error:', uploadError);
-            return null;
-        }
-
-        const { data: { publicUrl } } = supabase.storage
-            .from('avatars')
-            .getPublicUrl(path);
-
-        return publicUrl;
-    };
 
     const handleCreateServiceProfile = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -162,6 +128,8 @@ export const ServiceSetup: React.FC = () => {
                 cover_url: coverUrl,
                 city: location?.city || null,
                 neighborhood: location?.neighborhood === 'Bairro Desconhecido' ? null : (location?.neighborhood || null),
+                provider_type: providerType,
+                theme_id: themeId,
             };
 
             let result;
@@ -192,17 +160,7 @@ export const ServiceSetup: React.FC = () => {
 
             const providerId = result.data.id;
 
-            // 3) Upload fotos de portfólio
-            if (servicePhotos.length > 0) {
-                const uploadPromises = servicePhotos.map(async (photo, index) => {
-                    const ext = photo.file.name.split('.').pop();
-                    const path = `${user.id}/service_${providerId}_${index}_${Date.now()}.${ext}`;
-                    return uploadFile(photo.file, path);
-                });
-                await Promise.all(uploadPromises);
-            }
-
-            // 4) Salvar horários de atendimento
+            // 3) Salvar horários de atendimento
             const availabilityRows = availability.map((slot) => ({
                 provider_id: providerId,
                 day_of_week: slot.dayIndex,
@@ -215,6 +173,28 @@ export const ServiceSetup: React.FC = () => {
             await supabase
                 .from('provider_availability')
                 .upsert(availabilityRows, { onConflict: 'provider_id,day_of_week' });
+
+            // 4) Salvar fotos de portfólio pendentes (caso new profile: uploadadas ao Storage sem providerId)
+            if (portfolioUrls.length > 0) {
+                // Verifica quais URLs já estão no banco para não duplicar
+                const { data: existing } = await supabase
+                    .from('provider_portfolio_photos')
+                    .select('url')
+                    .eq('provider_id', providerId);
+
+                const existingUrls = new Set((existing || []).map((r: { url: string }) => r.url));
+                const toInsert = portfolioUrls
+                    .filter((url) => !existingUrls.has(url))
+                    .map((url, idx) => ({
+                        provider_id: providerId,
+                        url,
+                        position: (existing?.length || 0) + idx,
+                    }));
+
+                if (toInsert.length > 0) {
+                    await supabase.from('provider_portfolio_photos').insert(toInsert);
+                }
+            }
 
             navigate('/profile');
         } catch (err: any) {
@@ -265,10 +245,10 @@ export const ServiceSetup: React.FC = () => {
                         className="text-center mb-10"
                     >
                         <h1 className="font-display text-3xl font-extrabold tracking-tight text-neutral-900 mb-2">
-                            {existingProviderId ? 'Configurar Sua Vitrine' : 'Ofereça Seus Serviços'}
+                            {existingProviderId ? 'Configurar Sua Vitrine' : 'Crie sua Vitrine de Serviços'}
                         </h1>
                         <p className="text-neutral-500">
-                            {existingProviderId ? 'Atualize suas informações e seu link público.' : 'Crie seu perfil profissional e comece a receber agendamentos.'}
+                            {existingProviderId ? 'Atualize suas informações e seu endereço exclusivo na Sovix.' : 'Crie seu perfil profissional e comece a ser descoberto na sua região.'}
                         </p>
                     </motion.div>
 
@@ -278,6 +258,39 @@ export const ServiceSetup: React.FC = () => {
                                 {error}
                             </div>
                         )}
+
+                        {/* ====== TIPO DE PRESTADOR ====== */}
+                        <div className="bg-white p-5 rounded-3xl border border-neutral-100 shadow-sm">
+                            <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest mb-3">
+                                Você atua como
+                            </p>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setProviderType('autonomo')}
+                                    className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${providerType === 'autonomo'
+                                        ? 'border-orange-500 bg-orange-50 text-orange-700'
+                                        : 'border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300'
+                                        }`}
+                                >
+                                    <User size={22} />
+                                    <span className="text-sm font-bold text-center leading-tight">Pessoa Física</span>
+                                    <span className="text-[10px] text-center leading-tight opacity-70">Autônomo / Freelancer</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setProviderType('empresa')}
+                                    className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 transition-all ${providerType === 'empresa'
+                                        ? 'border-blue-600 bg-blue-50 text-blue-700'
+                                        : 'border-neutral-200 bg-white text-neutral-500 hover:border-neutral-300'
+                                        }`}
+                                >
+                                    <Building2 size={22} />
+                                    <span className="text-sm font-bold text-center leading-tight">Empresa</span>
+                                    <span className="text-[10px] text-center leading-tight opacity-70">Pessoa Jurídica / CNPJ</span>
+                                </button>
+                            </div>
+                        </div>
 
                         {/* ====== FOTO DE CAPA E PERFIL ====== */}
                         <div className="relative mb-24">
@@ -337,7 +350,7 @@ export const ServiceSetup: React.FC = () => {
 
                             <div>
                                 <label className="block text-xs font-bold text-neutral-500 mb-2 uppercase tracking-widest">
-                                    Sua URL (jotaM.app/@...)
+                                    Username da Vitrine
                                 </label>
                                 <div className="relative">
                                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 font-bold">
@@ -348,10 +361,13 @@ export const ServiceSetup: React.FC = () => {
                                         required
                                         value={username}
                                         onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                                        placeholder="seunomeprofissional"
+                                        placeholder="ex: seunomeprofissional"
                                         className="w-full rounded-2xl bg-neutral-50 border border-neutral-200 py-4 pl-12 pr-4 text-sm font-bold text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all font-display lowercase"
                                     />
                                 </div>
+                                <p className="text-[10px] text-neutral-500 mt-2 ml-1 font-medium">
+                                    Seu endereço exclusivo será: <span className="text-purple-600 font-bold">sovix.com.br/@{username || 'nome_da_vitrine'}</span>
+                                </p>
                             </div>
 
                             <div>
@@ -373,63 +389,28 @@ export const ServiceSetup: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* ====== TEMA DA VITRINE ====== */}
+                        <div className="bg-white p-6 rounded-3xl border border-neutral-100 shadow-sm relative overflow-hidden">
+                            <ThemeSelector
+                                currentThemeId={themeId}
+                                userType="provider"
+                                onSelectTheme={setThemeId}
+                            />
+                        </div>
+
                         {/* ====== FOTOS DO SERVIÇO (PORTFÓLIO) ====== */}
                         <div className="bg-white p-6 rounded-3xl border border-neutral-100 shadow-sm">
                             <div className="flex items-center justify-between mb-1">
                                 <h3 className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
                                     Fotos dos seus Serviços (Opcional)
                                 </h3>
-                                <span className="text-[10px] font-bold text-neutral-400 uppercase">{servicePhotos.length}/6 fotos</span>
                             </div>
                             <p className="text-xs text-neutral-400 mb-4">A primeira foto será a capa do seu portfólio.</p>
-
-                            <div className="grid grid-cols-3 gap-3">
-                                <AnimatePresence mode="popLayout">
-                                    {servicePhotos.map((photo, index) => (
-                                        <motion.div
-                                            key={index}
-                                            initial={{ opacity: 0, scale: 0.8 }}
-                                            animate={{ opacity: 1, scale: 1 }}
-                                            exit={{ opacity: 0, scale: 0.8 }}
-                                            className="relative aspect-square rounded-2xl overflow-hidden shadow-sm border border-neutral-100 group"
-                                        >
-                                            <img src={photo.preview} alt={`Serviço ${index + 1}`} className="w-full h-full object-cover" />
-                                            <button
-                                                type="button"
-                                                onClick={() => removeServicePhoto(index)}
-                                                className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500"
-                                            >
-                                                <X size={14} />
-                                            </button>
-                                            {index === 0 && (
-                                                <div className="absolute bottom-0 left-0 right-0 bg-purple-600/90 py-1 text-center">
-                                                    <span className="text-[10px] font-bold text-white uppercase tracking-widest">Capa</span>
-                                                </div>
-                                            )}
-                                        </motion.div>
-                                    ))}
-                                </AnimatePresence>
-
-                                {servicePhotos.length < 6 && (
-                                    <label
-                                        htmlFor="portfolio-image-upload"
-                                        className="aspect-square rounded-2xl border-2 border-dashed border-neutral-200 bg-white flex flex-col items-center justify-center gap-2 text-neutral-400 hover:border-purple-500 hover:text-purple-500 transition-all cursor-pointer"
-                                    >
-                                        <input
-                                            id="portfolio-image-upload"
-                                            type="file"
-                                            accept="image/*"
-                                            multiple
-                                            className="hidden"
-                                            onChange={handleServicePhotosSelect}
-                                        />
-                                        <div className="p-2 rounded-full bg-neutral-50">
-                                            <ImagePlus size={22} />
-                                        </div>
-                                        <span className="text-[10px] font-bold text-center">Adicionar da<br />Galeria</span>
-                                    </label>
-                                )}
-                            </div>
+                            <PortfolioUploader
+                                uid={user?.id || ''}
+                                providerId={existingProviderId}
+                                onPhotosChange={setPortfolioUrls}
+                            />
                         </div>
 
                         {/* ====== HORÁRIOS DE ATENDIMENTO ====== */}
@@ -540,11 +521,10 @@ export const ServiceSetup: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Benefícios */}
                         <div className="bg-purple-50 rounded-2xl p-6 border border-purple-100">
                             <h3 className="text-sm font-bold text-purple-900 mb-3 flex items-center gap-2">
                                 <CheckCircle2 size={16} className="text-purple-600" />
-                                Por que oferecer serviços?
+                                Por que oferecer serviços com a gente?
                             </h3>
                             <ul className="text-xs text-purple-700 space-y-2 opacity-80">
                                 <li>• Seu perfil aparecerá no Feed e na Busca.</li>
@@ -574,7 +554,7 @@ export const ServiceSetup: React.FC = () => {
                         </button>
                     </form>
                 </div>
-            </main>
-        </div>
+            </main >
+        </div >
     );
 };

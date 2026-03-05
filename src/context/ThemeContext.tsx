@@ -20,7 +20,9 @@ const STORAGE_KEY = 'jotam_theme';
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [mode, setModeState] = useState<ThemeMode>(() => {
-        return (localStorage.getItem(STORAGE_KEY) as ThemeMode) || 'system';
+        const stored = localStorage.getItem(STORAGE_KEY) as ThemeMode;
+        if (stored === 'system' || !stored) return 'light'; // Força light como default invés de system
+        return stored;
     });
 
     const systemDark = () =>
@@ -56,14 +58,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         localStorage.setItem(STORAGE_KEY, m);
     };
 
-    // Toggle: system → dark → light → system
+    // Toggle: dark → light → dark
     const toggle = () => {
-        const next: Record<ThemeMode, ThemeMode> = {
-            system: 'dark',
-            dark: 'light',
-            light: 'system',
-        };
-        setMode(next[mode]);
+        setMode(mode === 'dark' ? 'light' : 'dark');
     };
 
     return (

@@ -43,6 +43,7 @@ export interface Database {
                     name: string;
                     icon: string | null;
                     type: 'product' | 'service';
+                    parent_id: string | null;
                     created_at: string;
                 };
                 Insert: Omit<Database['public']['Tables']['categories']['Row'], 'id' | 'created_at'>;
@@ -62,6 +63,7 @@ export interface Database {
                     instagram: string | null;
                     is_verified: boolean;
                     pinned_product_id: string | null;
+                    category_id: string | null;
                     views: number;
                     created_at: string;
                 };
@@ -145,6 +147,7 @@ export interface Database {
                     username: string | null;
                     bio: string | null;
                     avatar_url: string | null;
+                    category_id: string | null;
                     rating: number;
                     created_at: string;
                 };

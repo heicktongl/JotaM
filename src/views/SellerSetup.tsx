@@ -19,6 +19,7 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { AvatarUploader } from '../components/AvatarUploader';
 import { getDetailedLocation } from '../utils/geolocation';
+import { ThemeSelector } from '../components/ThemeSelector';
 
 interface StoreLocation {
     label: string;
@@ -74,6 +75,7 @@ export const SellerSetup: React.FC = () => {
     const [isChecking, setIsChecking] = useState(true);
     const [error, setError] = useState('');
     const [existingSellerId, setExistingSellerId] = useState<string | null>(null);
+    const [themeId, setThemeId] = useState<string>('sovix_default');
 
     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
     const [coverUrl, setCoverUrl] = useState<string | null>(null);
@@ -100,6 +102,7 @@ export const SellerSetup: React.FC = () => {
                 setUsername(data.username || '');
                 setAvatarUrl(data.avatar_url || null);
                 setCoverUrl(data.cover_url || null);
+                if (data.theme_id) setThemeId(data.theme_id);
                 // Busca localizações se existir
                 const { data: locs } = await supabase
                     .from('store_locations')
@@ -381,6 +384,7 @@ export const SellerSetup: React.FC = () => {
                     .update({
                         store_name: storeName.trim(),
                         username: cleanUsername,
+                        theme_id: themeId,
                     })
                     .eq('id', existingSellerId);
 
@@ -415,6 +419,7 @@ export const SellerSetup: React.FC = () => {
                         user_id: user.id,
                         store_name: storeName.trim(),
                         username: cleanUsername,
+                        theme_id: themeId,
                     })
                     .select('id')
                     .single();
@@ -497,10 +502,10 @@ export const SellerSetup: React.FC = () => {
                     </div>
                 </div>
                 <h1 className="font-display text-2xl font-extrabold tracking-tight text-neutral-900">
-                    Crie sua Loja Virtual
+                    Crie sua Vitrine na Sovix
                 </h1>
                 <p className="text-neutral-500 text-sm mt-1">
-                    Comece a vender para a sua vizinhança agora mesmo.
+                    Defina o nome e o endereço exclusivo da sua vitrine.
                 </p>
             </header>
 
@@ -564,9 +569,9 @@ export const SellerSetup: React.FC = () => {
                         />
                     </div>
 
-                    {/* Link da Loja */}
+                    {/* Username da Vitrine */}
                     <div>
-                        <label className="block text-sm font-bold text-neutral-900 mb-2">Link da Loja (@username)</label>
+                        <label className="block text-sm font-bold text-neutral-900 mb-2">Username da Vitrine</label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-neutral-400">
                                 <AtSign size={18} />
@@ -576,13 +581,34 @@ export const SellerSetup: React.FC = () => {
                                 required
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
-                                placeholder="doceria.mari"
+                                placeholder="ex: doceria.mari"
                                 className="w-full rounded-2xl bg-white border border-neutral-200 py-4 pl-12 pr-4 text-sm font-bold text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all shadow-sm lowercase"
                             />
                         </div>
-                        <p className="text-xs text-neutral-500 mt-2 ml-1">
-                            Seu link será: <span className="font-bold text-neutral-700">jotam.com.br/@{username || 'seu_link'}</span>
+                        <p className="text-xs text-neutral-500 mt-2 ml-1 font-medium">
+                            Seu endereço exclusivo será: <span className="text-orange-600">sovix.com.br/@{username || 'nome_da_vitrine'}</span>
                         </p>
+                    </div>
+
+                    {/* Separador de Tema */}
+                    <div className="relative py-2">
+                        <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-neutral-200" />
+                        </div>
+                        <div className="relative flex justify-center">
+                            <span className="bg-neutral-50 px-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">
+                                Aparência da Vitrine
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Seleção de Tema */}
+                    <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm">
+                        <ThemeSelector
+                            currentThemeId={themeId}
+                            userType="seller"
+                            onSelectTheme={setThemeId}
+                        />
                     </div>
 
                     {/* Separador */}

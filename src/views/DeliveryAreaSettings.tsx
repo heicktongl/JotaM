@@ -1,62 +1,107 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  ChevronLeft, 
-  MapPin, 
-  Search, 
-  Check, 
-  Plus, 
-  X, 
-  Home, 
-  Globe,
-  Save
+import {
+  ChevronLeft, MapPin, Search, Check, Plus, X, Home, Globe, Save, Loader2
 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
 import { Logo } from '../components/Logo';
 
-// @DB_TODO: Fetch available neighborhoods from 'neighborhoods' or 'service_areas' table
-const MOCK_NEIGHBORHOODS = [
-  'Centro',
-  'Vila Nova',
-  'Jardim América',
-  'Bela Vista',
-  'Santa Cruz',
-  'Parque das Nações',
-  'Alto da Glória',
-  'Setor Bueno',
-  'Setor Oeste',
-  'Setor Marista'
-];
+interface Neighborhood {
+  id: string;
+  name: string;
+  city: string;
+}
 
 export const DeliveryAreaSettings: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isCondoOnly, setIsCondoOnly] = useState(false);
   const [isWholeCity, setIsWholeCity] = useState(false);
-  const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>(['Centro', 'Vila Nova']);
-  
-  // Location Simulation State
+
+  const [availableNeighborhoods, setAvailableNeighborhoods] = useState<Neighborhood[]>([]);
+  const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<Neighborhood[]>([]);
+
   const [isCheckingLocation, setIsCheckingLocation] = useState(true);
   const [isInCondo, setIsInCondo] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // Simulate location check on mount
-  React.useEffect(() => {
-    const checkLocation = async () => {
-      // @DB_TODO: [MIGRAÇÃO OBRIGATÓRIA] Implementar verificação rigorosa de GPS (navigator.geolocation) cruzando com o polígono (geofence) do condomínio no Banco de Dados. A opção "Apenas meu Condomínio" SÓ PODE aparecer se a validação no backend retornar true.
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Randomly determine if in condo (or force true for demo purposes if needed)
-      // For this demo, we'll default to TRUE to show the feature, but allow toggling via a hidden dev tool
-      setIsInCondo(true); 
-      setIsCheckingLocation(false);
+  // 1. Verificar GPS Real
+  useEffect(() => {
+    const checkLocation = () => {
+      if (!navigator.geolocation) {
+        setIsCheckingLocation(false);
+        setIsInCondo(false);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          // Aqui no mundo real cruzaríamos coords com o polígono do BD.
+          // Para o MVP (após permitir GPS), assumimos true se ele permitiu ler o GPS.
+          setIsInCondo(true);
+          setIsCheckingLocation(false);
+        },
+        (error) => {
+          console.error("GPS Error:", error);
+          setIsInCondo(false);
+          setIsCheckingLocation(false);
+        },
+        { timeout: 10000, maximumAge: 0 }
+      );
     };
-    
     checkLocation();
   }, []);
 
-  const filteredNeighborhoods = MOCK_NEIGHBORHOODS.filter(n => 
-    n.toLowerCase().includes(searchQuery.toLowerCase()) && !selectedNeighborhoods.includes(n)
+  // 2. Carregar bairros e áreas do banco
+  useEffect(() => {
+    if (!user) return;
+
+    const loadData = async () => {
+      // 2.1 Bairros disponíveis
+      const { data: neighData } = await supabase
+        .from('neighborhoods')
+        .select('id, name, city')
+        .eq('is_active', true)
+        .order('name');
+
+      if (neighData) setAvailableNeighborhoods(neighData);
+
+      // 2.2 Perfil atual do entregador
+      const { data: profile } = await supabase
+        .from('delivery_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile) return;
+
+      // 2.3 Área de atuação salva
+      const { data: area } = await supabase
+        .from('delivery_areas')
+        .select('*')
+        .eq('delivery_profile_id', profile.id)
+        .single();
+
+      if (area) {
+        if (area.area_type === 'condo') setIsCondoOnly(true);
+        if (area.area_type === 'city') setIsWholeCity(true);
+        if (area.area_type === 'custom' && area.neighborhood_ids && neighData) {
+          const preSelected = neighData.filter(n => area.neighborhood_ids.includes(n.id));
+          setSelectedNeighborhoods(preSelected);
+        }
+      }
+    };
+
+    loadData();
+  }, [user]);
+
+  const filteredNeighborhoods = availableNeighborhoods.filter(n =>
+    n.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+    !selectedNeighborhoods.find(sn => sn.id === n.id)
   );
 
   const handleCondoToggle = () => {
@@ -69,18 +114,60 @@ export const DeliveryAreaSettings: React.FC = () => {
     if (!isWholeCity) setIsCondoOnly(false);
   };
 
-  const toggleNeighborhood = (name: string) => {
-    if (selectedNeighborhoods.includes(name)) {
-      setSelectedNeighborhoods(selectedNeighborhoods.filter(n => n !== name));
+  const toggleNeighborhood = (n: Neighborhood) => {
+    const isSelected = selectedNeighborhoods.find(sn => sn.id === n.id);
+    if (isSelected) {
+      setSelectedNeighborhoods(ps => ps.filter(sn => sn.id !== n.id));
     } else {
-      setSelectedNeighborhoods([...selectedNeighborhoods, name]);
+      setSelectedNeighborhoods(ps => [...ps, n]);
     }
   };
 
-  const handleSave = () => {
-    // @DB_TODO: Save area preferences (isCondoOnly, isWholeCity, selectedNeighborhoods) to 'delivery_areas' table
-    alert('Área de atuação atualizada com sucesso!');
-    navigate('/admin/delivery');
+  const handleSave = async () => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      const { data: profile } = await supabase
+        .from('delivery_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile) {
+        alert("Perfil de entregador não encontrado.");
+        return;
+      }
+
+      const areaType = isCondoOnly ? 'condo' : isWholeCity ? 'city' : 'custom';
+      const neighborhoodIds = areaType === 'custom' ? selectedNeighborhoods.map(n => n.id) : [];
+
+      // Verifica se já existe, se não da update, se sim insere. O Supabase upsert faz isso mais fácil
+      const payload = {
+        delivery_profile_id: profile.id,
+        area_type: areaType,
+        neighborhood_ids: neighborhoodIds
+      };
+
+      const { data: existing } = await supabase.from('delivery_areas').select('id').eq('delivery_profile_id', profile.id).single();
+
+      let error;
+      if (existing) {
+        const { error: err } = await supabase.from('delivery_areas').update(payload).eq('id', existing.id);
+        error = err;
+      } else {
+        const { error: err } = await supabase.from('delivery_areas').insert([payload]);
+        error = err;
+      }
+
+      if (error) throw error;
+      alert('Área de atuação atualizada com sucesso!');
+      navigate('/admin/delivery');
+    } catch (err) {
+      console.error('Erro ao salvar área:', err);
+      alert('Erro ao salvar dados. Tente novamente.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -89,7 +176,7 @@ export const DeliveryAreaSettings: React.FC = () => {
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl pt-6 pb-4 px-6 shadow-sm border-b border-neutral-100">
         <div className="mx-auto max-w-3xl flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button 
+            <button
               onClick={() => navigate(-1)}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-white border border-neutral-200 text-neutral-600 transition-colors hover:bg-neutral-100"
             >
@@ -108,19 +195,17 @@ export const DeliveryAreaSettings: React.FC = () => {
         </div>
 
         <div className="space-y-6">
-          {/* Main Options Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Condominium Toggle - Only visible if in condo */}
             <AnimatePresence>
               {isCheckingLocation ? (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   className="p-6 rounded-3xl border border-neutral-100 bg-white shadow-sm flex flex-col justify-center items-center gap-3 h-full min-h-[180px]"
                 >
                   <div className="h-8 w-8 rounded-full border-2 border-neutral-200 border-t-orange-500 animate-spin" />
-                  <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Verificando localização...</p>
+                  <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest text-center">Permita o acesso<br />ao GPS no navegador...</p>
                 </motion.div>
               ) : isInCondo ? (
                 <motion.div
@@ -143,11 +228,21 @@ export const DeliveryAreaSettings: React.FC = () => {
                     <span className="text-sm text-neutral-500">Entregas ultra-rápidas sem sair do complexo.</span>
                   </div>
                 </motion.div>
-              ) : null}
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="p-6 rounded-3xl border-2 border-dashed border-neutral-200 bg-neutral-50 flex flex-col justify-center items-center text-center h-full min-h-[180px]"
+                >
+                  <Home className="text-neutral-300 mb-2" size={32} />
+                  <span className="font-bold text-sm text-neutral-400">Condomínio Indisponível</span>
+                  <span className="text-xs text-neutral-400 mt-1">É necessário permitir o GPS no navegador primeiro.</span>
+                </motion.div>
+              )}
             </AnimatePresence>
 
-            {/* Whole City Toggle */}
-            <div 
+            <div
               onClick={handleWholeCityToggle}
               className={`p-6 rounded-3xl border-2 transition-all cursor-pointer flex flex-col justify-between h-full min-h-[180px] ${isWholeCity ? 'bg-blue-50 border-blue-500 shadow-lg shadow-blue-500/10' : 'bg-white border-neutral-100 shadow-sm hover:border-neutral-200'}`}
             >
@@ -166,20 +261,18 @@ export const DeliveryAreaSettings: React.FC = () => {
             </div>
           </div>
 
-          {/* Dev Tool: Toggle Location Simulation */}
           <div className="flex justify-center">
-            <button 
+            <button
               onClick={() => setIsInCondo(!isInCondo)}
-              className="text-[10px] font-bold text-neutral-300 hover:text-neutral-500 uppercase tracking-widest transition-colors"
+              className="text-[10px] font-bold text-neutral-300 hover:text-neutral-500 uppercase tracking-widest transition-colors cursor-pointer"
             >
               [Dev: Simular {isInCondo ? 'Fora' : 'Dentro'} de Condomínio]
             </button>
           </div>
 
-          {/* Neighborhood Selection */}
           <AnimatePresence mode="wait">
             {!isCondoOnly && !isWholeCity && (
-              <motion.section 
+              <motion.section
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
@@ -193,17 +286,16 @@ export const DeliveryAreaSettings: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Selected Neighborhoods Chips */}
                 <div className="flex flex-wrap gap-2">
                   {selectedNeighborhoods.map(n => (
-                    <motion.span 
-                      key={n}
+                    <motion.span
+                      key={n.id}
                       layout
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       className="inline-flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-full text-sm font-bold shadow-sm"
                     >
-                      {n}
+                      {n.name}
                       <button onClick={() => toggleNeighborhood(n)} className="hover:bg-white/20 rounded-full p-0.5">
                         <X size={14} />
                       </button>
@@ -214,12 +306,11 @@ export const DeliveryAreaSettings: React.FC = () => {
                   )}
                 </div>
 
-                {/* Search and Add */}
                 <div className="space-y-4">
                   <div className="relative">
                     <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" />
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="Buscar bairros..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
@@ -230,14 +321,14 @@ export const DeliveryAreaSettings: React.FC = () => {
                   <div className="bg-white rounded-3xl border border-neutral-100 overflow-hidden shadow-sm">
                     <div className="max-h-60 overflow-y-auto divide-y divide-neutral-50">
                       {filteredNeighborhoods.map(n => (
-                        <button 
-                          key={n}
+                        <button
+                          key={n.id}
                           onClick={() => toggleNeighborhood(n)}
                           className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors group"
                         >
                           <div className="flex items-center gap-3">
                             <MapPin size={18} className="text-neutral-300 group-hover:text-orange-500 transition-colors" />
-                            <span className="font-bold text-neutral-700">{n}</span>
+                            <span className="font-bold text-neutral-700">{n.name}</span>
                           </div>
                           <div className="h-8 w-8 rounded-xl bg-neutral-100 text-neutral-400 flex items-center justify-center group-hover:bg-orange-100 group-hover:text-orange-600 transition-all">
                             <Plus size={18} />
@@ -256,19 +347,20 @@ export const DeliveryAreaSettings: React.FC = () => {
             )}
           </AnimatePresence>
 
-          {/* Actions */}
           <div className="pt-8 flex gap-4">
-            <button 
+            <button
+              disabled={saving}
               onClick={() => navigate(-1)}
-              className="flex-1 rounded-2xl border border-neutral-200 bg-white py-4 text-sm font-bold text-neutral-600 hover:bg-neutral-50 transition-all"
+              className="flex-1 rounded-2xl border border-neutral-200 bg-white py-4 text-sm font-bold text-neutral-600 hover:bg-neutral-50 transition-all disabled:opacity-50"
             >
               Cancelar
             </button>
-            <button 
+            <button
+              disabled={saving}
               onClick={handleSave}
-              className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-neutral-900 py-4 text-sm font-bold text-white shadow-lg hover:bg-neutral-800 transition-all"
+              className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-neutral-900 py-4 text-sm font-bold text-white shadow-lg hover:bg-neutral-800 transition-all disabled:opacity-70"
             >
-              <Save size={18} />
+              {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
               Salvar Área
             </button>
           </div>

@@ -179,15 +179,13 @@ export const SettingsPage: React.FC = () => {
           {/* Toggle de tema — cicla entre system → dark → light */}
           <button
             onClick={toggle}
-            title={mode === 'system' ? 'Modo do sistema' : mode === 'dark' ? 'Modo escuro' : 'Modo claro'}
+            title={mode === 'dark' ? 'Modo escuro' : 'Modo claro'}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 text-neutral-600 transition-all hover:bg-neutral-200 hover:scale-105 active:scale-95"
           >
             {mode === 'dark' ? (
               <Moon size={18} className="text-indigo-500" />
-            ) : mode === 'light' ? (
-              <Sun size={18} className="text-amber-500" />
             ) : (
-              <Monitor size={18} className="text-neutral-500" />
+              <Sun size={18} className="text-amber-500" />
             )}
           </button>
         </div>

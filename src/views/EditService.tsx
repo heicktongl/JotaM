@@ -188,24 +188,62 @@ export const EditService: React.FC = () => {
                     ? { response_time_mins: null, duration_mins: parseInt(formData.duration_minutes, 10), billing_cycle: null }
                     : { response_time_mins: null, duration_mins: null, billing_cycle: formData.billing_cycle };
 
-            // ── UPDATE (edição) ou INSERT (criação nova) ──────────────
             let dbError;
+            let finalServiceId = id; // Vai ser preenchido caso seja criação
+
             if (id) {
                 // EDITAR: atualiza o registro existente pelo id
-                const { error } = await supabase
+                const { data: updatedService, error } = await supabase
                     .from('services')
                     .update({ ...basePayload, ...typePayload })
-                    .eq('id', id);
+                    .eq('id', id)
+                    .select()
+                    .single();
                 dbError = error;
+                if (updatedService) finalServiceId = updatedService.id;
             } else {
                 // CRIAR: insere novo registro
-                const { error } = await supabase
+                const { data: newService, error } = await supabase
                     .from('services')
-                    .insert({ ...basePayload, ...typePayload });
+                    .insert({ ...basePayload, ...typePayload })
+                    .select()
+                    .single();
                 dbError = error;
+                if (newService) finalServiceId = newService.id;
             }
 
             if (dbError) throw dbError;
+
+            // ── SALVANDO HORÁRIOS CUSTOMIZADOS ──────────────
+            if (finalServiceId) {
+                if (useCustomSchedule) {
+                    const availabilityRows = customAvailability.map((slot) => {
+                        const isValid = slot.enabled && slot.start && slot.end;
+                        return isValid ? {
+                            service_id: finalServiceId,
+                            day_of_week: slot.dayIndex,
+                            start_time: slot.start,
+                            end_time: slot.end,
+                        } : null;
+                    }).filter(Boolean);
+
+                    // Limpa tudo antes de salvar de novo (upsert)
+                    await supabase.from('service_availability').delete().eq('service_id', finalServiceId);
+
+                    if (availabilityRows.length > 0) {
+                        const { error: avErr } = await supabase
+                            .from('service_availability')
+                            .insert(availabilityRows);
+
+                        if (avErr) {
+                            console.error('Erro ao salvar horários de disponibilidade:', avErr);
+                        }
+                    }
+                } else {
+                    // Se desligou o switch "usar custom", apaga os rastros do banco
+                    await supabase.from('service_availability').delete().eq('service_id', finalServiceId);
+                }
+            }
 
             alert(id ? 'Serviço atualizado com sucesso!' : 'Serviço cadastrado com sucesso!');
             navigate('/admin/services');

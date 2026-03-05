@@ -13,57 +13,71 @@
 }
 
 /* ─────────────────────────────────────────────
-   DARK MODE — sobrescreve tokens do Tailwind v4
-   A classe .dark é aplicada no <html> pelo ThemeContext
+   DARK MODE — Dinâmico com Tailwind v4
+   Reescrevendo a paleta base (CSS variables).
+   Isso permite que rgba(), hovers (, border, shadow
+   funcione globalmente sem precisar reescrever as classes!
    ───────────────────────────────────────────── */
 
-/* Backgrounds */
-.dark body,
-.dark .bg-neutral-50   { background-color: #0f0f0f !important; }
-.dark .bg-white        { background-color: #1a1a1a !important; }
-.dark .bg-neutral-100  { background-color: #262626 !important; }
-.dark .bg-neutral-200  { background-color: #2e2e2e !important; }
+.dark {
+  /* Invertendo a gama Neutral do Tailwind para que 
+     hover, focus, border e text color respondam 
+     dinamicamente à engine do v4 */
+  --color-neutral-50: #0a0a0a;
+  --color-neutral-100: #1a1a1a;
+  --color-neutral-200: #262626;
+  --color-neutral-300: #404040;
+  --color-neutral-400: #737373;
 
-/* Bg especial para seção destacada */
-.dark .bg-neutral-900  { background-color: #f5f5f5 !important; }
+  --color-neutral-500: #8a8a8a;
+  --color-neutral-600: #a3a3a3;
 
-/* Textos */
-.dark .text-neutral-900 { color: #f5f5f5 !important; }
-.dark .text-neutral-700 { color: #d4d4d4 !important; }
-.dark .text-neutral-600 { color: #a3a3a3 !important; }
-.dark .text-neutral-500 { color: #8a8a8a !important; }
-.dark .text-neutral-400 { color: #6a6a6a !important; }
-
-/* Bordas */
-.dark .border-neutral-100 { border-color: #2a2a2a !important; }
-.dark .border-neutral-200 { border-color: #363636 !important; }
-
-/* Inputs dark */
-.dark input:not([type="time"]):not([type="file"]),
-.dark textarea,
-.dark select {
-  background-color: #262626 !important;
-  border-color: #363636 !important;
-  color: #f5f5f5 !important;
+  --color-neutral-700: #d4d4d4;
+  --color-neutral-800: #e5e5e5;
+  --color-neutral-900: #f5f5f5;
+  --color-neutral-950: #ffffff;
 }
 
-.dark input::placeholder,
-.dark textarea::placeholder {
-  color: #6a6a6a !important;
+/* Intercepta instâncias de bg-white que representam painéis, 
+   mapeando-os para superfície escura sem quebrar text-white */
+@layer utilities {
+  .dark .bg-white {
+    background-color: var(--color-neutral-100);
+  }
+
+  .dark .bg-white\/90 {
+    background-color: color-mix(in srgb, var(--color-neutral-100) 90%, transparent);
+  }
+
+  .dark .bg-white\/80 {
+    background-color: color-mix(in srgb, var(--color-neutral-100) 80%, transparent);
+  }
+
+  .dark .bg-white\/20 {
+    background-color: color-mix(in srgb, var(--color-neutral-100) 20%, transparent);
+  }
+
+  .dark .hover\:bg-white:hover {
+    background-color: var(--color-neutral-200);
+  }
+
+  /* Corrige botões neutros escuros (bg-neutral-900 text-white) que no dark mode 
+     ficam com fundo claro (neutral-900 vira branco). O texto deve ficar escuro! */
+  .dark .bg-neutral-900.text-white {
+    color: var(--color-neutral-50) !important;
+  }
+
+  .dark .hover\:bg-neutral-800.text-white:hover {
+    color: var(--color-neutral-50) !important;
+  }
 }
 
-/* Bg glassmorphism e backdrops */
-.dark .bg-white\/80  { background-color: rgba(26,26,26,0.85) !important; }
-.dark .bg-white\/20  { background-color: rgba(255,255,255,0.12) !important; }
-.dark .bg-neutral-50\/50 { background-color: rgba(15,15,15,0.5) !important; }
-
-/* Chips / pills neutros */
-.dark .bg-neutral-50 { background-color: #1a1a1a !important; }
-
-/* Accent orange — mantém inalterado, já funciona bem no dark */
-
-/* Divide e separator */
-.dark .divide-neutral-100 > * { border-color: #2a2a2a !important; }
+/* Garantir a transição suave global de cor */
+@layer base {
+  body {
+    @apply transition-colors duration-200 ease-in-out;
+  }
+}
 
 /* ─── Utilidades extras ─── */
 .glass {
@@ -77,6 +91,7 @@
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
 .hide-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;

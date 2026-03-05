@@ -16,6 +16,8 @@ import { useCart } from '../context/CartContext';
 import { useLocationScope } from '../context/LocationContext';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
+import { buildProductCheckoutMessage, openWhatsApp } from '../lib/msgZapeficiente';
+import { trackEvent } from '../lib/olheiro';
 
 type PaymentMethod = 'pix' | 'card' | 'cash';
 type Address = Database['public']['Tables']['user_addresses']['Row'];
@@ -33,8 +35,14 @@ export const CheckoutPage: React.FC = () => {
   const [isLoadingAddresses, setIsLoadingAddresses] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
+  const [checkoutMessage, setCheckoutMessage] = useState<string | null>(null);
+  const [sellerPhone, setSellerPhone] = useState<string | null>(null);
 
-  const SERVICE_FEE = 4.90;
+  // ── Taxa de Serviço ─────────────────────────────────────────────
+  // Atualmente zerada por decisão de negócio (Alpha).
+  // Para ativar no futuro, basta alterar o valor abaixo.
+  // Ex: const SERVICE_FEE = totalPrice * 0.05; (5%)
+  const SERVICE_FEE = 0;
   const finalTotal = totalPrice + SERVICE_FEE;
 
   // Busca endereços salvos do usuário
@@ -82,28 +90,52 @@ export const CheckoutPage: React.FC = () => {
         return;
       }
 
-      // Descobre o seller_id a partir do primeiro item do carrinho
-      // (assumindo que o carrinho é de um único vendedor)
+      // ╔═══════════════════════════════════════════════╗
+      // ║  MsgZapEficiente — Descoberta do vendedor      ║
+      // ║  Queries separadas para evitar PGRST201        ║
+      // ╚═══════════════════════════════════════════════╝
       const firstItem = items[0];
       const itemId = firstItem.item.id;
 
       let sellerId: string | null = null;
+      let fetchedPhone: string | null = null;
 
       if (firstItem.type === 'product') {
-        const { data } = await supabase
+        // 1a) Pega seller_id do produto
+        const { data: prodData } = await supabase
           .from('products')
           .select('seller_id')
           .eq('id', itemId)
           .single();
-        sellerId = data?.seller_id ?? null;
+        sellerId = prodData?.seller_id ?? null;
+
+        // 1b) Pega o WhatsApp do seller (query separada, sem join ambíguo)
+        if (sellerId) {
+          const { data: sellerData } = await supabase
+            .from('sellers')
+            .select('whatsapp')
+            .eq('id', sellerId)
+            .single();
+          fetchedPhone = sellerData?.whatsapp ?? null;
+        }
       } else {
-        // Para serviço, usa o provider_id como seller_id
-        const { data } = await supabase
+        // 2a) Pega provider_id do serviço
+        const { data: svcData } = await supabase
           .from('services')
           .select('provider_id')
           .eq('id', itemId)
           .single();
-        sellerId = data?.provider_id ?? null;
+        sellerId = svcData?.provider_id ?? null;
+
+        // 2b) Pega o WhatsApp do prestador
+        if (sellerId) {
+          const { data: provData } = await supabase
+            .from('service_providers')
+            .select('whatsapp')
+            .eq('id', sellerId)
+            .single();
+          fetchedPhone = provData?.whatsapp ?? null;
+        }
       }
 
       if (!sellerId) {
@@ -111,6 +143,18 @@ export const CheckoutPage: React.FC = () => {
         setIsLoading(false);
         return;
       }
+
+      // 👁️ Olheiro — registra início do checkout
+      trackEvent({
+        sellerId,
+        eventType: 'checkout_started',
+        productId: firstItem.type === 'product' ? itemId : undefined,
+        serviceId: firstItem.type === 'service' ? itemId : undefined,
+        metadata: { total: finalTotal, itemCount: items.length },
+      });
+
+      // Busca nome do cliente para a mensagem
+      const customerName = user.user_metadata?.name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Cliente';
 
       // 1. Cria o pedido na tabela orders
       const { data: order, error: orderErr } = await supabase
@@ -165,10 +209,26 @@ export const CheckoutPage: React.FC = () => {
 
       if (paymentErr) {
         console.error('Erro ao registrar pagamento:', paymentErr);
-        // Não bloqueia o fluxo — pedido já foi criado
       }
 
-      // 4. Sucesso!
+      // 4. Prepara a mensagem do WhatsApp (MsgZapEficiente)
+      const messageItems = items.map(cartItem => ({
+        name: cartItem.item.name,
+        quantity: cartItem.quantity,
+        price: cartItem.type === 'product'
+          ? (cartItem.item as any).price
+          : (cartItem.item as any).pricePerHour
+      }));
+
+      const addr = addresses.find(a => a.id === selectedAddressId) || null;
+      const zapMessage = buildProductCheckoutMessage(
+        order.id, messageItems, finalTotal, paymentMethod, addr, notes, customerName
+      );
+
+      setSellerPhone(fetchedPhone);
+      setCheckoutMessage(zapMessage);
+
+      // 5. Sucesso!
       setCreatedOrderId(order.id);
       clearCart();
     } catch (e: unknown) {
@@ -180,50 +240,85 @@ export const CheckoutPage: React.FC = () => {
     }
   };
 
-  // Tela de Sucesso
+  // Tela de Sucesso — MsgZapEficiente
   if (createdOrderId) {
     return (
-      <div className="min-h-screen bg-orange-600 flex flex-col items-center justify-center p-6 text-white">
+      <div className="min-h-screen bg-gradient-to-b from-orange-600 via-orange-500 to-orange-700 flex flex-col items-center justify-center p-6 text-white">
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           transition={{ type: 'spring', bounce: 0.5 }}
-          className="h-24 w-24 rounded-full bg-white flex items-center justify-center text-orange-600 mb-8 shadow-2xl"
+          className="h-24 w-24 rounded-full bg-white flex items-center justify-center text-orange-600 mb-6 shadow-2xl"
         >
           <CheckCircle2 size={48} />
         </motion.div>
+
         <motion.h1
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="font-display text-4xl font-extrabold tracking-tight text-center mb-4"
+          className="font-display text-3xl font-extrabold tracking-tight text-center mb-2"
         >
-          Pedido Confirmado!
+          Pedido Registrado!
         </motion.h1>
-        <motion.p
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="text-orange-100 text-center mb-4 max-w-xs"
-        >
-          Seu vizinho já foi notificado. Acompanhe o status na aba de Perfil.
-        </motion.p>
+
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.2 }}
-          className="text-orange-200 text-xs font-mono mb-10"
+          transition={{ delay: 0.1 }}
+          className="text-orange-200 text-xs font-mono mb-6"
         >
           Pedido #{createdOrderId.slice(0, 8).toUpperCase()}
         </motion.p>
-        <motion.button
+
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          onClick={() => navigate('/')}
-          className="rounded-2xl bg-white px-8 py-4 font-bold text-orange-600 shadow-lg transition-all hover:bg-neutral-50 active:scale-95"
+          transition={{ delay: 0.2 }}
+          className="w-full max-w-sm space-y-4"
         >
-          Voltar para o Início
-        </motion.button>
+          {/* Card explicativo */}
+          <div className="bg-white/15 backdrop-blur-md rounded-2xl p-5 border border-white/20">
+            <p className="text-sm font-bold text-center mb-3">
+              📲 Último passo: envie o resumo do pedido para o vendedor confirmar
+            </p>
+            <p className="text-xs text-orange-100 text-center leading-relaxed">
+              Ao clicar no botão abaixo, o WhatsApp abrirá com uma mensagem pronta contendo todos os detalhes do seu pedido. Basta enviar!
+            </p>
+          </div>
+
+          {/* Botão primário do WhatsApp */}
+          {sellerPhone && checkoutMessage ? (
+            <button
+              onClick={() => {
+                // 👁️ Olheiro — registra envio via WhatsApp
+                const firstItem = items[0];
+                trackEvent({
+                  sellerId: sellerPhone ? sellerPhone : '',
+                  eventType: 'whatsapp_sent',
+                  productId: firstItem?.type === 'product' ? firstItem.item.id : undefined,
+                  serviceId: firstItem?.type === 'service' ? firstItem.item.id : undefined,
+                  metadata: { orderId: createdOrderId },
+                });
+                openWhatsApp(sellerPhone, checkoutMessage);
+              }}
+              className="w-full flex items-center justify-center gap-3 rounded-2xl bg-[#25D366] px-8 py-4 font-bold text-white shadow-xl shadow-green-900/30 transition-all hover:bg-[#20BD5A] active:scale-[0.97] text-lg"
+            >
+              📩 Enviar Pedido via WhatsApp
+            </button>
+          ) : (
+            <div className="bg-white/20 backdrop-blur-md px-5 py-4 rounded-2xl text-sm text-center font-medium border border-white/20">
+              ⚠️ O vendedor ainda não cadastrou o WhatsApp. Entre em contato pela vitrine dele.
+            </div>
+          )}
+
+          {/* Botão secundário */}
+          <button
+            onClick={() => navigate('/')}
+            className="w-full rounded-2xl bg-white/10 backdrop-blur-sm px-8 py-3.5 font-semibold text-white/80 transition-all hover:bg-white/20 active:scale-[0.97] text-sm border border-white/10"
+          >
+            Voltar para o Início
+          </button>
+        </motion.div>
       </div>
     );
   }
@@ -241,7 +336,7 @@ export const CheckoutPage: React.FC = () => {
             <ChevronLeft size={20} />
           </button>
           <h1 className="font-display text-2xl font-extrabold tracking-tight text-neutral-900">
-            Finalizar Pedido
+            Resumo do Pedido
           </h1>
         </div>
       </header>
@@ -269,10 +364,6 @@ export const CheckoutPage: React.FC = () => {
                 </div>
               );
             })}
-            <div className="border-t border-neutral-100 pt-3 flex justify-between">
-              <span className="text-sm text-neutral-500">Taxa de serviço</span>
-              <span className="text-sm font-bold text-neutral-700">R$ {SERVICE_FEE.toFixed(2)}</span>
-            </div>
           </div>
         </section>
 
@@ -292,8 +383,8 @@ export const CheckoutPage: React.FC = () => {
                     key={addr.id}
                     onClick={() => setSelectedAddressId(addr.id)}
                     className={`w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all text-left ${selectedAddressId === addr.id
-                        ? 'border-orange-500 bg-orange-50/50'
-                        : 'border-neutral-100 hover:border-neutral-200'
+                      ? 'border-orange-500 bg-orange-50/50'
+                      : 'border-neutral-100 hover:border-neutral-200'
                       }`}
                   >
                     <div className={`p-2 rounded-xl shrink-0 ${selectedAddressId === addr.id ? 'bg-orange-600 text-white' : 'bg-neutral-100 text-neutral-500'}`}>
@@ -346,8 +437,8 @@ export const CheckoutPage: React.FC = () => {
                 key={method}
                 onClick={() => setPaymentMethod(method)}
                 className={`w-full flex items-center justify-between p-5 rounded-3xl border-2 transition-all ${paymentMethod === method
-                    ? 'border-orange-600 bg-orange-50/50'
-                    : 'border-neutral-100 bg-white hover:border-neutral-200'
+                  ? 'border-orange-600 bg-orange-50/50'
+                  : 'border-neutral-100 bg-white hover:border-neutral-200'
                   }`}
               >
                 <div className="flex items-center gap-4">
@@ -398,12 +489,12 @@ export const CheckoutPage: React.FC = () => {
           <button
             onClick={handleCheckout}
             disabled={isLoading || items.length === 0}
-            className="flex h-14 flex-1 items-center justify-center rounded-2xl bg-orange-600 px-6 font-bold text-white shadow-lg shadow-orange-600/30 transition-all hover:bg-orange-700 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex h-14 flex-1 items-center justify-center rounded-2xl bg-[#25D366] px-6 font-bold text-white shadow-lg shadow-green-600/30 transition-all hover:bg-[#20BD5A] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isLoading ? (
               <Loader2 size={22} className="animate-spin" />
             ) : (
-              'Finalizar Compra'
+              '📩 Enviar Pedido via WhatsApp'
             )}
           </button>
         </div>

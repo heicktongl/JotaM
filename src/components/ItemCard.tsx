@@ -38,21 +38,6 @@ export const ItemCard: React.FC<CardProps> = ({ item, type }) => {
             <span className="inline-flex items-center rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-neutral-900 backdrop-blur-md shadow-sm">
               {item.category}
             </span>
-            {!isProduct && service.service_type === 'immediate' && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-red-600/90 text-white px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest backdrop-blur-md shadow-sm">
-                <Zap size={10} /> Imediato
-              </span>
-            )}
-            {!isProduct && service.service_type === 'scheduled' && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-blue-600/90 text-white px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest backdrop-blur-md shadow-sm">
-                <Calendar size={10} /> Agenda
-              </span>
-            )}
-            {!isProduct && service.service_type === 'recurring' && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-green-600/90 text-white px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest backdrop-blur-md shadow-sm">
-                <Repeat size={10} /> Plano
-              </span>
-            )}
           </div>
           <div className="absolute top-3 right-3">
             <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-neutral-700 backdrop-blur-md shadow-sm">

@@ -26,6 +26,8 @@ import type { Database } from '../lib/database.types';
 import { ItemCard, ItemType } from '../components/ItemCard';
 import { AvatarUploader } from '../components/AvatarUploader';
 import { LocationGuard } from '../components/LocationGuard';
+import { THEME_REGISTRY } from '../lib/themeRegistry';
+import { LanchoneteTheme } from './themes/LanchoneteTheme';
 
 
 type Product = Database['public']['Tables']['products']['Row'];
@@ -66,6 +68,7 @@ export const SellerProfile: React.FC = () => {
   const [followersCount, setFollowersCount] = useState(0);
   const [storeLocations, setStoreLocations] = useState<StoreLocation[]>([]);
   const [availability, setAvailability] = useState<Availability[]>([]);
+  const [portfolioPhotos, setPortfolioPhotos] = useState<string[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +76,8 @@ export const SellerProfile: React.FC = () => {
   // Estado de localização do perfil (para LocationGuard)
   const [profileCity, setProfileCity] = useState<string | null>(null);
   const [profileNeighborhood, setProfileNeighborhood] = useState<string | null>(null);
+
+  const [themeId, setThemeId] = useState<string>('sovix_default');
 
   // Normaliza o username da URL (remove @ se existir)
   const rawUsername = username ? decodeURIComponent(username) : '';
@@ -117,6 +122,7 @@ export const SellerProfile: React.FC = () => {
         setViews(sellerData.views);
         setCreatedAt(sellerData.created_at);
         setPinnedProductId(sellerData.pinned_product_id);
+        if (sellerData.theme_id) setThemeId(sellerData.theme_id);
 
         // Dispara aumento de views fire & forget (RPC bulará RLS para visitantes)
         supabase.rpc('increment_seller_views', { seller_uuid: sellerData.id }).then();
@@ -143,6 +149,7 @@ export const SellerProfile: React.FC = () => {
           setViews(0);
           setRating(providerData.rating || 5.0);
           setCreatedAt(providerData.created_at);
+          if (providerData.theme_id) setThemeId(providerData.theme_id);
           // Localização para blindagem de prestadores
           setProfileCity(providerData.city ?? null);
           setProfileNeighborhood(providerData.neighborhood ?? null);
@@ -171,6 +178,14 @@ export const SellerProfile: React.FC = () => {
         // Buscar horários do prestador
         const { data: availData } = await supabase.from('provider_availability').select('*').eq('provider_id', targetId).order('day_of_week', { ascending: true });
         setAvailability(availData ?? []);
+
+        // Buscar fotos do portfólio
+        const { data: portfolioData } = await supabase
+          .from('provider_portfolio_photos')
+          .select('url')
+          .eq('provider_id', targetId)
+          .order('position', { ascending: true });
+        setPortfolioPhotos(portfolioData?.map(p => p.url) ?? []);
       }
 
       setProducts(productsData);
@@ -313,6 +328,46 @@ export const SellerProfile: React.FC = () => {
   const coverSeed = `${avatarSeed}cover`;
   const totalItems = products.length + services.length;
   const pinnedProduct = products.find(p => p.id === pinnedProductId) ?? products[0];
+
+  const activeTheme = THEME_REGISTRY.find(t => t.id === themeId) || THEME_REGISTRY[0];
+
+  if (activeTheme.id === 'lanchonete_01') {
+    return (
+      <LocationGuard
+        itemCity={profileCity}
+        itemNeighborhood={profileNeighborhood}
+        itemDisplayName={displayName}
+        bypass={isOwner}
+      >
+        <LanchoneteTheme
+          data={{
+            displayName,
+            normalizedUsername,
+            bio,
+            avatarUrl,
+            coverUrl,
+            rating,
+            totalItems,
+            followersCount,
+            whatsapp,
+            products,
+            services,
+            portfolioPhotos,
+            pinnedProductId,
+            profileCity,
+            profileNeighborhood,
+            storeLocations,
+            activeTab,
+            isOwner,
+            onShare: handleShare,
+            onFollow: handleFollow,
+            isFollowing,
+            theme: activeTheme,
+          }}
+        />
+      </LocationGuard>
+    );
+  }
 
   return (
     <LocationGuard
@@ -514,6 +569,46 @@ export const SellerProfile: React.FC = () => {
 
           <div className="space-y-10">
             {/* Bloco de Horários: Renderiza apenas se for Prestador E tiver horários cadastrados */}
+            {profileType === 'provider' && portfolioPhotos.length > 0 && (
+              <section>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-1.5 h-6 bg-[#8b5cf6] rounded-full"></div>
+                  <h2 className="text-xl font-bold text-neutral-900">Portfólio de Serviços</h2>
+                </div>
+                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory">
+                  {portfolioPhotos.map((url, idx) => (
+                    <div
+                      key={idx}
+                      className="relative shrink-0 w-48 h-48 rounded-3xl overflow-hidden shadow-sm border border-neutral-100 snap-start bg-neutral-100"
+                    >
+                      <img
+                        src={url}
+                        alt={`Portfólio ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                      {idx === 0 && (
+                        <div className="absolute bottom-0 left-0 right-0 bg-[#8b5cf6]/90 py-1 text-center">
+                          <span className="text-[10px] font-bold text-white uppercase tracking-widest">Capa</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {/* Indicador de mais fotos */}
+                {portfolioPhotos.length > 2 && (
+                  <div className="flex justify-center gap-1.5 mt-3">
+                    {portfolioPhotos.map((_, idx) => (
+                      <div
+                        key={idx}
+                        className={`h-1.5 rounded-full transition-all ${idx === 0 ? 'w-4 bg-[#8b5cf6]' : 'w-1.5 bg-neutral-300'}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
             {profileType === 'provider' && availability.length > 0 && (
               <section>
                 <div className="flex items-center gap-3 mb-6">

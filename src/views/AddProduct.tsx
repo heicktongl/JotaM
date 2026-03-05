@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, Plus, X, Loader2, Phone, ArrowRight } from 'lucide-react';
+import { ChevronLeft, Plus, X, Loader2, Phone, ArrowRight, ChevronDown, ChevronUp, Puzzle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { Logo } from '../components/Logo';
@@ -23,7 +23,54 @@ export const AddProduct: React.FC = () => {
     stock: '',
   });
 
+  // Estado dos grupos de complemento
+  const [complementGroups, setComplementGroups] = useState<Array<{
+    name: string;
+    required: boolean;
+    max_choices: number;
+    items: Array<{ name: string; price: string }>
+  }>>([]);
+  const [openGroupIndex, setOpenGroupIndex] = useState<number | null>(null);
+
   useEffect(() => {
+    // ╔══════════════════════════════════════════╗
+    // ║     LembreteZap — Restauração de Rascunho ║
+    // ║  Recupera formData, fotos e complementos  ║
+    // ╚══════════════════════════════════════════╝
+    let defaultCategoryId = '';
+    const draft = sessionStorage.getItem('lembretezap_product_draft');
+    if (draft) {
+      try {
+        console.log('[LembreteZap] Rascunho encontrado, restaurando...');
+        const parsed = JSON.parse(draft);
+        if (parsed) {
+          // Restaurar dados do formulário
+          if (parsed.formData) {
+            setFormData(parsed.formData);
+            defaultCategoryId = parsed.formData.category_id || '';
+          }
+          // Restaurar fotos (previews base64)
+          if (parsed.imagePreviews && parsed.imagePreviews.length > 0) {
+            setImagePreviews(parsed.imagePreviews);
+            // Converter base64 de volta a File para o upload funcionar
+            const filePromises = parsed.imagePreviews.map(async (b64: string, idx: number) => {
+              const res = await fetch(b64);
+              const blob = await res.blob();
+              return new File([blob], `foto_${idx}.jpg`, { type: blob.type || 'image/jpeg' });
+            });
+            Promise.all(filePromises).then(files => setImages(files));
+          }
+          // Restaurar complementos
+          if (parsed.complementGroups) {
+            setComplementGroups(parsed.complementGroups);
+          }
+        }
+      } catch (e) {
+        console.error('[LembreteZap] Erro ao restaurar rascunho:', e);
+      }
+    }
+
+    // 2. Busca categorias em paralelo
     supabase
       .from('categories')
       .select('id, name')
@@ -31,7 +78,11 @@ export const AddProduct: React.FC = () => {
       .then(({ data }) => {
         if (data && data.length > 0) {
           setCategories(data);
-          setFormData(f => ({ ...f, category_id: data[0].id }));
+          // Se não havia rascunho preenchendo a categoria, força a primeira
+          setFormData(f => ({
+            ...f,
+            category_id: f.category_id || defaultCategoryId || data[0].id
+          }));
         }
       });
   }, []);
@@ -145,8 +196,48 @@ export const AddProduct: React.FC = () => {
 
       if (error) throw error;
 
+      // 5. Salvar complementos (se houver)
+      if (complementGroups.length > 0) {
+        const { data: insertedProduct } = await supabase
+          .from('products')
+          .select('id')
+          .eq('seller_id', sellerData.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (insertedProduct) {
+          for (let gIdx = 0; gIdx < complementGroups.length; gIdx++) {
+            const group = complementGroups[gIdx];
+            const { data: savedGroup } = await supabase
+              .from('product_complement_groups')
+              .insert({
+                product_id: insertedProduct.id,
+                name: group.name,
+                required: group.required,
+                max_choices: group.max_choices,
+                position: gIdx,
+              })
+              .select('id')
+              .single();
+
+            if (savedGroup && group.items.length > 0) {
+              await supabase.from('product_complement_items').insert(
+                group.items.map((item, iIdx) => ({
+                  group_id: savedGroup.id,
+                  name: item.name,
+                  price: parseFloat(item.price) || 0,
+                  position: iIdx,
+                }))
+              );
+            }
+          }
+        }
+      }
+
       alert('Produto cadastrado com sucesso!');
-      // Redireciona para o hub de perfil evitando fluxo de "voltar, voltar, voltar"
+      sessionStorage.removeItem('lembretezap_product_draft');
+      sessionStorage.removeItem('jotam_pending_publish');
       navigate('/profile');
     } catch (err: unknown) {
       console.error('Erro ao salvar produto:', err);
@@ -157,6 +248,17 @@ export const AddProduct: React.FC = () => {
   };
 
   const handleGoToSettings = () => {
+    // ╔══════════════════════════════════════════════╗
+    // ║   LembreteZap — Salvamento completo antes   ║
+    // ║   de redirecionar para cadastro do número   ║
+    // ╚══════════════════════════════════════════════╝
+    console.log('[LembreteZap] Salvando rascunho completo antes de redirecionar...');
+    const draft = {
+      formData,
+      imagePreviews,   // base64 — sobrevive ao redirect
+      complementGroups // grupos e itens
+    };
+    sessionStorage.setItem('lembretezap_product_draft', JSON.stringify(draft));
     sessionStorage.setItem('jotam_pending_publish', location.pathname);
     navigate('/settings');
   };
@@ -366,7 +468,160 @@ export const AddProduct: React.FC = () => {
             </div>
           </section>
 
-          {/* Actions */}
+          {/* ====== SEÇÃO DE COMPLEMENTOS ====== */}
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Puzzle size={14} className="text-orange-500" />
+                <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Complementos (Opcional)</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setComplementGroups(prev => [
+                    ...prev,
+                    { name: '', required: false, max_choices: 1, items: [] }
+                  ]);
+                  setOpenGroupIndex(complementGroups.length);
+                }}
+                className="flex items-center gap-1.5 text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-full transition-all"
+              >
+                <Plus size={12} /> Novo Grupo
+              </button>
+            </div>
+
+            {complementGroups.length === 0 && (
+              <p className="text-xs text-neutral-400 text-center py-4 border-2 border-dashed border-neutral-200 rounded-2xl">
+                Sem complementos. Adicione grupos como "Tamanho", "Adicionais", etc.
+              </p>
+            )}
+
+            {complementGroups.map((group, gIdx) => (
+              <div key={gIdx} className="rounded-2xl border border-neutral-200 bg-white overflow-hidden">
+                {/* Cabeçalho do grupo */}
+                <div className="p-4 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setOpenGroupIndex(openGroupIndex === gIdx ? null : gIdx)}
+                    className="flex-1 flex items-center gap-2 text-left"
+                  >
+                    {openGroupIndex === gIdx ? <ChevronUp size={16} className="text-neutral-400 shrink-0" /> : <ChevronDown size={16} className="text-neutral-400 shrink-0" />}
+                    <input
+                      type="text"
+                      placeholder="Nome do grupo (ex: Tamanho)"
+                      value={group.name}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        const updated = [...complementGroups];
+                        updated[gIdx].name = e.target.value;
+                        setComplementGroups(updated);
+                      }}
+                      className="flex-1 text-sm font-bold text-neutral-900 bg-transparent outline-none placeholder:text-neutral-400 placeholder:font-normal"
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setComplementGroups(prev => prev.filter((_, i) => i !== gIdx))}
+                    className="h-7 w-7 flex items-center justify-center rounded-full text-neutral-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+
+                {openGroupIndex === gIdx && (
+                  <div className="px-4 pb-4 space-y-4 border-t border-neutral-100 pt-4">
+                    {/* Configurações do grupo */}
+                    <div className="flex flex-wrap items-center gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={group.required}
+                          onChange={(e) => {
+                            const updated = [...complementGroups];
+                            updated[gIdx].required = e.target.checked;
+                            setComplementGroups(updated);
+                          }}
+                          className="w-4 h-4 accent-orange-500"
+                        />
+                        <span className="text-xs font-bold text-neutral-700">Obrigatório</span>
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-neutral-500">Máx. escolhas:</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={group.max_choices}
+                          onChange={(e) => {
+                            const updated = [...complementGroups];
+                            updated[gIdx].max_choices = parseInt(e.target.value) || 1;
+                            setComplementGroups(updated);
+                          }}
+                          className="w-16 rounded-xl border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs font-bold text-center focus:border-orange-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Itens do grupo */}
+                    <div className="space-y-2">
+                      {group.items.map((item, iIdx) => (
+                        <div key={iIdx} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            placeholder="Nome (ex: Grande)"
+                            value={item.name}
+                            onChange={(e) => {
+                              const updated = [...complementGroups];
+                              updated[gIdx].items[iIdx].name = e.target.value;
+                              setComplementGroups(updated);
+                            }}
+                            className="flex-1 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-orange-500 focus:outline-none"
+                          />
+                          <div className="relative">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-neutral-400 font-bold">R$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0,00"
+                              value={item.price}
+                              onChange={(e) => {
+                                const updated = [...complementGroups];
+                                updated[gIdx].items[iIdx].price = e.target.value;
+                                setComplementGroups(updated);
+                              }}
+                              className="w-24 rounded-xl border border-neutral-200 bg-neutral-50 pl-7 pr-2 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-orange-500 focus:outline-none"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = [...complementGroups];
+                              updated[gIdx].items = updated[gIdx].items.filter((_, i) => i !== iIdx);
+                              setComplementGroups(updated);
+                            }}
+                            className="h-8 w-8 flex items-center justify-center rounded-full text-neutral-400 hover:bg-red-50 hover:text-red-500 transition-colors shrink-0"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...complementGroups];
+                          updated[gIdx].items.push({ name: '', price: '' });
+                          setComplementGroups(updated);
+                        }}
+                        className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border-2 border-dashed border-neutral-200 text-xs font-bold text-neutral-400 hover:border-orange-400 hover:text-orange-500 transition-all"
+                      >
+                        <Plus size={12} /> Adicionar item
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </section>
           <div className="pt-8 flex flex-col sm:flex-row gap-4">
             <button
               type="button"
