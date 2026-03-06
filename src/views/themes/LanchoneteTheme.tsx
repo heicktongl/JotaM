@@ -1,5 +1,6 @@
 import React from 'react';
-import { Share2, Clock, MapPin, Star, ChevronRight, Check } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Share2, Clock, MapPin, Star, ChevronRight, ChevronLeft, Check, Heart, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { VitrineTheme } from '../../lib/themeRegistry';
 
@@ -25,10 +26,12 @@ interface ProfileData {
     onShare: () => void;
     onFollow: () => void;
     isFollowing: boolean;
+    isFollowLoading?: boolean;
     theme: VitrineTheme;
 }
 
 export const LanchoneteTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
+    const navigate = useNavigate();
     const { theme } = data;
 
     const pinnedProduct = data.products.find(p => p.id === data.pinnedProductId) ?? data.products[0];
@@ -58,6 +61,13 @@ export const LanchoneteTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
                 >
                     <Share2 size={18} />
                 </button>
+                {/* Back Button top left */}
+                <button
+                    onClick={() => navigate(-1)}
+                    className="absolute top-6 left-6 lg:left-8 w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white"
+                >
+                    <ChevronLeft size={22} />
+                </button>
             </div>
 
             <main className="max-w-2xl mx-auto px-4 relative z-10 -mt-16">
@@ -78,7 +88,7 @@ export const LanchoneteTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
 
                 {/* Title & Info */}
                 <div className="text-center mt-4">
-                    <h1 className="text-3xl font-black text-neutral-900" style={{ fontFamily: '"Playfair Display", serif' }}>
+                    <h1 className="text-3xl font-black text-neutral-900" style={{ fontFamily: theme.layout.fontFamilyHeading }}>
                         {data.displayName}
                     </h1>
                     <div className="flex items-center justify-center gap-2 mt-1 mb-3">
@@ -118,7 +128,7 @@ export const LanchoneteTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
                             href={`https://wa.me/${data.whatsapp.replace(/[^0-9]/g, '')}`}
                             target="_blank"
                             rel="noreferrer"
-                            className="flex-1 bg-[#ff5100] hover:bg-[#e64900] text-white py-3.5 rounded-full font-bold shadow-[0_8px_20px_rgba(255,81,0,0.25)] flex items-center justify-center gap-2 transition-all"
+                            className="flex-1 bg-[var(--theme-primary)] text-white py-3.5 rounded-full font-bold flex items-center justify-center gap-2 transition-all hover:brightness-110"
                         >
                             {theme.layout.ctaIcon === 'utensils' ? (
                                 <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14h-2v-4H8V9c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v3h-3v4z" /></svg>
@@ -139,6 +149,29 @@ export const LanchoneteTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
                         Compartilhar
                     </button>
                 </div>
+
+                {/* Botão Seguir */}
+                {!data.isOwner && (
+                    <div className="mt-3">
+                        <button
+                            onClick={data.onFollow}
+                            disabled={data.isFollowLoading}
+                            className={`w-full py-3 rounded-full font-bold transition-all flex items-center gap-2 justify-center ${data.isFollowing
+                                ? 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 border border-neutral-200'
+                                : 'bg-neutral-900 text-white shadow-lg shadow-neutral-900/20 hover:bg-neutral-800'
+                                }`}
+                        >
+                            {data.isFollowLoading ? (
+                                <Loader2 size={18} className="animate-spin" />
+                            ) : (
+                                <>
+                                    <Heart size={18} className={data.isFollowing ? 'fill-current text-pink-500' : ''} />
+                                    {data.isFollowing ? 'Seguindo' : 'Seguir'}
+                                </>
+                            )}
+                        </button>
+                    </div>
+                )}
 
                 {/* Info Cards (Status & Location) */}
                 <div className="mt-8 space-y-3">
@@ -177,7 +210,7 @@ export const LanchoneteTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
                 {/* Vibe do Local */}
                 {theme.layout.showPortfolio && data.portfolioPhotos.length > 0 && (
                     <section className="mt-10">
-                        <h3 className="font-black text-neutral-900 text-lg mb-4" style={{ fontFamily: '"Playfair Display", serif' }}>
+                        <h3 className="font-black text-neutral-900 text-lg mb-4" style={{ fontFamily: theme.layout.fontFamilyHeading }}>
                             Vibe do Local
                         </h3>
                         <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide snap-x">
@@ -193,8 +226,8 @@ export const LanchoneteTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
                 {/* Cardápio Digital */}
                 <section className="mt-8">
                     <div className="flex items-center gap-2 mb-6">
-                        <div className="w-1.5 h-5 bg-[#ff5100] rounded-full" />
-                        <h3 className="font-black text-neutral-900 text-xl" style={{ fontFamily: '"Playfair Display", serif' }}>
+                        <div className="w-1.5 h-5 rounded-full" style={{ backgroundColor: 'var(--theme-primary)' }} />
+                        <h3 className="font-black text-neutral-900 text-xl" style={{ fontFamily: theme.layout.fontFamilyHeading }}>
                             Cardápio Digital
                         </h3>
                     </div>
@@ -222,7 +255,7 @@ export const LanchoneteTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
                             </div>
 
                             <div className="p-6 pt-8 bg-white text-neutral-900 relative">
-                                <h4 className="text-xl font-black mb-2" style={{ fontFamily: '"Playfair Display", serif' }}>
+                                <h4 className="text-xl font-black mb-2" style={{ fontFamily: theme.layout.fontFamilyHeading }}>
                                     {pinnedProduct.name}
                                 </h4>
                                 <p className="text-sm text-neutral-500 leading-relaxed font-medium mb-4 line-clamp-3">
@@ -231,9 +264,12 @@ export const LanchoneteTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <span className="block text-xs text-neutral-400 line-through font-bold">R$ {(pinnedProduct.price * 1.15).toFixed(2).replace('.', ',')}</span>
-                                        <span className="text-2xl font-black text-[#ff5100]">R$ {pinnedProduct.price.toFixed(2).replace('.', ',')}</span>
+                                        <span className="text-2xl font-black" style={{ color: 'var(--theme-primary)' }}>R$ {pinnedProduct.price.toFixed(2).replace('.', ',')}</span>
                                     </div>
-                                    <button className="w-10 h-10 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center text-neutral-900 transition-colors">
+                                    <button
+                                        onClick={() => navigate(`/item/product/${pinnedProduct.id}`)}
+                                        className="w-10 h-10 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center text-neutral-900 transition-colors"
+                                    >
                                         <ChevronRight size={20} />
                                     </button>
                                 </div>
@@ -250,7 +286,11 @@ export const LanchoneteTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
                             const badgeLabel = isRed ? 'NOVIDADE' : 'VEGANO';
 
                             return (
-                                <div key={prod.id} className="bg-white rounded-3xl border border-neutral-100 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow cursor-pointer">
+                                <div
+                                    key={prod.id}
+                                    onClick={() => navigate(`/item/product/${prod.id}`)}
+                                    className="bg-white rounded-3xl border border-neutral-100 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition-shadow cursor-pointer"
+                                >
                                     <div className="w-full aspect-square relative bg-neutral-50">
                                         <img
                                             src={prod.image_url || `https://picsum.photos/seed/${prod.id}/400/400`}
@@ -264,7 +304,7 @@ export const LanchoneteTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
                                     <div className="p-4 flex flex-col flex-1">
                                         <h4 className="font-bold text-neutral-900 leading-tight mb-1">{prod.name}</h4>
                                         <p className="text-[10px] text-neutral-500 line-clamp-2 leading-relaxed mb-3 flex-1">{prod.description}</p>
-                                        <span className="font-black text-[#ff5100]">R$ {prod.price.toFixed(2).replace('.', ',')}</span>
+                                        <span className="font-black" style={{ color: 'var(--theme-primary)' }}>R$ {prod.price.toFixed(2).replace('.', ',')}</span>
                                     </div>
                                 </div>
                             );

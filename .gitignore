@@ -6,3 +6,7 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Antigravity Agent Assets
+.agent/
+.agents/

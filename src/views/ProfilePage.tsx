@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Settings, Heart, Clock, ChevronRight, LogOut, Store, Bike, Briefcase,
   ChevronDown, DollarSign, Package, Plus, MapPin,
-  Star, Loader2
+  Star, Loader2, Palette
 } from 'lucide-react';
 import { BottomNav } from '../components/BottomNav';
 import { LocationSelector } from '../components/LocationSelector';
@@ -260,7 +260,7 @@ export const ProfilePage: React.FC = () => {
                       >
                         <div className="flex items-center gap-3">
                           <div className="p-2 rounded-xl bg-neutral-100 text-neutral-600"><Settings size={18} /></div>
-                          <span className="font-bold text-neutral-900">Configurar Minha Vitrine</span>
+                          <span className="font-bold text-neutral-900">Dados da Vitrine</span>
                         </div>
                         <ChevronRight size={18} className="text-neutral-400" />
                       </button>
@@ -450,7 +450,7 @@ export const ProfilePage: React.FC = () => {
                       <div className="flex items-center gap-3">
                         <div className="p-2 rounded-xl bg-green-50 text-green-600"><DollarSign size={18} /></div>
                         <div className="text-left">
-                          <span className="font-bold text-neutral-900 block">Ganhe dinheiro com a jotaM</span>
+                          <span className="font-bold text-neutral-900 block">Ganhe dinheiro com a Sovix</span>
                           <span className="text-xs text-neutral-500">Descubra formas de lucrar na sua região</span>
                         </div>
                       </div>

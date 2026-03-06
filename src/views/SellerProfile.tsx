@@ -28,6 +28,9 @@ import { AvatarUploader } from '../components/AvatarUploader';
 import { LocationGuard } from '../components/LocationGuard';
 import { THEME_REGISTRY } from '../lib/themeRegistry';
 import { LanchoneteTheme } from './themes/LanchoneteTheme';
+import { BioBurgerTheme } from './themes/BioBurgerTheme';
+import { DynamicThemeProvider, useDynamicTheme } from '../contexts/DynamicThemeContext';
+import { ThemeCustomization } from '../lib/themeEngine';
 
 
 type Product = Database['public']['Tables']['products']['Row'];
@@ -78,6 +81,7 @@ export const SellerProfile: React.FC = () => {
   const [profileNeighborhood, setProfileNeighborhood] = useState<string | null>(null);
 
   const [themeId, setThemeId] = useState<string>('sovix_default');
+  const [customizations, setCustomizations] = useState<ThemeCustomization | null>(null);
 
   // Normaliza o username da URL (remove @ se existir)
   const rawUsername = username ? decodeURIComponent(username) : '';
@@ -123,6 +127,7 @@ export const SellerProfile: React.FC = () => {
         setCreatedAt(sellerData.created_at);
         setPinnedProductId(sellerData.pinned_product_id);
         if (sellerData.theme_id) setThemeId(sellerData.theme_id);
+        if (sellerData.theme_customization) setCustomizations(sellerData.theme_customization);
 
         // Dispara aumento de views fire & forget (RPC bulará RLS para visitantes)
         supabase.rpc('increment_seller_views', { seller_uuid: sellerData.id }).then();
@@ -150,6 +155,7 @@ export const SellerProfile: React.FC = () => {
           setRating(providerData.rating || 5.0);
           setCreatedAt(providerData.created_at);
           if (providerData.theme_id) setThemeId(providerData.theme_id);
+          if (providerData.theme_customization) setCustomizations(providerData.theme_customization);
           // Localização para blindagem de prestadores
           setProfileCity(providerData.city ?? null);
           setProfileNeighborhood(providerData.neighborhood ?? null);
@@ -203,6 +209,7 @@ export const SellerProfile: React.FC = () => {
         }
       }
 
+      // Buscar contagem de seguidores ou check de ownership
       // Check de isOwner (logado auth == userId do dono)
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -290,7 +297,7 @@ export const SellerProfile: React.FC = () => {
   const handleShare = () => {
     if (navigator.share) {
       navigator.share({
-        title: `Conheça ${displayName} no jotaM`,
+        title: `Conheça ${displayName} na Sovix`,
         text: bio || 'Confira os produtos e serviços de elite da nossa rede!',
         url: window.location.href,
       }).catch(console.error);
@@ -324,44 +331,56 @@ export const SellerProfile: React.FC = () => {
     );
   }
 
-  const avatarSeed = normalizedUsername;
-  const coverSeed = `${avatarSeed}cover`;
-  const totalItems = products.length + services.length;
-  const pinnedProduct = products.find(p => p.id === pinnedProductId) ?? products[0];
+  const profileDataPayload = {
+    displayName,
+    normalizedUsername,
+    bio,
+    avatarUrl,
+    coverUrl,
+    rating,
+    followersCount,
+    whatsapp,
+    products,
+    services,
+    totalItems: products.length + services.length,
+    portfolioPhotos,
+    pinnedProductId,
+    profileCity,
+    profileNeighborhood,
+    storeLocations,
+    activeTab,
+    isOwner,
+    onShare: handleShare,
+    onFollow: handleFollow,
+    isFollowing,
+    isFollowLoading,
+    createdAt,
+    views,
+    isVerified
+  };
 
-  const activeTheme = THEME_REGISTRY.find(t => t.id === themeId) || THEME_REGISTRY[0];
+  return (
+    <DynamicThemeProvider initialThemeId={themeId} initialCustomizations={customizations}>
+      <SellerProfileContent data={profileDataPayload as any} />
+    </DynamicThemeProvider>
+  );
+};
+
+const SellerProfileContent: React.FC<{ data: any }> = ({ data }) => {
+  const navigate = useNavigate();
+  const { activeTheme } = useDynamicTheme();
 
   if (activeTheme.id === 'lanchonete_01') {
     return (
       <LocationGuard
-        itemCity={profileCity}
-        itemNeighborhood={profileNeighborhood}
-        itemDisplayName={displayName}
-        bypass={isOwner}
+        itemCity={data.profileCity}
+        itemNeighborhood={data.profileNeighborhood}
+        itemDisplayName={data.displayName}
+        bypass={data.isOwner}
       >
         <LanchoneteTheme
           data={{
-            displayName,
-            normalizedUsername,
-            bio,
-            avatarUrl,
-            coverUrl,
-            rating,
-            totalItems,
-            followersCount,
-            whatsapp,
-            products,
-            services,
-            portfolioPhotos,
-            pinnedProductId,
-            profileCity,
-            profileNeighborhood,
-            storeLocations,
-            activeTab,
-            isOwner,
-            onShare: handleShare,
-            onFollow: handleFollow,
-            isFollowing,
+            ...data,
             theme: activeTheme,
           }}
         />
@@ -369,18 +388,41 @@ export const SellerProfile: React.FC = () => {
     );
   }
 
+  if (activeTheme.id === 'bioburger_01') {
+    return (
+      <LocationGuard
+        itemCity={data.profileCity}
+        itemNeighborhood={data.profileNeighborhood}
+        itemDisplayName={data.displayName}
+        bypass={data.isOwner}
+      >
+        <BioBurgerTheme
+          data={{
+            ...data,
+            theme: activeTheme,
+          }}
+        />
+      </LocationGuard>
+    );
+  }
+
+  // Fallbacks sovix_default
+  const avatarSeed = data.normalizedUsername;
+  const coverSeed = `${avatarSeed}cover`;
+  const pinnedProduct = data.products.find((p: any) => p.id === data.pinnedProductId) ?? data.products[0];
+
   return (
     <LocationGuard
-      itemCity={profileCity}
-      itemNeighborhood={profileNeighborhood}
-      itemDisplayName={displayName}
-      bypass={isOwner}
+      itemCity={data.profileCity}
+      itemNeighborhood={data.profileNeighborhood}
+      itemDisplayName={data.displayName}
+      bypass={data.isOwner}
     >
       <div className="min-h-screen bg-neutral-50 pb-24">
         {/* Cover */}
         <div className="relative h-48 md:h-64 w-full bg-neutral-200 z-0">
           <img
-            src={coverUrl ?? `https://picsum.photos/seed/${coverSeed}/1200/400`}
+            src={data.coverUrl ?? `https://picsum.photos/seed/${coverSeed}/1200/400`}
             alt="Capa do Perfil"
             className="h-full w-full object-cover"
             referrerPolicy="no-referrer"
@@ -395,7 +437,7 @@ export const SellerProfile: React.FC = () => {
               <ChevronLeft size={24} />
             </button>
             <button
-              onClick={handleShare}
+              onClick={data.onShare}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md transition-colors hover:bg-white/40"
             >
               <Share2 size={20} />
@@ -412,14 +454,14 @@ export const SellerProfile: React.FC = () => {
               <div className="p-1 rounded-full bg-gradient-to-tr from-purple-500 to-pink-500 shadow-xl">
                 <div className="h-32 w-32 rounded-full border-4 border-white bg-white overflow-hidden relative">
                   <img
-                    src={avatarUrl ?? `https://picsum.photos/seed/${avatarSeed}profile/200/200`}
-                    alt={displayName}
+                    src={data.avatarUrl ?? `https://picsum.photos/seed/${avatarSeed}profile/200/200`}
+                    alt={data.displayName}
                     className="h-full w-full object-cover"
                     referrerPolicy="no-referrer"
                   />
                 </div>
               </div>
-              {isVerified && (
+              {data.isVerified && (
                 <div className="absolute bottom-1 right-1 h-8 w-8 bg-emerald-500 rounded-full border-[3px] border-white flex items-center justify-center text-white shadow-sm z-30" title="Verificado Profissionalmente">
                   <CheckCircle2 size={16} />
                 </div>
@@ -428,18 +470,18 @@ export const SellerProfile: React.FC = () => {
 
             {/* Informações de Texto */}
             <div className="mt-4 text-center px-4 w-full">
-              <h1 className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight text-neutral-900 flex items-center justify-center gap-2">
-                {displayName}
-                {profileType === 'provider' && (
+              <h1 className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight text-neutral-900 flex items-center justify-center gap-2" style={{ fontFamily: activeTheme.layout.fontFamilyHeading }}>
+                {data.displayName}
+                {data.profileType === 'provider' && (
                   <span className="text-[10px] bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded-full align-middle">
                     Serviços
                   </span>
                 )}
               </h1>
-              <p className="text-sm font-bold text-neutral-400 mt-1">@{normalizedUsername}</p>
+              <p className="text-sm font-bold text-neutral-400 mt-1">@{data.normalizedUsername}</p>
 
-              <p className="mt-3 text-neutral-600 max-w-md mx-auto leading-relaxed text-sm">
-                {bio ? bio : (profileType === 'provider' ? 'Especialista profissional e de alta qualidade do jotaM.' : 'Especialista em produtos locais e de alta qualidade do jotaM.')}
+              <p className="mt-3 text-neutral-600 max-w-md mx-auto leading-relaxed text-sm" style={{ fontFamily: activeTheme.layout.fontFamilyBody }}>
+                {data.bio ? data.bio : (data.profileType === 'provider' ? 'Especialista profissional e de alta qualidade da Sovix.' : 'Especialista em produtos locais e de alta qualidade da Sovix.')}
               </p>
             </div>
 
@@ -448,7 +490,7 @@ export const SellerProfile: React.FC = () => {
               <div className="flex flex-col items-center justify-center px-4 sm:px-6">
                 <div className="flex items-center gap-1.5">
                   <Star size={18} className="text-amber-500" fill="currentColor" />
-                  <span className="font-black text-neutral-900 text-lg sm:text-xl">{rating}</span>
+                  <span className="font-black text-neutral-900 text-lg sm:text-xl">{data.rating}</span>
                 </div>
                 <span className="text-[9px] font-bold text-neutral-400 tracking-widest uppercase mt-1">
                   Avaliação
@@ -456,14 +498,14 @@ export const SellerProfile: React.FC = () => {
               </div>
 
               <div className="flex flex-col items-center justify-center px-4 sm:px-6">
-                <span className="font-black text-neutral-900 text-lg sm:text-xl">{totalItems}</span>
+                <span className="font-black text-neutral-900 text-lg sm:text-xl">{data.totalItems}</span>
                 <span className="text-[9px] font-bold text-neutral-400 tracking-widest uppercase mt-1">
-                  {totalItems === 1 ? 'Item' : 'Itens'}
+                  {data.totalItems === 1 ? 'Item' : 'Itens'}
                 </span>
               </div>
 
               <div className="flex flex-col items-center justify-center px-4 sm:px-6">
-                <span className="font-black text-neutral-900 text-lg sm:text-xl">{followersCount}</span>
+                <span className="font-black text-neutral-900 text-lg sm:text-xl">{data.followersCount}</span>
                 <span className="text-[9px] font-bold text-neutral-400 tracking-widest uppercase mt-1">
                   Seguidores
                 </span>
@@ -472,15 +514,16 @@ export const SellerProfile: React.FC = () => {
 
             {/* Botões de Ação */}
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3 w-full max-w-md mx-auto px-4">
-              {whatsapp ? (
+              {data.whatsapp ? (
                 <a
-                  href={`https://wa.me/${whatsapp.replace(/[^0-9]/g, '')}`}
+                  href={`https://wa.me/${data.whatsapp.replace(/[^0-9]/g, '')}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 w-full flex items-center justify-center gap-2 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white py-3.5 px-6 rounded-full font-bold shadow-[0_8px_20px_rgba(139,92,246,0.25)] transition-all"
+                  className="flex-1 w-full flex items-center justify-center gap-2 bg-[var(--theme-primary)] hover:opacity-90 text-white py-3.5 px-6 rounded-full font-bold shadow-[0_8px_20px_rgba(139,92,246,0.25)] transition-all"
+                  style={{ backgroundColor: activeTheme.colors.primary }}
                 >
                   <MessageSquare size={18} fill="currentColor" />
-                  Contato
+                  {activeTheme.layout.ctaLabel || 'Contato'}
                 </a>
               ) : (
                 <button
@@ -493,7 +536,7 @@ export const SellerProfile: React.FC = () => {
               )}
 
               <button
-                onClick={handleShare}
+                onClick={data.onShare}
                 className="flex-1 w-full flex items-center justify-center gap-2 bg-white border border-neutral-200/80 hover:bg-neutral-50 text-neutral-700 py-3.5 px-6 rounded-full font-bold shadow-sm transition-all"
               >
                 <Share2 size={18} />
@@ -502,22 +545,22 @@ export const SellerProfile: React.FC = () => {
             </div>
 
             {/* Botão Seguir Condicional */}
-            {!isOwner && (
+            {!data.isOwner && (
               <div className="mt-4 w-full max-w-md mx-auto px-4">
                 <button
-                  onClick={handleFollow}
-                  disabled={isFollowLoading}
-                  className={`w-full py-3 rounded-full font-bold transition-all flex items-center gap-2 justify-center ${isFollowing
+                  onClick={data.onFollow}
+                  disabled={data.isFollowLoading}
+                  className={`w-full py-3 rounded-full font-bold transition-all flex items-center gap-2 justify-center ${data.isFollowing
                     ? 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200 border border-neutral-200/80'
                     : 'bg-neutral-900 text-white shadow-lg shadow-neutral-900/20 hover:bg-neutral-800'
                     }`}
                 >
-                  {isFollowLoading ? (
+                  {data.isFollowLoading ? (
                     <Loader2 size={18} className="animate-spin" />
                   ) : (
                     <>
-                      <Heart size={18} className={isFollowing ? 'fill-current text-pink-500' : ''} />
-                      {isFollowing ? 'Seguindo Perfil' : 'Seguir Perfil'}
+                      <Heart size={18} className={data.isFollowing ? 'fill-current text-pink-500' : ''} />
+                      {data.isFollowing ? 'Seguindo Perfil' : 'Seguir Perfil'}
                     </>
                   )}
                 </button>
@@ -528,7 +571,7 @@ export const SellerProfile: React.FC = () => {
 
           {/* Produto em Destaque (Apenas Lojista) */}
           {
-            pinnedProduct && activeTab === 'all' && profileType === 'seller' && (
+            pinnedProduct && data.activeTab === 'all' && data.profileType === 'seller' && (
               <section className="mb-10">
                 <h2 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                   <Star size={14} className="text-amber-500" fill="currentColor" />
@@ -556,7 +599,7 @@ export const SellerProfile: React.FC = () => {
                       <p className="text-neutral-500 mb-4 line-clamp-2">{pinnedProduct.description}</p>
                       <div className="flex items-center justify-between mt-auto">
                         <p className="text-2xl font-black text-neutral-900">R$ {pinnedProduct.price.toFixed(2)}</p>
-                        <button className="px-6 py-3 bg-orange-600 text-white rounded-2xl font-bold hover:bg-orange-700 transition-colors">
+                        <button className="px-6 py-3 bg-[var(--theme-primary)] text-white rounded-2xl font-bold hover:brightness-110 transition-colors" style={{ backgroundColor: activeTheme.colors.primary }}>
                           Ver Detalhes
                         </button>
                       </div>
@@ -569,14 +612,14 @@ export const SellerProfile: React.FC = () => {
 
           <div className="space-y-10">
             {/* Bloco de Horários: Renderiza apenas se for Prestador E tiver horários cadastrados */}
-            {profileType === 'provider' && portfolioPhotos.length > 0 && (
+            {data.profileType === 'provider' && data.portfolioPhotos.length > 0 && (
               <section>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-1.5 h-6 bg-[#8b5cf6] rounded-full"></div>
+                  <div className="w-1.5 h-6 rounded-full" style={{ backgroundColor: activeTheme.colors.primary }}></div>
                   <h2 className="text-xl font-bold text-neutral-900">Portfólio de Serviços</h2>
                 </div>
                 <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory">
-                  {portfolioPhotos.map((url, idx) => (
+                  {data.portfolioPhotos.map((url: string, idx: number) => (
                     <div
                       key={idx}
                       className="relative shrink-0 w-48 h-48 rounded-3xl overflow-hidden shadow-sm border border-neutral-100 snap-start bg-neutral-100"
@@ -588,105 +631,24 @@ export const SellerProfile: React.FC = () => {
                         referrerPolicy="no-referrer"
                       />
                       {idx === 0 && (
-                        <div className="absolute bottom-0 left-0 right-0 bg-[#8b5cf6]/90 py-1 text-center">
+                        <div className="absolute bottom-0 left-0 right-0 py-1 text-center" style={{ backgroundColor: `${activeTheme.colors.primary}E6` }}>
                           <span className="text-[10px] font-bold text-white uppercase tracking-widest">Capa</span>
                         </div>
                       )}
                     </div>
                   ))}
                 </div>
-                {/* Indicador de mais fotos */}
-                {portfolioPhotos.length > 2 && (
-                  <div className="flex justify-center gap-1.5 mt-3">
-                    {portfolioPhotos.map((_, idx) => (
-                      <div
-                        key={idx}
-                        className={`h-1.5 rounded-full transition-all ${idx === 0 ? 'w-4 bg-[#8b5cf6]' : 'w-1.5 bg-neutral-300'}`}
-                      />
-                    ))}
-                  </div>
-                )}
               </section>
             )}
 
-            {profileType === 'provider' && availability.length > 0 && (
+            {(data.activeTab === 'all' || data.activeTab === 'products') && data.products.length > 0 && (
               <section>
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-1.5 h-6 bg-[#8b5cf6] rounded-full"></div>
-                  <h2 className="text-xl font-bold text-neutral-900">Horário de Atendimento</h2>
-                </div>
-                <div className="bg-white rounded-[32px] border border-neutral-100 p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow">
-                  <div className="flex flex-col gap-3">
-                    {(() => {
-                      const DAY_NAMES = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
-
-                      const formatDays = (start: number, end: number) => {
-                        if (start === end) return DAY_NAMES[start];
-                        if (end === start + 1) return `${DAY_NAMES[start]} e ${DAY_NAMES[end]}`;
-                        return `${DAY_NAMES[start]} à ${DAY_NAMES[end]}`;
-                      };
-
-                      const grouped = [];
-                      let current = null;
-
-                      for (const slot of availability) {
-                        const isOpen = slot.is_enabled;
-                        const startT = (slot.start_time || '').slice(0, 5);
-                        const endT = (slot.end_time || '').slice(0, 5);
-
-                        if (!current) {
-                          current = { startDay: slot.day_of_week, endDay: slot.day_of_week, isOpen, startT, endT };
-                        } else {
-                          const isContinuous = slot.day_of_week === current.endDay + 1;
-                          const isSameSchedule = current.isOpen === isOpen && (!isOpen || (current.startT === startT && current.endT === endT));
-
-                          if (isContinuous && isSameSchedule) {
-                            current.endDay = slot.day_of_week;
-                          } else {
-                            grouped.push(current);
-                            current = { startDay: slot.day_of_week, endDay: slot.day_of_week, isOpen, startT, endT };
-                          }
-                        }
-                      }
-                      if (current) grouped.push(current);
-
-                      // Ocultar dias fechados caso tudo não seja fechado
-                      const onlyClosed = grouped.every(g => !g.isOpen);
-                      const displayGroups = onlyClosed ? grouped.slice(0, 1) : grouped.filter(g => g.isOpen);
-
-                      if (displayGroups.length === 0) return null;
-
-                      return displayGroups.map((g, idx) => (
-                        <div key={idx} className="flex items-center justify-between group">
-                          <span className="text-[15px] font-medium text-neutral-500 group-hover:text-neutral-700 transition-colors">
-                            {formatDays(g.startDay, g.endDay)}
-                          </span>
-                          <div className="flex-1 border-b border-dashed border-neutral-200 mx-4 opacity-50 relative top-2 invisible sm:visible"></div>
-                          {g.isOpen ? (
-                            <span className="text-[15px] font-bold text-neutral-900">
-                              {g.startT} às {g.endT}
-                            </span>
-                          ) : (
-                            <span className="text-[15px] font-medium text-neutral-400">
-                              Fechado
-                            </span>
-                          )}
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {(activeTab === 'all' || activeTab === 'products') && products.length > 0 && (
-              <section>
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-1.5 h-6 bg-orange-500 rounded-full"></div>
+                  <div className="w-1.5 h-6 rounded-full" style={{ backgroundColor: activeTheme.colors.primary }}></div>
                   <h2 className="text-xl font-bold text-neutral-900">Catálogo de Produtos</h2>
                 </div>
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {products.map(product => (
+                  {data.products.map((product: any) => (
                     <ItemCard
                       key={product.id}
                       type="product"
@@ -696,8 +658,8 @@ export const SellerProfile: React.FC = () => {
                         price: product.price,
                         image: product.image_url || 'https://picsum.photos/seed/' + product.id + '/800/1000',
                         category: product.category_id || 'Produto',
-                        seller: displayName,
-                        username: normalizedUsername,
+                        seller: data.displayName,
+                        username: data.normalizedUsername,
                         description: product.description || '',
                         distance: '–',
                       } as ItemType}
@@ -707,19 +669,19 @@ export const SellerProfile: React.FC = () => {
               </section>
             )}
 
-            {(activeTab === 'all' || activeTab === 'services') && services.length > 0 && (
+            {(data.activeTab === 'all' || data.activeTab === 'services') && data.services.length > 0 && (
               <section>
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-1.5 h-6 bg-[#8b5cf6] rounded-full"></div>
+                  <div className="w-1.5 h-6 rounded-full" style={{ backgroundColor: activeTheme.colors.primary }}></div>
                   <h2 className="text-xl font-bold text-neutral-900">Catálogo de Serviços</h2>
                 </div>
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {services.map(service => (
+                  {data.services.map((service: any) => (
                     <div key={service.id} className="relative bg-white rounded-[32px] p-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-neutral-50 flex flex-col group hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow">
 
                       {/* Top badges */}
                       <div className="flex justify-between items-center absolute w-[calc(100%-2rem)] left-4 top-4 z-10">
-                        <span className="bg-neutral-100/90 text-[#8b5cf6] text-[10px] uppercase font-black px-3 py-1.5 rounded-xl tracking-wider backdrop-blur-md">
+                        <span className="bg-neutral-100/90 text-[10px] uppercase font-black px-3 py-1.5 rounded-xl tracking-wider backdrop-blur-md" style={{ color: activeTheme.colors.primary }}>
                           SERVIÇO
                         </span>
                         <span className="bg-white text-neutral-600 text-[10px] font-bold px-3 py-1.5 rounded-full border border-neutral-100 flex items-center gap-1 shadow-sm">
@@ -728,7 +690,7 @@ export const SellerProfile: React.FC = () => {
                       </div>
 
                       {/* Image Area */}
-                      <div className="relative mt-12 w-full pt-[100%] max-w-[220px] mx-auto bg-amber-100/50 rounded-[32px] overflow-hidden mb-2">
+                      <div className="relative mt-12 w-full pt-[100%] max-w-[220px] mx-auto bg-neutral-100 rounded-[32px] overflow-hidden mb-2">
                         <img
                           src={service.image_url || `https://picsum.photos/seed/${service.id}/800/800`}
                           alt={service.name}
@@ -739,13 +701,13 @@ export const SellerProfile: React.FC = () => {
 
                       {/* Content */}
                       <div className="flex flex-col gap-1 mt-6 px-2">
-                        <h3 className="font-bold text-neutral-900 text-lg leading-tight group-hover:text-[#8b5cf6] transition-colors">{service.name}</h3>
+                        <h3 className="font-bold text-neutral-900 text-lg leading-tight group-hover:opacity-80 transition-colors" style={{ color: activeTheme.colors.primary }}>{service.name}</h3>
                         <p className="text-sm text-neutral-500 line-clamp-2 leading-relaxed h-10 mt-1">{service.description}</p>
                       </div>
 
                       {/* Footer */}
                       <div className="flex items-center justify-between mt-auto px-2 pb-2 pt-4">
-                        <span className="text-[#8b5cf6] font-extrabold text-xl">
+                        <span className="font-extrabold text-xl" style={{ color: activeTheme.colors.primary }}>
                           R$ {service.price.toFixed(2)}
                         </span>
                         <button onClick={() => navigate(`/item/service/${service.id}`)} className="bg-neutral-100 hover:bg-neutral-200 text-neutral-900 w-10 h-10 flex items-center justify-center rounded-full transition-colors">
@@ -758,7 +720,7 @@ export const SellerProfile: React.FC = () => {
               </section>
             )}
 
-            {totalItems === 0 && (
+            {data.totalItems === 0 && (
               <div className="col-span-full flex flex-col items-center justify-center gap-4 py-24 text-neutral-400 opacity-80">
                 <ShoppingBag size={64} strokeWidth={1} />
                 <p className="text-xl font-black text-neutral-900 mt-2">Vitrine Vazia</p>
@@ -769,16 +731,16 @@ export const SellerProfile: React.FC = () => {
 
           {/* Footer */}
           <div className="mt-16 pt-8 border-t border-neutral-200 flex justify-center gap-8 text-neutral-400">
-            {isOwner && (
+            {data.isOwner && (
               <div className="flex items-center gap-2">
                 <Eye size={16} />
-                <span className="text-xs font-bold">{views} acessos totais do público</span>
+                <span className="text-xs font-bold">{data.views} acessos totais do público</span>
               </div>
             )}
             <div className="flex items-center gap-2">
               <Users size={16} />
               <span className="text-xs font-bold">
-                Certificado desde {createdAt ? new Date(createdAt).getFullYear() : '2024'}
+                Certificado desde {data.createdAt ? new Date(data.createdAt).getFullYear() : '2024'}
               </span>
             </div>
           </div>

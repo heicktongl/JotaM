@@ -271,7 +271,7 @@ export const ItemDetail: React.FC = () => {
               </p>
               <div className="mt-2 flex items-center gap-2 text-sm font-medium text-neutral-500">
                 <MapPin size={16} className="text-orange-500" />
-                {item.distance} da sua Localização
+                No seu bairro
               </div>
             </div>
             {!isProduct && (
@@ -279,7 +279,7 @@ export const ItemDetail: React.FC = () => {
                 <div className="flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-amber-600">
                   <Star size={16} fill="currentColor" /><span className="font-bold">{(item as any).rating || '5.0'}</span>
                 </div>
-                <span className="mt-1 text-xs text-neutral-400">Proteção jotaM</span>
+                <span className="mt-1 text-xs text-neutral-400">Proteção Sovix</span>
               </div>
             )}
           </div>

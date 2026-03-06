@@ -26,8 +26,8 @@ interface LocationContextType {
 
 const LocationContext = createContext<LocationContextType | undefined>(undefined);
 
-const LOCATION_STORAGE_KEY = 'jotam_location_v1';
-const SCOPE_STORAGE_KEY = 'jotam_scope_v1';
+const LOCATION_STORAGE_KEY = 'sovix_location_v1';
+const SCOPE_STORAGE_KEY = 'sovix_scope_v1';
 
 const readCachedLocation = (): LocationData | null => {
   try {

@@ -21,7 +21,7 @@ export const CartPage: React.FC = () => {
           onClick={() => navigate('/')}
           className="rounded-2xl bg-orange-600 px-8 py-4 font-bold text-white shadow-lg shadow-orange-600/30 transition-all hover:bg-orange-700"
         >
-          Explorar o jotaM
+          Explorar a Sovix
         </button>
       </div>
     );

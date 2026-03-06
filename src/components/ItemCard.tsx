@@ -42,7 +42,7 @@ export const ItemCard: React.FC<CardProps> = ({ item, type }) => {
           <div className="absolute top-3 right-3">
             <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-neutral-700 backdrop-blur-md shadow-sm">
               <MapPin size={12} className="text-orange-500" />
-              {item.distance}
+              No seu bairro
             </span>
           </div>
         </div>

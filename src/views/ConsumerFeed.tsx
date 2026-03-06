@@ -52,11 +52,16 @@ export const ConsumerFeed: React.FC = () => {
         let prodQuery = supabase.from('products').select(prodSelect).eq('is_active', true).limit(30);
         let svcQuery = supabase.from('services').select(svcSelect).eq('is_active', true).limit(30);
 
+        // SIS-LOCA-HIPERLOCAL: Filtro rigoroso de localidade
         if (location) {
-          if (scope === 'city' && location.city) {
+          // 1. Sempre travar na cidade se existir (evita cross-city bleeding)
+          if (location.city) {
             prodQuery = prodQuery.ilike('city', `%${location.city}%`);
             svcQuery = svcQuery.ilike('city', `%${location.city}%`);
-          } else if (location.neighborhood && location.neighborhood !== 'Bairro Desconhecido') {
+          }
+          
+          // 2. Se o escopo for mais restrito que cidade (bairro ou exato), aplicar bairro
+          if (scope !== 'city' && location.neighborhood && location.neighborhood !== 'Bairro Desconhecido') {
             prodQuery = prodQuery.ilike('neighborhood', `%${location.neighborhood}%`);
             svcQuery = svcQuery.ilike('neighborhood', `%${location.neighborhood}%`);
           }

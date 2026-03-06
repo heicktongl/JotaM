@@ -237,7 +237,7 @@ export const AddProduct: React.FC = () => {
 
       alert('Produto cadastrado com sucesso!');
       sessionStorage.removeItem('lembretezap_product_draft');
-      sessionStorage.removeItem('jotam_pending_publish');
+      sessionStorage.removeItem('sovix_pending_publish');
       navigate('/profile');
     } catch (err: unknown) {
       console.error('Erro ao salvar produto:', err);
@@ -259,7 +259,7 @@ export const AddProduct: React.FC = () => {
       complementGroups // grupos e itens
     };
     sessionStorage.setItem('lembretezap_product_draft', JSON.stringify(draft));
-    sessionStorage.setItem('jotam_pending_publish', location.pathname);
+    sessionStorage.setItem('sovix_pending_publish', location.pathname);
     navigate('/settings');
   };
 

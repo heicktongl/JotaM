@@ -286,8 +286,16 @@ export const SearchPage: React.FC = () => {
           }
         };
 
+        // SIS-LOCA-HIPERLOCAL: Filtro rigoroso para top vitrines
         if (neighborhoodFilter) {
-          const { data: locs } = await supabase.from('store_locations').select('seller_id').ilike('neighborhood', `%${neighborhoodFilter}%`);
+          let queryLocs = supabase.from('store_locations').select('seller_id').ilike('neighborhood', `%${neighborhoodFilter}%`);
+
+          // Sempre travar na cidade também para evitar vazamento
+          if (cityFilter) {
+            queryLocs = queryLocs.ilike('city', `%${cityFilter}%`);
+          }
+
+          const { data: locs } = await queryLocs;
           const sIds = (locs || []).map((l: any) => l.seller_id).filter(Boolean);
           if (sIds.length > 0) {
             const { data } = await supabase.from('sellers')
@@ -323,7 +331,7 @@ export const SearchPage: React.FC = () => {
             .select('id, store_name, username, avatar_url, bio, views, store_locations(neighborhood, city, is_primary)')
             .not('username', 'is', null).order('views', { ascending: false }).limit(2 - topResults.length);
           if (data) addResults(formatSellers(data));
-          setTopSectionTitle('Destaques na JotaM');
+          setTopSectionTitle('Destaques na Sovix');
         }
 
         setTopStorefronts(topResults);

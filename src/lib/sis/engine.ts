@@ -53,25 +53,29 @@ export interface LocationFilter {
 
 // ── Helpers ─────────────────────────────────────────────────
 
+// SIS-LOCA-HIPERLOCAL: Construtor rigoroso de filtro geográfico
 function buildLocationFilter(
     query: any,
     loc: LocationFilter,
     neighborhoodCol = 'neighborhood',
     cityCol = 'city'
 ) {
-    if (loc.neighborhood) {
-        return query.ilike(neighborhoodCol, `%${loc.neighborhood}%`);
-    }
+    let finalQuery = query;
+    // 1. Sempre trava na cidade (Âncora estratégica territorial)
     if (loc.city) {
-        return query.ilike(cityCol, `%${loc.city}%`);
+        finalQuery = finalQuery.ilike(cityCol, `%${loc.city}%`);
     }
-    return query;
+    // 2. Aplica bairro por cima (se existente e válido)
+    if (loc.neighborhood && loc.neighborhood !== 'Bairro Desconhecido') {
+        finalQuery = finalQuery.ilike(neighborhoodCol, `%${loc.neighborhood}%`);
+    }
+    return finalQuery;
 }
 
 // ── Engine Principal ────────────────────────────────────────
 
 /**
- * Executa uma busca completa no JotaM via Sovix Intent Search.
+ * Executa uma busca completa na Sovix via Sovix Intent Search.
  *
  * 1. Aplica correção de typos na query
  * 2. Dispara queries paralelas ao Supabase
@@ -120,16 +124,21 @@ export async function sisSearch(
         servsQuery = servsQuery.or(`name.ilike.${searchTerm},description.ilike.${searchTerm}`);
     }
 
-    // ── 3. Query de Sellers ────────────────────────────────────
+    // ── 3. Query de Sellers (SIS-LOCA-HIPERLOCAL) ──────────────
     // Sellers exigem sub-query via store_locations para localização
     let sellerIds: string[] = [];
     if (location.neighborhood || location.city) {
         let locQ = supabase.from('store_locations').select('seller_id');
-        if (location.neighborhood) {
-            locQ = locQ.ilike('neighborhood', `%${location.neighborhood}%`);
-        } else if (location.city) {
+
+        // Sempre trava na cidade
+        if (location.city) {
             locQ = locQ.ilike('city', `%${location.city}%`);
         }
+        // Aplica bairro
+        if (location.neighborhood && location.neighborhood !== 'Bairro Desconhecido') {
+            locQ = locQ.ilike('neighborhood', `%${location.neighborhood}%`);
+        }
+
         const { data: lData } = await locQ;
         sellerIds = (lData || []).map((l: any) => l.seller_id).filter(Boolean);
     }

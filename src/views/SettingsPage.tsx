@@ -115,9 +115,9 @@ export const SettingsPage: React.FC = () => {
 
       setSaveSuccess(true);
 
-      const pendingPublish = sessionStorage.getItem('jotam_pending_publish');
+      const pendingPublish = sessionStorage.getItem('sovix_pending_publish');
       if (pendingPublish) {
-        sessionStorage.removeItem('jotam_pending_publish');
+        sessionStorage.removeItem('sovix_pending_publish');
         // Redireciona de volta após um pequeno delay para mostrar a mensagem de sucesso
         setTimeout(() => navigate(pendingPublish), 1500);
       } else {
@@ -208,7 +208,7 @@ export const SettingsPage: React.FC = () => {
             />
           </div>
 
-          <h2 className="text-xl font-black text-neutral-900 z-10">{name || 'Usuário JotaM'}</h2>
+          <h2 className="text-xl font-black text-neutral-900 z-10">{name || 'Usuário Sovix'}</h2>
           <p className="text-sm font-bold text-neutral-400 z-10 flex items-center gap-1">
             <ShieldCheck size={14} className="text-emerald-500" />
             Conta Verificada

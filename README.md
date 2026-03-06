@@ -1,8 +1,7 @@
 <div align="center">
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
-
-# JotaM
+# Sovix
 
 Plataforma de marketplace para condomínios, com autenticação via Supabase, carrinho de compras e integração com pagamento PIX.
 
@@ -46,7 +45,7 @@ Plataforma de marketplace para condomínios, com autenticação via Supabase, ca
 
 ### 1 — Importe o repositório
 1. Acesse [vercel.com/new](https://vercel.com/new)
-2. Clique em **Import Git Repository** e selecione `jotaM`
+2. Clique em **Import Git Repository** e selecione `Sovix`
 
 ### 2 — Configure as variáveis de ambiente
 Na tela de configuração, vá em **Environment Variables** e adicione:
@@ -62,7 +61,7 @@ Na tela de configuração, vá em **Environment Variables** e adicione:
 Clique em **Deploy**. A cada `git push` na branch `main`, um novo deploy é disparado automaticamente.
 
 ### 4 — Configure o domínio no Supabase
-Após o deploy, adicione a URL do Vercel (ex: `https://jota-m.vercel.app`) em:
+Após o deploy, adicione a URL do Vercel (ex: `https://sovix.vercel.app`) em:
 
 **Supabase → Authentication → URL Configuration → Site URL**
 

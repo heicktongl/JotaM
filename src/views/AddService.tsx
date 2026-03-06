@@ -50,7 +50,7 @@ export const AddService: React.FC = () => {
     useEffect(() => {
         // 1. Carrega o rascunho IMEDIATAMENTE antes de qualquer request
         let defaultCategoryId = '';
-        const draft = sessionStorage.getItem('jotam_service_draft');
+        const draft = sessionStorage.getItem('sovix_service_draft');
         if (draft) {
             try {
                 const parsed = JSON.parse(draft);
@@ -233,7 +233,7 @@ export const AddService: React.FC = () => {
             }
 
             alert('Serviço cadastrado com sucesso!');
-            sessionStorage.removeItem('jotam_service_draft');
+            sessionStorage.removeItem('sovix_service_draft');
             navigate('/admin/services');
         } catch (err: unknown) {
             console.error('Erro ao salvar serviço:', err);
@@ -255,8 +255,8 @@ export const AddService: React.FC = () => {
             customAvailability,
             imagePreviews,   // base64 — sobrevive ao redirect
         };
-        sessionStorage.setItem('jotam_service_draft', JSON.stringify(draft));
-        sessionStorage.setItem('jotam_pending_publish', location.pathname);
+        sessionStorage.setItem('sovix_service_draft', JSON.stringify(draft));
+        sessionStorage.setItem('sovix_pending_publish', location.pathname);
         navigate('/settings');
     };
 

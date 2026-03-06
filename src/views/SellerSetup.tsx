@@ -13,13 +13,13 @@ import {
     CheckCircle2,
     XCircle,
     Navigation,
-    Camera
+    Camera,
+    Palette
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { AvatarUploader } from '../components/AvatarUploader';
 import { getDetailedLocation } from '../utils/geolocation';
-import { ThemeSelector } from '../components/ThemeSelector';
 
 interface StoreLocation {
     label: string;
@@ -590,26 +590,41 @@ export const SellerSetup: React.FC = () => {
                         </p>
                     </div>
 
-                    {/* Separador de Tema */}
-                    <div className="relative py-2">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-neutral-200" />
-                        </div>
-                        <div className="relative flex justify-center">
-                            <span className="bg-neutral-50 px-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">
-                                Aparência da Vitrine
-                            </span>
-                        </div>
-                    </div>
+                    {/* Separador de Tema e Seleção - Apenas para vitrines já existentes */}
+                    {existingSellerId && (
+                        <>
+                            <div className="relative py-2">
+                                <div className="absolute inset-0 flex items-center">
+                                    <div className="w-full border-t border-neutral-200" />
+                                </div>
+                                <div className="relative flex justify-center">
+                                    <span className="bg-neutral-50 px-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">
+                                        Aparência da Vitrine
+                                    </span>
+                                </div>
+                            </div>
 
-                    {/* Seleção de Tema */}
-                    <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm">
-                        <ThemeSelector
-                            currentThemeId={themeId}
-                            userType="seller"
-                            onSelectTheme={setThemeId}
-                        />
-                    </div>
+                            <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
+                                        <Palette size={20} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="text-sm font-black text-neutral-900">Tema da Vitrine</h3>
+                                        <p className="text-[11px] text-neutral-400 font-medium">Personalize o visual público da sua loja</p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/theme-gallery')}
+                                    className="w-full mt-2 bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 rounded-2xl py-3.5 px-4 text-sm font-bold text-neutral-700 transition-all flex items-center justify-between group"
+                                >
+                                    <span>Ver Galeria de Temas</span>
+                                    <ChevronLeft size={18} className="rotate-180 text-neutral-400 group-hover:translate-x-1 transition-transform" />
+                                </button>
+                            </div>
+                        </>
+                    )}
 
                     {/* Separador */}
                     <div className="relative py-2">

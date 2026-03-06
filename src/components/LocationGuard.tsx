@@ -83,7 +83,7 @@ export const LocationGuard: React.FC<LocationGuardProps> = ({
                     <span className="font-bold text-neutral-800">{itemCity}</span>.
                 </p>
                 <p className="text-neutral-400 text-sm max-w-xs mb-8">
-                    Você está em <strong>{location.city}</strong>. O JotaM é um app hiperlocal — o conteúdo é exclusivo para quem está na mesma região.
+                    Você está em <strong>{location.city}</strong>. A Sovix Connect é um app hiperlocal — o conteúdo é exclusivo para quem está na mesma região.
                 </p>
                 <button
                     onClick={() => navigate('/')}
