@@ -10,6 +10,7 @@ export interface LocationData {
   city: string;
   lat: number;
   lng: number;
+  timestamp?: number;
 }
 
 interface LocationContextType {
@@ -32,7 +33,13 @@ const SCOPE_STORAGE_KEY = 'sovix_scope_v1';
 const readCachedLocation = (): LocationData | null => {
   try {
     const raw = localStorage.getItem(LOCATION_STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as LocationData) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as LocationData;
+    // Basic validation to prevent injected garbage
+    if (typeof parsed.lat === 'number' && typeof parsed.lng === 'number' && typeof parsed.city === 'string') {
+      return parsed;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -54,11 +61,12 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState<string | null>(null);
 
   const handleLocationUpdate = async (loc: LocationData) => {
-    setLocation(loc);
+    const locWithTime = { ...loc, timestamp: Date.now() };
+    setLocation(locWithTime);
 
     // Persistência imediata no localStorage para eliminar glitch de carregamento futuro
     try {
-      localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(loc));
+      localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(locWithTime));
     } catch { /* storage cheio, ignora */ }
 
     // Se a localização veio com "Bairro Desconhecido", rebaixamos o escopo graciosamente para a cidade.
@@ -110,6 +118,53 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
       console.error('Erro ao salvar override de bairro:', err);
     }
   };
+
+  React.useEffect(() => {
+    const checkBackgroundLocation = () => {
+      // Background location refresh logic
+      if (!location || !navigator.geolocation) return;
+      
+      const MAX_AGE_MS = 5 * 60 * 1000; // 5 minutos
+      const lastUpdate = location.timestamp || 0;
+      
+      if (Date.now() - lastUpdate > MAX_AGE_MS) {
+        // Soft refresh sem UI loader forçado (se falhar, mantém o antigo)
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+          const { latitude, longitude } = pos.coords;
+          
+          // Cálculo de Haversine para > 500m
+          const R = 6371e3; // metres
+          const φ1 = location.lat * Math.PI/180; // φ, λ in radians
+          const φ2 = latitude * Math.PI/180;
+          const Δφ = (latitude - location.lat) * Math.PI/180;
+          const Δλ = (longitude - location.lng) * Math.PI/180;
+
+          const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                    Math.cos(φ1) * Math.cos(φ2) *
+                    Math.sin(Δλ/2) * Math.sin(Δλ/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          const d = R * c; // in metres
+
+          // Se moveu mais de 500m ou passou tempo considerável
+          if (d > 500 || (Date.now() - lastUpdate > MAX_AGE_MS * 2)) {
+             try {
+                const detailedLoc = await getDetailedLocation(latitude, longitude);
+                handleLocationUpdate(detailedLoc);
+             } catch(e) {
+                console.error("Erro background geoloc", e);
+             }
+          }
+        }, () => {}, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
+      }
+    };
+
+    // Executa ao focar a window para re-avaliação inteligente
+    window.addEventListener('focus', checkBackgroundLocation);
+    // Executa uma vez no load se já tiver location cached antiga
+    checkBackgroundLocation();
+    
+    return () => window.removeEventListener('focus', checkBackgroundLocation);
+  }, [location]);
 
   const requestLocation = () => {
     setIsLoading(true);
