@@ -19,17 +19,32 @@ const ThemeContext = createContext<ThemeContextValue>({
 const STORAGE_KEY = 'jotam_theme';
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    // Tenta carregar do localStorage, se não existir ou for inválido, usa 'system' como padrão
     const [mode, setModeState] = useState<ThemeMode>(() => {
         const stored = localStorage.getItem(STORAGE_KEY) as ThemeMode;
-        if (stored === 'system' || !stored) return 'light'; // Força light como default invés de system
-        return stored;
+        if (stored === 'system' || stored === 'light' || stored === 'dark') return stored;
+        return 'system'; // Default sênior: respeita o sistema
     });
 
-    const systemDark = () =>
-        window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const [isSystemDark, setIsSystemDark] = useState(() => 
+        window.matchMedia('(prefers-color-scheme: dark)').matches
+    );
 
-    const isDark =
-        mode === 'dark' || (mode === 'system' && systemDark());
+    // Ouve mudanças de tema do sistema em tempo real
+    useEffect(() => {
+        const mq = window.matchMedia('(prefers-color-scheme: dark)');
+        const handler = (e: MediaQueryListEvent) => {
+            setIsSystemDark(e.matches);
+        };
+        
+        mq.addEventListener('change', handler);
+        return () => mq.removeEventListener('change', handler);
+    }, []);
+
+    // Determina se deve usar tema dark: 
+    // Se modo for manual (dark/light), usa o manual. 
+    // Se for system, usa a preferência do sistema.
+    const isDark = mode === 'dark' || (mode === 'system' && isSystemDark);
 
     useEffect(() => {
         const root = document.documentElement;
@@ -40,27 +55,16 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     }, [isDark]);
 
-    // Ouve mudanças na preferência do sistema
-    useEffect(() => {
-        if (mode !== 'system') return;
-        const mq = window.matchMedia('(prefers-color-scheme: dark)');
-        const handler = () => {
-            const root = document.documentElement;
-            if (mq.matches) root.classList.add('dark');
-            else root.classList.remove('dark');
-        };
-        mq.addEventListener('change', handler);
-        return () => mq.removeEventListener('change', handler);
-    }, [mode]);
-
     const setMode = (m: ThemeMode) => {
         setModeState(m);
         localStorage.setItem(STORAGE_KEY, m);
     };
 
-    // Toggle: dark → light → dark
+    // Ciclo Sênior: system -> dark -> light -> system
     const toggle = () => {
-        setMode(mode === 'dark' ? 'light' : 'dark');
+        if (mode === 'system') setMode('dark');
+        else if (mode === 'dark') setMode('light');
+        else setMode('system');
     };
 
     return (

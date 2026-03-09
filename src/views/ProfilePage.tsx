@@ -38,6 +38,29 @@ interface UserRoles {
   } | null;
 }
 
+/**
+ * SIS-INSTANT-UI: Configuração Estática de Ferramentas
+ * Permite renderização imediata sem esperar o backend.
+ */
+const SELLER_TOOLS = [
+  { id: 'manage', label: 'Gerenciar Produtos', icon: Package, route: '/admin/products', color: 'orange' },
+  { id: 'new', label: 'Cadastrar Novo Produto', icon: Plus, route: '/admin/products/new', color: 'green' },
+  { id: 'setup', label: 'Dados da Vitrine', icon: Settings, route: '/seller-setup', color: 'neutral' },
+  { id: 'view', label: 'Ver Minha Vitrine', icon: Store, route: '/:username', color: 'orange', isDynamic: true },
+];
+
+const SERVICE_TOOLS = [
+  { id: 'panel', label: 'Painel de Serviços', icon: Briefcase, route: '/admin/services', color: 'purple' },
+  { id: 'new', label: 'Cadastrar Novo Serviço', icon: Plus, route: '/admin/services/new', color: 'indigo' },
+  { id: 'setup', label: 'Configurar Minha Vitrine', icon: Settings, route: '/service-setup', color: 'neutral' },
+  { id: 'view', label: 'Ver Minha Vitrine', icon: Store, route: '/:username', color: 'purple', isDynamic: true },
+];
+
+const DELIVERY_TOOLS = [
+  { id: 'panel', label: 'Painel de Entregas', icon: Bike, route: '/admin/delivery', color: 'emerald' },
+];
+
+
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const [isEarnMoneyOpen, setIsEarnMoneyOpen] = useState(false);
@@ -60,67 +83,71 @@ export const ProfilePage: React.FC = () => {
           supabase.from('service_providers').select('*').eq('user_id', user.id).maybeSingle(),
         ]);
 
-
         const seller = sellerRes.data;
         const delivery = deliveryRes.data;
         const service = serviceRes.data;
 
-        let sellerData = null;
-        if (seller) {
-          const [prodRes, orderRes] = await Promise.all([
-            supabase.from('products').select('id', { count: 'exact', head: true }).eq('seller_id', seller.id),
-            supabase.from('orders').select('id', { count: 'exact', head: true }).eq('seller_id', seller.id),
-          ]);
-          sellerData = {
-            store_name: seller.store_name,
-            username: seller.username,
-            views: seller.views ?? 0,
-            productCount: prodRes.count ?? 0,
-            orderCount: orderRes.count ?? 0,
-          };
-        }
-
-        let deliveryData = null;
-        if (delivery) {
-          const today = new Date().toISOString().split('T')[0];
-          const [earningsRes, deliveriesRes] = await Promise.all([
-            supabase.from('earnings').select('amount').eq('delivery_profile_id', delivery.id).eq('date', today),
-            supabase.from('deliveries').select('id', { count: 'exact', head: true }).eq('delivery_profile_id', delivery.id).eq('status', 'delivered'),
-          ]);
-          const todayEarnings = (earningsRes.data ?? []).reduce((sum, e) => sum + Number(e.amount), 0);
-          deliveryData = {
-            is_online: delivery.is_online,
-            rating: Number(delivery.rating),
-            todayEarnings,
-            deliveryCount: deliveriesRes.count ?? 0,
-          };
-        }
-
-        let serviceData = null;
-        if (service) {
-          const appointRes = await supabase
-            .from('appointments')
-            .select('id', { count: 'exact', head: true })
-            .eq('provider_id', service.id);
-          serviceData = {
-            name: service.name,
-            username: service.username,
-            rating: Number(service.rating),
-            appointmentCount: appointRes.count ?? 0,
-          };
-        }
-
-        setRoles({
+        // Atualiza roles IMEDIATAMENTE após descobrir quem o usuário é
+        setRoles(prev => ({
+          ...prev,
           isSeller: !!seller,
           isDelivery: !!delivery,
           isServiceProvider: !!service,
-          sellerData,
-          deliveryData,
-          serviceData,
-        });
+          sellerData: seller ? { store_name: seller.store_name, username: seller.username, views: seller.views ?? 0, productCount: 0, orderCount: 0 } : null,
+          deliveryData: delivery ? { is_online: delivery.is_online, rating: Number(delivery.rating), todayEarnings: 0, deliveryCount: 0 } : null,
+          serviceData: service ? { name: service.name, username: service.username, rating: Number(service.rating), appointmentCount: 0 } : null,
+        } as UserRoles));
+        setLoadingRoles(false);
+
+        // Busca Métricas DETALHADAS em background (Lazy Loading)
+        if (seller) {
+          Promise.all([
+            supabase.from('products').select('id', { count: 'exact', head: true }).eq('seller_id', seller.id),
+            supabase.from('orders').select('id', { count: 'exact', head: true }).eq('seller_id', seller.id),
+          ]).then(([prodRes, orderRes]) => {
+            setRoles(prev => prev ? ({
+              ...prev,
+              sellerData: {
+                ...prev.sellerData!,
+                productCount: prodRes.count ?? 0,
+                orderCount: orderRes.count ?? 0,
+              }
+            }) : null);
+          });
+        }
+
+        if (delivery) {
+          const today = new Date().toISOString().split('T')[0];
+          Promise.all([
+            supabase.from('earnings').select('amount').eq('delivery_profile_id', delivery.id).eq('date', today),
+            supabase.from('deliveries').select('id', { count: 'exact', head: true }).eq('delivery_profile_id', delivery.id).eq('status', 'delivered'),
+          ]).then(([earningsRes, deliveriesRes]) => {
+            const todayEarnings = (earningsRes.data ?? []).reduce((sum, e) => sum + Number(e.amount), 0);
+            setRoles(prev => prev ? ({
+              ...prev,
+              deliveryData: {
+                ...prev.deliveryData!,
+                todayEarnings,
+                deliveryCount: deliveriesRes.count ?? 0,
+              }
+            }) : null);
+          });
+        }
+
+        if (service) {
+          supabase.from('appointments').select('id', { count: 'exact', head: true }).eq('provider_id', service.id)
+            .then(appointRes => {
+              setRoles(prev => prev ? ({
+                ...prev,
+                serviceData: {
+                  ...prev.serviceData!,
+                  appointmentCount: appointRes.count ?? 0,
+                }
+              }) : null);
+            });
+        }
       } catch (e) {
         console.error('Erro ao buscar perfis:', e);
-      } finally {
         setLoadingRoles(false);
       }
     };
@@ -217,8 +244,8 @@ export const ProfilePage: React.FC = () => {
                 <section>
                   <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-3">Minha Loja</h3>
                   <div className="bg-white rounded-3xl border border-neutral-100 overflow-hidden shadow-sm">
-                    {/* Métricas */}
-                    <div className="grid grid-cols-3 gap-0 divide-x divide-neutral-100">
+                    {/* Métricas (Lazy Loaded) */}
+                    <div className="grid grid-cols-3 gap-0 divide-x divide-neutral-100 bg-neutral-50/30">
                       <div className="p-4 text-center">
                         <p className="text-2xl font-black text-neutral-900">{roles.sellerData.productCount}</p>
                         <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Produtos</p>
@@ -234,49 +261,30 @@ export const ProfilePage: React.FC = () => {
                     </div>
 
                     <div className="border-t border-neutral-100">
-                      <button
-                        onClick={() => navigate('/admin/products')}
-                        className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-orange-50 text-orange-600"><Package size={18} /></div>
-                          <span className="font-bold text-neutral-900">Gerenciar Produtos</span>
-                        </div>
-                        <ChevronRight size={18} className="text-neutral-400" />
-                      </button>
-                      <button
-                        onClick={() => navigate('/admin/products/new')}
-                        className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-green-50 text-green-600"><Plus size={18} /></div>
-                          <span className="font-bold text-neutral-900">Cadastrar Novo Produto</span>
-                        </div>
-                        <ChevronRight size={18} className="text-neutral-400" />
-                      </button>
-                      <button
-                        onClick={() => navigate('/seller-setup')}
-                        className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-neutral-100 text-neutral-600"><Settings size={18} /></div>
-                          <span className="font-bold text-neutral-900">Dados da Vitrine</span>
-                        </div>
-                        <ChevronRight size={18} className="text-neutral-400" />
-                      </button>
-                      <button
-                        onClick={() => navigate(`/${roles.sellerData!.username}`)}
-                        className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-orange-50 text-orange-600"><Store size={18} /></div>
-                          <div className="text-left">
-                            <span className="font-bold text-neutral-900 block">Ver Minha Vitrine</span>
-                            <span className="text-xs text-neutral-500">@{roles.sellerData.username}</span>
-                          </div>
-                        </div>
-                        <ChevronRight size={18} className="text-neutral-400" />
-                      </button>
+                      {SELLER_TOOLS.map((tool) => {
+                        const Icon = tool.icon;
+                        const finalRoute = tool.isDynamic ? tool.route.replace(':username', roles.sellerData!.username) : tool.route;
+                        const colorClass = tool.color === 'orange' ? 'bg-orange-50 text-orange-600' :
+                                         tool.color === 'green' ? 'bg-green-50 text-green-600' :
+                                         'bg-neutral-100 text-neutral-600';
+
+                        return (
+                          <button
+                            key={tool.id}
+                            onClick={() => navigate(finalRoute)}
+                            className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100 last:border-0"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-xl ${colorClass}`}><Icon size={18} /></div>
+                              <div className="text-left">
+                                <span className="font-bold text-neutral-900 block">{tool.label}</span>
+                                {tool.isDynamic && <span className="text-xs text-neutral-500">@{roles.sellerData!.username}</span>}
+                              </div>
+                            </div>
+                            <ChevronRight size={18} className="text-neutral-400" />
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </section>
@@ -289,7 +297,7 @@ export const ProfilePage: React.FC = () => {
                 <section>
                   <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-3">Minhas Entregas</h3>
                   <div className="bg-white rounded-3xl border border-neutral-100 overflow-hidden shadow-sm">
-                    <div className="grid grid-cols-3 gap-0 divide-x divide-neutral-100">
+                    <div className="grid grid-cols-3 gap-0 divide-x divide-neutral-100 bg-neutral-50/30">
                       <div className="p-4 text-center">
                         <p className="text-2xl font-black text-green-600">R$ {roles.deliveryData.todayEarnings.toFixed(0)}</p>
                         <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Hoje</p>
@@ -308,26 +316,23 @@ export const ProfilePage: React.FC = () => {
                     </div>
 
                     <div className="border-t border-neutral-100">
-                      <button
-                        onClick={() => navigate('/admin/delivery')}
-                        className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600"><Bike size={18} /></div>
-                          <span className="font-bold text-neutral-900">Painel de Entregas</span>
-                        </div>
-                        <ChevronRight size={18} className="text-neutral-400" />
-                      </button>
-                      <button
-                        onClick={() => navigate('/admin/delivery/area')}
-                        className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-blue-50 text-blue-600"><MapPin size={18} /></div>
-                          <span className="font-bold text-neutral-900">Configurar Área de Atuação</span>
-                        </div>
-                        <ChevronRight size={18} className="text-neutral-400" />
-                      </button>
+                      {DELIVERY_TOOLS.map((tool) => {
+                        const Icon = tool.icon;
+                        const colorClass = tool.color === 'emerald' ? 'bg-emerald-50 text-emerald-600' : 'bg-neutral-100 text-neutral-600';
+                        return (
+                          <button
+                            key={tool.id}
+                            onClick={() => navigate(tool.route)}
+                            className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-xl ${colorClass}`}><Icon size={18} /></div>
+                              <span className="font-bold text-neutral-900">{tool.label}</span>
+                            </div>
+                            <ChevronRight size={18} className="text-neutral-400" />
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </section>
@@ -340,7 +345,7 @@ export const ProfilePage: React.FC = () => {
                 <section>
                   <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-3">Meus Serviços</h3>
                   <div className="bg-white rounded-3xl border border-neutral-100 overflow-hidden shadow-sm">
-                    <div className="grid grid-cols-2 gap-0 divide-x divide-neutral-100">
+                    <div className="grid grid-cols-2 gap-0 divide-x divide-neutral-100 bg-neutral-50/30">
                       <div className="p-4 text-center">
                         <p className="text-2xl font-black text-neutral-900">{roles.serviceData.appointmentCount}</p>
                         <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Agendamentos</p>
@@ -356,49 +361,30 @@ export const ProfilePage: React.FC = () => {
 
 
                     <div className="border-t border-neutral-100">
-                      <button
-                        onClick={() => navigate('/admin/services')}
-                        className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-purple-50 text-purple-600"><Briefcase size={18} /></div>
-                          <span className="font-bold text-neutral-900">Painel de Serviços</span>
-                        </div>
-                        <ChevronRight size={18} className="text-neutral-400" />
-                      </button>
-                      <button
-                        onClick={() => navigate('/admin/services/new')}
-                        className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600"><Plus size={18} /></div>
-                          <span className="font-bold text-neutral-900">Cadastrar Novo Serviço</span>
-                        </div>
-                        <ChevronRight size={18} className="text-neutral-400" />
-                      </button>
-                      <button
-                        onClick={() => navigate('/service-setup')}
-                        className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-neutral-100 text-neutral-600"><Settings size={18} /></div>
-                          <span className="font-bold text-neutral-900">Configurar Minha Vitrine</span>
-                        </div>
-                        <ChevronRight size={18} className="text-neutral-400" />
-                      </button>
-                      <button
-                        onClick={() => navigate(`/${roles.serviceData!.username}`)}
-                        className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-purple-50 text-purple-600"><Store size={18} /></div>
-                          <div className="text-left">
-                            <span className="font-bold text-neutral-900 block">Ver Minha Vitrine</span>
-                            <span className="text-xs text-neutral-500">@{roles.serviceData.username}</span>
-                          </div>
-                        </div>
-                        <ChevronRight size={18} className="text-neutral-400" />
-                      </button>
+                      {SERVICE_TOOLS.map((tool) => {
+                        const Icon = tool.icon;
+                        const finalRoute = tool.isDynamic ? tool.route.replace(':username', roles.serviceData!.username) : tool.route;
+                        const colorClass = tool.color === 'purple' ? 'bg-purple-50 text-purple-600' :
+                                         tool.color === 'indigo' ? 'bg-indigo-50 text-indigo-600' :
+                                         'bg-neutral-100 text-neutral-600';
+
+                        return (
+                          <button
+                            key={tool.id}
+                            onClick={() => navigate(finalRoute)}
+                            className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100 last:border-0"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`p-2 rounded-xl ${colorClass}`}><Icon size={18} /></div>
+                              <div className="text-left">
+                                <span className="font-bold text-neutral-900 block">{tool.label}</span>
+                                {tool.isDynamic && <span className="text-xs text-neutral-500">@{roles.serviceData!.username}</span>}
+                              </div>
+                            </div>
+                            <ChevronRight size={18} className="text-neutral-400" />
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </section>

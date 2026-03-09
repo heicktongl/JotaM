@@ -31,6 +31,7 @@ import { LanchoneteTheme } from './themes/LanchoneteTheme';
 import { BioBurgerTheme } from './themes/BioBurgerTheme';
 import { DynamicThemeProvider, useDynamicTheme } from '../contexts/DynamicThemeContext';
 import { ThemeCustomization } from '../lib/themeEngine';
+import { registerView } from '../lib/metrics';
 
 
 type Product = Database['public']['Tables']['products']['Row'];
@@ -129,8 +130,8 @@ export const SellerProfile: React.FC = () => {
         if (sellerData.theme_id) setThemeId(sellerData.theme_id);
         if (sellerData.theme_customization) setCustomizations(sellerData.theme_customization);
 
-        // Dispara aumento de views fire & forget (RPC bulará RLS para visitantes)
-        supabase.rpc('increment_seller_views', { seller_uuid: sellerData.id }).then();
+        // SIS-VIEW-COUNTER: Registro inteligente de visualização
+        registerView(sellerData.id, 'shop').then();
       } else {
         // 2. Tenta buscar em Service Providers
         const { data: providerData, error: providerErr } = await supabase
@@ -159,6 +160,9 @@ export const SellerProfile: React.FC = () => {
           // Localização para blindagem de prestadores
           setProfileCity(providerData.city ?? null);
           setProfileNeighborhood(providerData.neighborhood ?? null);
+
+          // SIS-VIEW-COUNTER: Registro inteligente de visualização
+          registerView(providerData.id, 'provider').then();
         } else {
           // Nenhum dos dois achado
           setError('Profissional ou Lojista não encontrado com esta URL na rede JotaM.');
