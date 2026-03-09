@@ -1,13 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, Briefcase, Loader2, LogOut, FileText, Pickaxe, CheckCircle2, Clock, Zap, Calendar, User, Building2, Palette } from 'lucide-react';
+import { ChevronLeft, Briefcase, Loader2, LogOut, FileText, Pickaxe, CheckCircle2, Clock, Zap, Calendar, User, Building2, Palette, Navigation, AlertCircle, XCircle, MapPin, Trash2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { Logo } from '../components/Logo';
 import { AvatarUploader } from '../components/AvatarUploader';
 import { PortfolioUploader } from '../components/PortfolioUploader';
 import { useLocationScope } from '../context/LocationContext';
+import { SISBairro, extractBairroName, fetchNeighborhoodsByCity } from '../utils/sis-loca';
 
 export const ServiceSetup: React.FC = () => {
     const navigate = useNavigate();
@@ -29,6 +30,19 @@ export const ServiceSetup: React.FC = () => {
 
     // URLs das fotos de portfólio capturadas pelo PortfolioUploader
     const [portfolioUrls, setPortfolioUrls] = useState<string[]>([]);
+
+    const [bairrosAtendidos, setBairrosAtendidos] = useState<string[]>([]);
+    const [newBairroForm, setNewBairroForm] = useState<SISBairro>({ bairro: '', rua: '', numero: '', complemento: '' });
+    const [bairroSuggestions, setBairroSuggestions] = useState<string[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const MAX_BAIRROS = 3;
+
+    // Buscar Sugestões de Bairro (Sis-Loca)
+    useEffect(() => {
+        if (location?.city) {
+            fetchNeighborhoodsByCity(supabase, location.city).then(sugs => setBairroSuggestions(sugs));
+        }
+    }, [location]);
 
     // Horários de atendimento (grade semanal)
     const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
@@ -63,6 +77,7 @@ export const ServiceSetup: React.FC = () => {
                     if (data.theme_id) setThemeId(data.theme_id);
                     setExistingProviderId(data.id);
                     if (data.provider_type) setProviderType(data.provider_type as 'autonomo' | 'empresa');
+                    if (data.bairros_atendidos) setBairrosAtendidos(data.bairros_atendidos);
 
                     // Carregar horários salvos
                     const { data: avData } = await supabase
@@ -129,6 +144,7 @@ export const ServiceSetup: React.FC = () => {
                 neighborhood: location?.neighborhood === 'Bairro Desconhecido' ? null : (location?.neighborhood || null),
                 provider_type: providerType,
                 theme_id: themeId,
+                bairros_atendidos: bairrosAtendidos,
             };
 
             let result;
@@ -407,6 +423,184 @@ export const ServiceSetup: React.FC = () => {
                                 <span>Ver Galeria de Temas</span>
                                 <ChevronLeft size={18} className="rotate-180 text-neutral-400 group-hover:translate-x-1 transition-transform" />
                             </button>
+                        </div>
+
+                        {/* ====== BAIRROS ATENDIDOS ====== */}
+                        <div className="bg-white p-6 rounded-3xl border border-neutral-100 shadow-sm mt-6">
+                            <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-purple-500/20 shrink-0">
+                                    <Navigation size={20} />
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="text-sm font-black text-neutral-900">Bairros Atendidos</h3>
+                                    <p className="text-xs text-neutral-500 mt-1">
+                                        Em quais bairros você presta serviço? (Máximo {MAX_BAIRROS}).
+                                    </p>
+                                    
+                                    <div className="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2 mb-4">
+                                        <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                                        <p className="text-xs text-amber-700 font-medium">
+                                            Adicione apenas bairros onde você tem disponibilidade para atender.
+                                        </p>
+                                    </div>
+
+                                    {/* Lista de Bairros Adicionados */}
+                                    <div className="flex flex-col gap-3 mb-6">
+                                        {bairrosAtendidos.map((bRaw, idx) => {
+                                            let parsed: SISBairro | null = null;
+                                            try { parsed = JSON.parse(bRaw) as SISBairro; } catch {}
+                                            const nomeBairro = parsed ? parsed.bairro : bRaw;
+                                            const temDetalhes = parsed && (parsed.rua || parsed.numero || parsed.complemento);
+                                            
+                                            return (
+                                                <div key={idx} className="flex items-center justify-between p-3 bg-purple-50 border border-purple-100 rounded-xl">
+                                                    <div className="flex items-start gap-3">
+                                                        <MapPin size={18} className="text-purple-500 mt-0.5 shrink-0" />
+                                                        <div>
+                                                            <p className="text-sm font-bold text-purple-900">{nomeBairro}</p>
+                                                            {temDetalhes && (
+                                                                <p className="text-xs text-purple-600 mt-0.5">
+                                                                    {parsed?.rua}{parsed?.numero ? `, ${parsed.numero}` : ''}{parsed?.complemento ? ` - ${parsed.complemento}` : ''}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setBairrosAtendidos(prev => prev.filter((_, i) => i !== idx))}
+                                                        className="p-2 text-purple-400 hover:text-red-500 hover:bg-white rounded-lg transition-colors flex-shrink-0"
+                                                    >
+                                                        <XCircle size={16} />
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                        {bairrosAtendidos.length === 0 && (
+                                            <div className="text-sm text-neutral-400 font-medium italic p-4 text-center border border-dashed border-neutral-200 rounded-xl">
+                                                Nenhum bairro adicional cadastrado.
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Formulario para Adicionar Bairro */}
+                                    {bairrosAtendidos.length < MAX_BAIRROS && (
+                                        <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-200 space-y-4">
+                                            <h4 className="text-xs font-bold text-neutral-600 uppercase tracking-wider">Adicionar Novo Bairro</h4>
+                                            
+                                            <div>
+                                                <label className="block text-xs font-bold text-neutral-500 mb-1.5">Nome do Bairro *</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={newBairroForm.bairro}
+                                                        onChange={e => {
+                                                            setNewBairroForm(prev => ({ ...prev, bairro: e.target.value }));
+                                                            setShowSuggestions(true);
+                                                        }}
+                                                        onFocus={() => setShowSuggestions(true)}
+                                                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                                                        placeholder="Ex: Centro"
+                                                        className="w-full rounded-xl border border-neutral-200 p-3 text-sm font-bold text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                                                    />
+                                                    {/* Dropdown de Sugestões Sis-Loca */}
+                                                    <AnimatePresence>
+                                                        {showSuggestions && bairroSuggestions.length > 0 && (
+                                                            <motion.div 
+                                                                initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }}
+                                                                className="absolute z-10 w-full mt-1 bg-white border border-neutral-200 rounded-xl shadow-lg max-h-48 overflow-y-auto"
+                                                            >
+                                                                {bairroSuggestions
+                                                                    .filter(s => s.toLowerCase().includes(newBairroForm.bairro.toLowerCase()))
+                                                                    .map((sug, i) => (
+                                                                        <button
+                                                                            key={i}
+                                                                            type="button"
+                                                                            className="w-full text-left px-4 py-2.5 text-sm font-bold text-neutral-700 hover:bg-purple-50 hover:text-purple-700 transition-colors"
+                                                                            onClick={() => {
+                                                                                setNewBairroForm(prev => ({ ...prev, bairro: sug }));
+                                                                                setShowSuggestions(false);
+                                                                            }}
+                                                                        >
+                                                                            {sug}
+                                                                        </button>
+                                                                ))}
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-xs font-bold text-neutral-500 mb-1.5">Rua (Opcional)</label>
+                                                    <input
+                                                        type="text"
+                                                        value={newBairroForm.rua}
+                                                        onChange={e => setNewBairroForm(prev => ({ ...prev, rua: e.target.value }))}
+                                                        placeholder="Ex: Av. Brasil"
+                                                        className="w-full rounded-xl bg-white border border-neutral-200 p-3 text-sm font-medium text-neutral-700 focus:outline-none focus:border-purple-500"
+                                                    />
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-neutral-500 mb-1.5">Número</label>
+                                                        <input
+                                                            type="text"
+                                                            value={newBairroForm.numero}
+                                                            onChange={e => setNewBairroForm(prev => ({ ...prev, numero: e.target.value }))}
+                                                            placeholder="123"
+                                                            className="w-full rounded-xl bg-white border border-neutral-200 p-3 text-sm font-medium text-neutral-700 focus:outline-none focus:border-purple-500"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-neutral-500 mb-1.5">Compl.</label>
+                                                        <input
+                                                            type="text"
+                                                            value={newBairroForm.complemento}
+                                                            onChange={e => setNewBairroForm(prev => ({ ...prev, complemento: e.target.value }))}
+                                                            placeholder="Sala 2"
+                                                            className="w-full rounded-xl bg-white border border-neutral-200 p-3 text-sm font-medium text-neutral-700 focus:outline-none focus:border-purple-500"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (newBairroForm.bairro.trim()) {
+                                                        const bairroData: SISBairro = {
+                                                            bairro: newBairroForm.bairro.trim(),
+                                                            rua: newBairroForm.rua?.trim() || undefined,
+                                                            numero: newBairroForm.numero?.trim() || undefined,
+                                                            complemento: newBairroForm.complemento?.trim() || undefined,
+                                                        };
+                                                        
+                                                        // Checagem para evitar que o usuario adicione o mesmo bairro 2x
+                                                        const alreadyExists = bairrosAtendidos.some(bRaw => {
+                                                            try {
+                                                                return (JSON.parse(bRaw) as SISBairro).bairro.toLowerCase() === bairroData.bairro.toLowerCase();
+                                                            } catch {
+                                                                return bRaw.toLowerCase() === bairroData.bairro.toLowerCase();
+                                                            }
+                                                        });
+
+                                                        if (!alreadyExists) {
+                                                            setBairrosAtendidos(prev => [...prev, JSON.stringify(bairroData)]);
+                                                        }
+                                                        
+                                                        setNewBairroForm({ bairro: '', rua: '', numero: '', complemento: '' });
+                                                    }
+                                                }}
+                                                disabled={!newBairroForm.bairro.trim()}
+                                                className="w-full px-4 py-3 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-xl font-bold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                                            >
+                                                Adicionar à Lista de Atendimento
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
 
                         {/* ====== FOTOS DO SERVIÇO (PORTFÓLIO) ====== */}

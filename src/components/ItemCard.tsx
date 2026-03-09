@@ -3,6 +3,8 @@ import { motion } from 'motion/react';
 import { MapPin, ShoppingBag, Star, ArrowRight, Zap, Calendar, Repeat } from 'lucide-react';
 import { Product, Service } from '../data';
 import { Link } from 'react-router-dom';
+import { useLocationScope } from '../context/LocationContext';
+import { calculateProximityLabel } from '../utils/sis-loca';
 
 export type ItemType = (Product & { target_type?: 'product'; created_at?: string }) | (Service & { target_type?: 'service'; created_at?: string });
 
@@ -12,6 +14,7 @@ interface CardProps {
 }
 
 export const ItemCard: React.FC<CardProps> = ({ item, type }) => {
+  const { location } = useLocationScope();
   const isProduct = type === 'product';
   const product = item as Product;
   const service = item as Service;
@@ -42,7 +45,7 @@ export const ItemCard: React.FC<CardProps> = ({ item, type }) => {
           <div className="absolute top-3 right-3">
             <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-neutral-700 backdrop-blur-md shadow-sm">
               <MapPin size={12} className="text-orange-500" />
-              No seu bairro
+              {calculateProximityLabel(location, item as any)}
             </span>
           </div>
         </div>

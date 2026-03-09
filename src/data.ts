@@ -8,6 +8,8 @@ export interface Product {
   username: string;
   distance: string;
   description: string;
+  city?: string | null;
+  neighborhood?: string | null;
 }
 
 export interface Service {
@@ -25,6 +27,8 @@ export interface Service {
   response_time_mins?: number;
   billing_cycle?: string;
   providerPhone?: string;
+  city?: string | null;
+  neighborhood?: string | null;
 }
 
 export const MOCK_PRODUCTS: Product[] = [

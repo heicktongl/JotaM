@@ -200,6 +200,7 @@ export const SearchPage: React.FC = () => {
   const [subCategories, setSubCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedSubCategory, setSelectedSubCategory] = useState<Category | null>(null);
+  const [isShowingExternal, setIsShowingExternal] = useState(false);
   const { location, scope } = useLocationScope();
 
   const neighborhoodFilter =
@@ -356,6 +357,27 @@ export const SearchPage: React.FC = () => {
           city: cityFilter,
           categoryId: activeCategoryId,
         });
+
+        // ── FILTRO DE CAMADAS (Tiered Search Hiperlocal) ──
+        let externalFlag = false;
+        if (neighborhoodFilter) {
+           const safeNormalize = (b: string | null | undefined) => b ? b.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim() : '';
+           const targetBairro = safeNormalize(neighborhoodFilter);
+
+           const applyTier = (items: any[]) => {
+              if (items.length === 0) return items;
+              const localItems = items.filter(i => safeNormalize(i.neighborhood) === targetBairro);
+              if (localItems.length > 0) return localItems;
+              externalFlag = true;
+              return items; // Retorna os externos se não houver locais
+           };
+
+           sisResults.products = applyTier(sisResults.products);
+           sisResults.services = applyTier(sisResults.services);
+           sisResults.storefronts = applyTier(sisResults.storefronts);
+        }
+        
+        setIsShowingExternal(externalFlag);
         setResults(sisResults);
       } catch (err) {
         console.error('[SIS] Erro na busca:', err);
@@ -492,9 +514,17 @@ export const SearchPage: React.FC = () => {
           <>
             {/* Resumo do motorzinho */}
             {!isSearching && totalResults > 0 && (
-              <div className="flex items-center gap-2 text-xs font-bold text-neutral-400">
-                <Sparkles size={12} className="text-orange-400" />
-                <span>{totalResults} {totalResults === 1 ? 'resultado' : 'resultados'} para "{query}"</span>
+              <div className="flex flex-col gap-1 mb-4">
+                <div className="flex items-center gap-2 text-xs font-bold text-neutral-400">
+                  <Sparkles size={12} className="text-orange-400" />
+                  <span>{totalResults} {totalResults === 1 ? 'resultado' : 'resultados'} para "{query}"</span>
+                </div>
+                {isShowingExternal && (
+                   <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-md inline-flex w-fit items-center gap-1">
+                     <MapPin size={10} />
+                     Exibindo resultados de outros bairros
+                   </span>
+                )}
               </div>
             )}
 

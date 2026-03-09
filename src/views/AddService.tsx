@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { useLocationScope } from '../context/LocationContext';
 import { Logo } from '../components/Logo';
-
+import { extractBairroName } from '../utils/sis-loca';
 export const AddService: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -20,6 +20,11 @@ export const AddService: React.FC = () => {
 
     const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
     const [saving, setSaving] = useState(false);
+    
+    // Controle de Multi-Bairros (Hyperlocal)
+    const [bairrosAtendidos, setBairrosAtendidos] = useState<string[]>([]);
+    const [isAllBairros, setIsAllBairros] = useState(true);
+    const [selectedBairros, setSelectedBairros] = useState<string[]>([]);
     const [formData, setFormData] = useState({
         name: '',
         description: '',
@@ -73,6 +78,8 @@ export const AddService: React.FC = () => {
                     });
                     Promise.all(filePromises).then(files => setImages(files));
                 }
+                if (parsed.isAllBairros !== undefined) setIsAllBairros(parsed.isAllBairros);
+                if (parsed.selectedBairros) setSelectedBairros(parsed.selectedBairros);
             } catch (e) {
                 console.error('Erro ao ler draft:', e);
             }
@@ -93,7 +100,17 @@ export const AddService: React.FC = () => {
                     }));
                 }
             });
-    }, []);
+
+        // 3. Buscar Bairros de Atendimento do Provider Logado
+        const fetchProviderData = async () => {
+            if (!user?.id) return;
+            const { data } = await supabase.from('service_providers').select('bairros_atendidos').eq('user_id', user.id).single();
+            if (data && data.bairros_atendidos) {
+                setBairrosAtendidos(data.bairros_atendidos);
+            }
+        };
+        fetchProviderData();
+    }, [user]);
 
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
@@ -118,6 +135,14 @@ export const AddService: React.FC = () => {
     const removeImage = (index: number) => {
         setImages(prev => prev.filter((_, i) => i !== index));
         setImagePreviews(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const toggleBairro = (n: string) => {
+        if (selectedBairros.includes(n)) {
+            setSelectedBairros(prev => prev.filter(b => b !== n));
+        } else {
+            setSelectedBairros(prev => [...prev, n]);
+        }
     };
 
     const uploadFile = async (file: File, path: string): Promise<string | null> => {
@@ -189,6 +214,7 @@ export const AddService: React.FC = () => {
                 is_active: true,
                 neighborhood: userLocation?.neighborhood || null,
                 city: userLocation?.city || null,
+                bairros_disponiveis: isAllBairros ? [] : selectedBairros,
                 service_type: formData.service_type,
                 is_home_service: homeService,
             };
@@ -254,6 +280,8 @@ export const AddService: React.FC = () => {
             useCustomSchedule,
             customAvailability,
             imagePreviews,   // base64 — sobrevive ao redirect
+            isAllBairros,
+            selectedBairros
         };
         sessionStorage.setItem('sovix_service_draft', JSON.stringify(draft));
         sessionStorage.setItem('sovix_pending_publish', location.pathname);
@@ -665,6 +693,50 @@ export const AddService: React.FC = () => {
                             </div>
                         )}
                     </section>
+
+                    {/* Disponibilidade por Bairro */}
+                    {bairrosAtendidos.length > 0 && (
+                        <section className="space-y-4">
+                            <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Disponibilidade (Hiperlocal)</h3>
+                            <div className="rounded-2xl border border-neutral-200 bg-white p-5 space-y-4">
+                                <div className="flex flex-col gap-3">
+                                  <label className="flex items-center gap-3 cursor-pointer">
+                                    <input
+                                      type="radio"
+                                      checked={isAllBairros}
+                                      onChange={() => setIsAllBairros(true)}
+                                      className="w-5 h-5 accent-orange-500 cursor-pointer"
+                                    />
+                                    <span className="font-bold text-neutral-800">Disponível em todos os bairros da vitrine</span>
+                                  </label>
+                                  <label className="flex items-center gap-3 cursor-pointer">
+                                    <input
+                                      type="radio"
+                                      checked={!isAllBairros}
+                                      onChange={() => setIsAllBairros(false)}
+                                      className="w-5 h-5 accent-orange-500 cursor-pointer"
+                                    />
+                                    <span className="font-bold text-neutral-800">Escolher bairros específicos</span>
+                                  </label>
+                                </div>
+                                
+                                {!isAllBairros && (
+                                    <div className="pt-3 border-t border-neutral-100 flex flex-wrap gap-2">
+                                        {bairrosAtendidos.map(b => (
+                                            <button
+                                                key={b}
+                                                type="button"
+                                                onClick={() => toggleBairro(b)}
+                                                className={`px-4 py-2 rounded-xl text-sm font-bold transition-all border ${selectedBairros.includes(b) ? 'bg-orange-600 border-orange-600 text-white shadow-md' : 'bg-neutral-50 border-neutral-200 text-neutral-600 hover:border-orange-500'}`}
+                                            >
+                                                {extractBairroName(b)}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </section>
+                    )}
 
                     {/* Ações */}
                     <div className="pt-8 flex flex-col sm:flex-row gap-4">

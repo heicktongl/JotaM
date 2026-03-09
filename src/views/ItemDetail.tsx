@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ChevronLeft, MapPin, Star, ShieldCheck, Minus, Plus, ShoppingBag, ChevronRight, Loader2, Zap, Calendar, Repeat, X, Clock } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { useLocationScope } from '../context/LocationContext';
+import { calculateProximityLabel, extractBairroName } from '../utils/sis-loca';
 import { supabase } from '../lib/supabase';
 import { ItemType } from '../components/ItemCard';
 import { LocationGuard } from '../components/LocationGuard';
@@ -18,11 +20,16 @@ export const ItemDetail: React.FC = () => {
   const { type, id } = useParams<{ type: 'product' | 'service', id: string }>();
   const navigate = useNavigate();
   const { addToCart } = useCart();
+  const { location } = useLocationScope();
   const [quantity, setQuantity] = useState(1);
   const [item, setItem] = useState<ItemType | null>(null);
   const [loading, setLoading] = useState(true);
   const [itemCity, setItemCity] = useState<string | null>(null);
   const [itemNeighborhood, setItemNeighborhood] = useState<string | null>(null);
+  
+  // Hiperlocal
+  const [bairrosDisponiveis, setBairrosDisponiveis] = useState<string[]>([]);
+  const [bairrosAtendidos, setBairrosAtendidos] = useState<string[]>([]);
 
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>('');
@@ -33,6 +40,12 @@ export const ItemDetail: React.FC = () => {
   type ComplementGroup = { id: string; name: string; required: boolean; max_choices: number; items: ComplementItem[] };
   const [complementGroups, setComplementGroups] = useState<ComplementGroup[]>([]);
   const [selectedComplements, setSelectedComplements] = useState<Record<string, string[]>>({});
+
+  // Função robusta de match para evitar erros de acento ("São João" vs "Sao Joao")
+  const normalizeBairro = (b: string | null | undefined) => {
+    if (!b) return '';
+    return b.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  };
 
   useEffect(() => {
     const fetchItem = async () => {
@@ -47,7 +60,8 @@ export const ItemDetail: React.FC = () => {
               sellers!products_seller_id_fkey (
                 store_name,
                 username,
-                avatar_url
+                avatar_url,
+                bairros_atendidos
               )
             `)
             .eq('id', id)
@@ -58,6 +72,8 @@ export const ItemDetail: React.FC = () => {
             const username = data.sellers?.username || '';
             setItemCity(data.city ?? null);
             setItemNeighborhood(data.neighborhood ?? null);
+            setBairrosDisponiveis(data.bairros_disponiveis || []);
+            setBairrosAtendidos(data.sellers?.bairros_atendidos || []);
             setItem({
               id: data.id,
               name: data.name,
@@ -88,7 +104,8 @@ export const ItemDetail: React.FC = () => {
                 rating,
                 phone,
                 whatsapp,
-                avatar_url
+                avatar_url,
+                bairros_atendidos
               )
             `)
             .eq('id', id)
@@ -101,6 +118,8 @@ export const ItemDetail: React.FC = () => {
             const phone = data.service_providers?.whatsapp || data.service_providers?.phone || '';
             setItemCity(data.city ?? null);
             setItemNeighborhood(data.neighborhood ?? null);
+            setBairrosDisponiveis(data.bairros_disponiveis || []);
+            setBairrosAtendidos(data.service_providers?.bairros_atendidos || []);
             setItem({
               id: data.id,
               name: data.name,
@@ -260,6 +279,38 @@ export const ItemDetail: React.FC = () => {
           </div>
         </div>
 
+        {/* --- BANNER ÁREA NÃO COBERTA --- */}
+        {(() => {
+          if (!location || location.scope === 'city' || !location.neighborhood || location.neighborhood === 'Bairro Desconhecido') return null;
+          
+          const userBairro = normalizeBairro(location.neighborhood);
+          let isOutOfRange = true;
+
+          const baseItemBairro = normalizeBairro(itemNeighborhood);
+
+          if (baseItemBairro === userBairro) {
+            isOutOfRange = false;
+          } else if (bairrosDisponiveis && bairrosDisponiveis.some(b => normalizeBairro(extractBairroName(b)) === userBairro)) {
+            isOutOfRange = false;
+          } else if ((!bairrosDisponiveis || bairrosDisponiveis.length === 0) && bairrosAtendidos && bairrosAtendidos.some(b => normalizeBairro(extractBairroName(b)) === userBairro)) {
+            isOutOfRange = false;
+          }
+
+          if (!isOutOfRange) return null;
+
+          return (
+            <div className="bg-orange-50 border-b border-orange-100 px-6 py-4 flex items-start gap-3">
+              <div className="shrink-0 p-2 bg-orange-100 rounded-full text-orange-600 mt-0.5">
+                <MapPin size={16} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-orange-800">Fora da área de cobertura garantida</p>
+                <p className="text-xs text-orange-600 mt-0.5">Entrega pode não estar disponível para seu bairro. Confirme com o vendedor.</p>
+              </div>
+            </div>
+          );
+        })()}
+
         <main className="mx-auto max-w-3xl px-6 pt-6">
           <div className="flex items-center justify-between border-b border-neutral-200 pb-6">
             <div>
@@ -271,7 +322,7 @@ export const ItemDetail: React.FC = () => {
               </p>
               <div className="mt-2 flex items-center gap-2 text-sm font-medium text-neutral-500">
                 <MapPin size={16} className="text-orange-500" />
-                No seu bairro
+                {calculateProximityLabel(location, { city: itemCity, neighborhood: itemNeighborhood })}
               </div>
             </div>
             {!isProduct && (

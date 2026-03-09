@@ -70,29 +70,47 @@ export const DeliveryAreaSettings: React.FC = () => {
 
       if (neighData) setAvailableNeighborhoods(neighData);
 
-      // 2.2 Perfil atual do entregador
-      const { data: profile } = await supabase
-        .from('delivery_profiles')
-        .select('id')
+      // 2.2 Perfil atual do vendedor/prestador (Busca o seller ativo)
+      let profileType = '';
+      let profileId = '';
+      let bairrosAtd = [];
+
+      // Tenta buscar como seller
+      const { data: seller } = await supabase
+        .from('sellers')
+        .select('id, bairros_atendidos')
         .eq('user_id', user.id)
         .single();
-
-      if (!profile) return;
-
-      // 2.3 Área de atuação salva
-      const { data: area } = await supabase
-        .from('delivery_areas')
-        .select('*')
-        .eq('delivery_profile_id', profile.id)
-        .single();
-
-      if (area) {
-        if (area.area_type === 'condo') setIsCondoOnly(true);
-        if (area.area_type === 'city') setIsWholeCity(true);
-        if (area.area_type === 'custom' && area.neighborhood_ids && neighData) {
-          const preSelected = neighData.filter(n => area.neighborhood_ids.includes(n.id));
-          setSelectedNeighborhoods(preSelected);
+      
+      if (seller) {
+        profileType = 'seller';
+        profileId = seller.id;
+        bairrosAtd = seller.bairros_atendidos || [];
+      } else {
+        // Tenta buscar como service_provider
+        const { data: provider } = await supabase
+          .from('service_providers')
+          .select('id, bairros_atendidos')
+          .eq('user_id', user.id)
+          .single();
+          
+        if (provider) {
+          profileType = 'provider';
+          profileId = provider.id;
+          bairrosAtd = provider.bairros_atendidos || [];
         }
+      }
+
+      if (!profileId) return;
+
+      // Armazenamos info persistida
+      (window as any).__sovix_profile_type = profileType;
+      (window as any).__sovix_profile_id = profileId;
+
+      // 2.3 Área de atuação salva (Herdada dos bairros_atendidos)
+      if (bairrosAtd.length > 0 && neighData) {
+        const preSelected = neighData.filter(n => bairrosAtd.includes(n.name));
+        setSelectedNeighborhoods(preSelected);
       }
     };
 
@@ -119,48 +137,39 @@ export const DeliveryAreaSettings: React.FC = () => {
     if (isSelected) {
       setSelectedNeighborhoods(ps => ps.filter(sn => sn.id !== n.id));
     } else {
+      if (selectedNeighborhoods.length >= 3) {
+        alert("Você pode adicionar no máximo 3 bairros para manter o padrão hiperlocal.");
+        return;
+      }
       setSelectedNeighborhoods(ps => [...ps, n]);
     }
   };
 
   const handleSave = async () => {
     if (!user) return;
+    const profileType = (window as any).__sovix_profile_type;
+    const profileId = (window as any).__sovix_profile_id;
+    
+    if (!profileId || !profileType) {
+        alert("Conta comercial não encontrada.");
+        return;
+    }
+
     setSaving(true);
     try {
-      const { data: profile } = await supabase
-        .from('delivery_profiles')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
+      // Salva array das STRINGS (nomes dos bairros) no banco master do usuário
+      const neighborhoodNames = selectedNeighborhoods.map(n => n.name);
+      
+      const tableName = profileType === 'seller' ? 'sellers' : 'service_providers';
 
-      if (!profile) {
-        alert("Perfil de entregador não encontrado.");
-        return;
-      }
-
-      const areaType = isCondoOnly ? 'condo' : isWholeCity ? 'city' : 'custom';
-      const neighborhoodIds = areaType === 'custom' ? selectedNeighborhoods.map(n => n.id) : [];
-
-      // Verifica se já existe, se não da update, se sim insere. O Supabase upsert faz isso mais fácil
-      const payload = {
-        delivery_profile_id: profile.id,
-        area_type: areaType,
-        neighborhood_ids: neighborhoodIds
-      };
-
-      const { data: existing } = await supabase.from('delivery_areas').select('id').eq('delivery_profile_id', profile.id).single();
-
-      let error;
-      if (existing) {
-        const { error: err } = await supabase.from('delivery_areas').update(payload).eq('id', existing.id);
-        error = err;
-      } else {
-        const { error: err } = await supabase.from('delivery_areas').insert([payload]);
-        error = err;
-      }
+      const { error } = await supabase
+        .from(tableName as any)
+        .update({ bairros_atendidos: neighborhoodNames })
+        .eq('id', profileId);
 
       if (error) throw error;
-      alert('Área de atuação atualizada com sucesso!');
+      
+      alert('Áreas de cobertura salvas com sucesso!');
       navigate('/admin/delivery');
     } catch (err) {
       console.error('Erro ao salvar área:', err);
@@ -241,23 +250,13 @@ export const DeliveryAreaSettings: React.FC = () => {
                 </motion.div>
               )}
             </AnimatePresence>
-
-            <div
-              onClick={handleWholeCityToggle}
-              className={`p-6 rounded-3xl border-2 transition-all cursor-pointer flex flex-col justify-between h-full min-h-[180px] ${isWholeCity ? 'bg-blue-50 border-blue-500 shadow-lg shadow-blue-500/10' : 'bg-white border-neutral-100 shadow-sm hover:border-neutral-200'}`}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-colors ${isWholeCity ? 'bg-blue-600 text-white' : 'bg-neutral-100 text-neutral-400'}`}>
-                  <Globe size={24} />
-                </div>
-                <div className={`h-6 w-6 rounded-full border-2 flex items-center justify-center transition-all ${isWholeCity ? 'bg-blue-600 border-blue-600' : 'border-neutral-200'}`}>
-                  {isWholeCity && <Check size={14} className="text-white" />}
-                </div>
-              </div>
-              <div>
-                <span className="font-bold text-lg text-neutral-900 block">Cidade Toda</span>
-                <span className="text-sm text-neutral-500">Receba pedidos de qualquer lugar da cidade.</span>
-              </div>
+            
+            {/* Aviso de recomendação UX */}
+            <div className="p-4 rounded-2xl bg-orange-50/80 border border-orange-100 flex items-start gap-3 col-span-1 md:col-span-2">
+                <Globe className="text-orange-500 mt-0.5 shrink-0" size={20} />
+                <p className="text-sm font-medium text-orange-900 leading-snug">
+                  Adicione apenas bairros onde você realmente consegue entregar com facilidade ou possui filial. Limite de 3 bairros.
+                </p>
             </div>
           </div>
 
@@ -271,7 +270,7 @@ export const DeliveryAreaSettings: React.FC = () => {
           </div>
 
           <AnimatePresence mode="wait">
-            {!isCondoOnly && !isWholeCity && (
+            {!isCondoOnly && (
               <motion.section
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
