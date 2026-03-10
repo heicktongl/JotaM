@@ -177,15 +177,25 @@ export const CheckoutPage: React.FC = () => {
       }
 
       // 2. Insere os itens do pedido em order_items
-      const orderItems = items.map(cartItem => ({
-        order_id: order.id,
-        product_id: cartItem.type === 'product' ? cartItem.item.id : null,
-        service_id: cartItem.type === 'service' ? cartItem.item.id : null,
-        quantity: cartItem.quantity,
-        unit_price: cartItem.type === 'product'
+      const orderItems = items.map(cartItem => {
+        const basePrice = cartItem.type === 'product'
           ? (cartItem.item as { price: number }).price
-          : (cartItem.item as { pricePerHour: number }).pricePerHour,
-      }));
+          : (cartItem.item as { pricePerHour: number }).pricePerHour;
+        
+        const optionsPrice = cartItem.selectedOptions.reduce((acc, opt) => acc + opt.price, 0);
+
+        return {
+          order_id: order.id,
+          product_id: cartItem.type === 'product' ? cartItem.item.id : null,
+          service_id: cartItem.type === 'service' ? cartItem.item.id : null,
+          quantity: cartItem.quantity,
+          unit_price: basePrice + optionsPrice,
+          metadata: {
+            options: cartItem.selectedOptions
+          }
+        };
+      });
+
 
       const { error: itemsErr } = await supabase
         .from('order_items')
@@ -212,13 +222,20 @@ export const CheckoutPage: React.FC = () => {
       }
 
       // 4. Prepara a mensagem do WhatsApp (MsgZapEficiente)
-      const messageItems = items.map(cartItem => ({
-        name: cartItem.item.name,
-        quantity: cartItem.quantity,
-        price: cartItem.type === 'product'
+      const messageItems = items.map(cartItem => {
+        const basePrice = cartItem.type === 'product'
           ? (cartItem.item as any).price
-          : (cartItem.item as any).pricePerHour
-      }));
+          : (cartItem.item as any).pricePerHour;
+        const optionsPrice = cartItem.selectedOptions.reduce((acc, opt) => acc + opt.price, 0);
+
+        return {
+          name: cartItem.item.name,
+          quantity: cartItem.quantity,
+          price: basePrice + optionsPrice,
+          options: cartItem.selectedOptions.map(o => o.itemName)
+        };
+      });
+
 
       const addr = addresses.find(a => a.id === selectedAddressId) || null;
       const zapMessage = buildProductCheckoutMessage(
@@ -347,23 +364,34 @@ export const CheckoutPage: React.FC = () => {
           <h2 className="text-sm font-bold text-neutral-900 mb-3">Resumo do Pedido</h2>
           <div className="rounded-3xl bg-white p-5 shadow-sm border border-neutral-100 space-y-3">
             {items.map(cartItem => {
-              const price = cartItem.type === 'product'
+              const basePrice = cartItem.type === 'product'
                 ? (cartItem.item as { price: number }).price
                 : (cartItem.item as { pricePerHour: number }).pricePerHour;
+              const optionsPrice = cartItem.selectedOptions.reduce((acc, opt) => acc + opt.price, 0);
+              const itemTotalPrice = basePrice + optionsPrice;
+
               return (
-                <div key={cartItem.item.id} className="flex items-center justify-between">
+                <div key={cartItem.cartId} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className="h-8 w-8 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center text-xs font-bold">
                       {cartItem.quantity}x
                     </span>
-                    <span className="font-bold text-neutral-900 text-sm">{cartItem.item.name}</span>
+                    <div>
+                      <span className="font-bold text-neutral-900 text-sm">{cartItem.item.name}</span>
+                      {cartItem.selectedOptions.length > 0 && (
+                        <p className="text-[10px] text-neutral-400 font-medium">
+                          {cartItem.selectedOptions.map(o => o.itemName).join(', ')}
+                        </p>
+                      )}
+                    </div>
                   </div>
                   <span className="font-bold text-neutral-700 text-sm">
-                    R$ {(price * cartItem.quantity).toFixed(2)}
+                    R$ {(itemTotalPrice * cartItem.quantity).toFixed(2)}
                   </span>
                 </div>
               );
             })}
+
           </div>
         </section>
 

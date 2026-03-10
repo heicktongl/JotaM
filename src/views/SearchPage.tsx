@@ -22,6 +22,7 @@ interface TopStorefront {
   neighborhood: string;
   city: string;
   views?: number;
+  categoryName?: string; // Added this to match the new component structure
 }
 
 interface Category {
@@ -90,9 +91,9 @@ const FeaturedStorefrontCard: React.FC<{ store: TopStorefront; rank: number }> =
   return (
     <button
       onClick={() => navigate(href)}
-      className="flex-1 min-w-0 flex flex-col bg-white rounded-3xl overflow-hidden shadow-sm border border-neutral-100 hover:shadow-md hover:border-orange-200 transition-all text-left group active:scale-[0.98]"
+      className="flex-1 w-full flex flex-col bg-white rounded-3xl overflow-hidden shadow-sm border border-neutral-100 hover:shadow-md hover:border-orange-200 transition-all text-left group active:scale-[0.98]"
     >
-      <div className={`relative h-20 w-full flex items-center justify-center ${isShop ? 'bg-gradient-to-br from-orange-400 to-rose-500' : 'bg-gradient-to-br from-purple-500 to-indigo-600'}`}>
+      <div className={`relative h-24 w-full flex items-center justify-center ${isShop ? 'bg-gradient-to-br from-orange-400 to-rose-500' : 'bg-gradient-to-br from-purple-500 to-indigo-600'}`}>
         <div className="absolute top-2 left-2 flex items-center gap-1 bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-full">
           <Flame size={10} className="text-amber-300" />
           <span className="text-[10px] font-black text-white">#{rank}</span>
@@ -107,29 +108,23 @@ const FeaturedStorefrontCard: React.FC<{ store: TopStorefront; rank: number }> =
           )}
         </div>
       </div>
-      <div className="p-3 flex flex-col gap-1 flex-1">
+      <div className="p-4 flex flex-col gap-1.5 flex-1">
         <div className="flex items-start justify-between gap-1">
-          <span className="font-bold text-sm text-neutral-900 leading-tight line-clamp-2">{store.name}</span>
+          <span className="font-bold text-sm text-neutral-900 leading-tight line-clamp-1">{store.name}</span>
           <ChevronRight size={14} className="shrink-0 text-neutral-300 group-hover:text-orange-400 transition-colors mt-0.5" />
         </div>
-        {store.bio && <p className="text-[11px] text-neutral-500 line-clamp-2 leading-relaxed">{store.bio}</p>}
+        {store.bio && <p className="text-[11px] text-neutral-500 line-clamp-1 leading-tight">{store.bio}</p>}
         <div className="flex items-center gap-1 mt-auto pt-1">
-          <MapPin size={9} className="text-neutral-400 shrink-0" />
-          <span className="text-[10px] text-neutral-400 truncate">{store.neighborhood}</span>
+          <div className="flex items-center gap-1 min-w-0 flex-1">
+            <MapPin size={9} className="text-neutral-400 shrink-0" />
+            <span className="text-[10px] text-neutral-400 truncate">{store.neighborhood}</span>
+          </div>
+          {store.categoryName && (
+             <span className={`shrink-0 text-[8px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded ${isShop ? 'bg-orange-50 text-orange-600' : 'bg-purple-50 text-purple-600'}`}>
+                {store.categoryName}
+             </span>
+          )}
         </div>
-        {(store.views ?? 0) > 0 && (
-          <div className="flex items-center gap-1">
-            <Flame size={9} className="text-amber-400 shrink-0" />
-            <span className="text-[10px] font-bold text-amber-500">{store.views} acessos</span>
-          </div>
-        )}
-        {store.categoryName && (
-          <div className="mt-1">
-            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${isShop ? 'bg-orange-50 text-orange-600' : 'bg-purple-50 text-purple-600'}`}>
-              {store.categoryName}
-            </span>
-          </div>
-        )}
       </div>
     </button>
   );
@@ -138,17 +133,23 @@ const FeaturedStorefrontCard: React.FC<{ store: TopStorefront; rank: number }> =
 // ──────────────────────────────────────────────
 // Card de Item (Produto/Serviço) — SIS
 // ──────────────────────────────────────────────
-const SISItemCard: React.FC<{ item: ScoredItem }> = ({ item }) => {
+const SISItemCard: React.FC<{ item: ScoredItem; rank?: number }> = ({ item, rank }) => {
   const navigate = useNavigate();
   const isProduct = item.type === 'product';
 
   return (
     <button
       onClick={() => navigate(`/item/${item.type}/${item.id}`)}
-      className="w-full flex items-center gap-4 bg-white rounded-2xl p-3 shadow-sm border border-neutral-100 hover:border-orange-200 hover:shadow-md transition-all text-left group active:scale-[0.98]"
+      className="w-full flex items-center gap-4 bg-white rounded-2xl p-3 shadow-sm border border-neutral-100 hover:border-orange-200 hover:shadow-md transition-all text-left group active:scale-[0.98] relative"
     >
-      <div className="shrink-0 h-16 w-16 rounded-2xl overflow-hidden bg-neutral-100">
+      <div className="shrink-0 h-16 w-16 rounded-2xl overflow-hidden bg-neutral-100 relative">
         <img src={item.image} alt={item.name} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+        {rank && rank <= 3 && (
+          <div className="absolute top-1 left-1 bg-black/60 backdrop-blur-sm text-[8px] font-black text-white px-1.5 py-0.5 rounded-lg flex items-center gap-0.5 animate-pulse">
+            <Flame size={8} className="text-orange-400" />
+            EM ALTA
+          </div>
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <p className="font-bold text-sm text-neutral-900 truncate group-hover:text-orange-600 transition-colors">{item.name}</p>
@@ -260,9 +261,17 @@ export const SearchPage: React.FC = () => {
         let topResults: TopStorefront[] = [];
         const usedIds = new Set<string>();
 
+        const isCompleteSeller = (s: any) =>
+          s.avatar_url && s.cover_url && s.bio && s.whatsapp &&
+          s.products?.length > 0 && s.seller_availability?.length > 0;
+
+        const isCompleteProvider = (p: any) =>
+          p.avatar_url && p.cover_url && p.bio && p.whatsapp &&
+          p.services?.length > 0 && p.provider_availability?.length > 0;
+
         const formatSellers = (data: any[]): TopStorefront[] =>
-          data.filter((s) => s.username).map((s) => {
-            const primary = (s.store_locations || []).find((l: any) => l.is_primary) || (s.store_locations || [])[0] || {};
+          data.filter(s => s.username && isCompleteSeller(s)).map((s) => {
+            const primary = s.store_locations?.find((l: any) => l.is_primary) || s.store_locations?.[0] || {};
             return {
               id: s.id, name: s.store_name, username: s.username,
               avatar_url: s.avatar_url, bio: s.bio, type: 'shop' as const,
@@ -272,7 +281,7 @@ export const SearchPage: React.FC = () => {
           });
 
         const formatProviders = (data: any[]): TopStorefront[] =>
-          data.filter((p) => p.username).map((p) => ({
+          data.filter(p => p.username && isCompleteProvider(p)).map((p) => ({
             id: p.id, name: p.name, username: p.username,
             avatar_url: p.avatar_url, bio: p.bio, type: 'provider' as const,
             neighborhood: p.neighborhood || '', city: p.city || '', views: 0,
@@ -280,7 +289,7 @@ export const SearchPage: React.FC = () => {
 
         const addResults = (newItems: TopStorefront[]) => {
           for (const item of newItems) {
-            if (!usedIds.has(item.id) && topResults.length < 2) {
+            if (!usedIds.has(item.id) && topResults.length < 7) {
               topResults.push(item);
               usedIds.add(item.id);
             }
@@ -300,20 +309,20 @@ export const SearchPage: React.FC = () => {
           const sIds = (locs || []).map((l: any) => l.seller_id).filter(Boolean);
           if (sIds.length > 0) {
             const { data } = await supabase.from('sellers')
-              .select('id, store_name, username, avatar_url, bio, views, store_locations(neighborhood, city, is_primary)')
-              .in('id', sIds).not('username', 'is', null).order('views', { ascending: false }).limit(2);
+              .select('id, store_name, username, avatar_url, cover_url, bio, whatsapp, views, store_locations(neighborhood, city, is_primary), products(id), seller_availability(id)')
+              .in('id', sIds).not('username', 'is', null).order('views', { ascending: false }).limit(20);
             if (data) addResults(formatSellers(data));
           }
           if (topResults.length > 0) setTopSectionTitle(`Mais acessadas em ${neighborhoodFilter}`);
         }
 
-        if (topResults.length < 2 && cityFilter) {
+        if (topResults.length < 7 && cityFilter) {
           const { data: locs } = await supabase.from('store_locations').select('seller_id').ilike('city', `%${cityFilter}%`);
           const sIds = (locs || []).map((l: any) => l.seller_id).filter(Boolean);
           if (sIds.length > 0) {
             const { data } = await supabase.from('sellers')
-              .select('id, store_name, username, avatar_url, bio, views, store_locations(neighborhood, city, is_primary)')
-              .in('id', sIds).not('username', 'is', null).order('views', { ascending: false }).limit(2);
+              .select('id, store_name, username, avatar_url, cover_url, bio, whatsapp, views, store_locations(neighborhood, city, is_primary), products(id), seller_availability(id)')
+              .in('id', sIds).not('username', 'is', null).order('views', { ascending: false }).limit(20);
             if (data) addResults(formatSellers(data));
           }
           if (topResults.length > 0 && topSectionTitle === 'Destaques') setTopSectionTitle('Mais acessadas na sua região');
@@ -460,15 +469,17 @@ export const SearchPage: React.FC = () => {
               </div>
 
               {isLoadingTop ? (
-                <div className="flex gap-3">
-                  {[0, 1].map((i) => (
-                    <div key={i} className="flex-1 h-44 rounded-3xl bg-neutral-200 animate-pulse" />
+                <div className="flex gap-3 overflow-x-auto pb-4 hide-scrollbar -mx-6 px-6">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="min-w-[220px] h-44 rounded-3xl bg-neutral-200 animate-pulse" />
                   ))}
                 </div>
               ) : topStorefronts.length > 0 ? (
-                <div className="flex gap-3">
+                <div className="flex gap-3 overflow-x-auto pb-4 hide-scrollbar snap-x snap-mandatory -mx-6 px-6">
                   {topStorefronts.map((store, idx) => (
-                    <FeaturedStorefrontCard key={store.id} store={store} rank={idx + 1} />
+                    <div key={store.id} className="min-w-[220px] snap-start">
+                      <FeaturedStorefrontCard store={store} rank={idx + 1} />
+                    </div>
                   ))}
                 </div>
               ) : (
@@ -479,11 +490,14 @@ export const SearchPage: React.FC = () => {
               )}
             </section>
 
-            {/* Recentes */}
+            {/* Destaques da Semana */}
             <section>
-              <h2 className="font-display text-lg font-bold text-neutral-900 mb-3">
-                Recentes em {neighborhoodLabel}
-              </h2>
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles size={16} className="text-orange-500" />
+                <h2 className="font-display text-lg font-bold text-neutral-900">
+                  Destaques da semana em {neighborhoodLabel}
+                </h2>
+              </div>
               {results.products.length === 0 && results.services.length === 0 && !isSearching ? (
                 <div className="flex flex-col items-center justify-center py-14 text-center">
                   <div className="h-14 w-14 rounded-full bg-neutral-100 flex items-center justify-center mb-3 text-neutral-400">
@@ -495,10 +509,21 @@ export const SearchPage: React.FC = () => {
               ) : (
                 <div className="space-y-3">
                   {[...results.services, ...results.products]
-                    .sort((a, b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime())
+                    .map(item => ({
+                      ...item,
+                      performanceScore: 
+                        ((item.views || 0) * 1) + 
+                        ((item.cart_count || 0) * 5) + 
+                        ((item.rating || 5) * 10)
+                    }))
+                    .sort((a, b) => b.performanceScore - a.performanceScore)
                     .slice(0, 10)
-                    .map((item) => (
-                      <SISItemCard key={`${item.type}-${item.id}`} item={item} />
+                    .map((item, idx) => (
+                      <SISItemCard 
+                        key={`${item.type}-${item.id}`} 
+                        item={item} 
+                        rank={idx + 1}
+                      />
                     ))}
                 </div>
               )}

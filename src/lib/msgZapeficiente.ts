@@ -10,7 +10,7 @@ export const openWhatsApp = (phone: string, msg: string) => {
 
 export const buildProductCheckoutMessage = (
     orderId: string,
-    items: Array<{ name: string; quantity: number; price: number }>,
+    items: Array<{ name: string; quantity: number; price: number; options?: string[] }>,
     total: number,
     paymentMethod: string,
     address: { street: string; neighborhood: string; city: string; label?: string } | null,
@@ -28,7 +28,11 @@ export const buildProductCheckoutMessage = (
 
     msg += `*🧾 Itens do Pedido:*\n`;
     items.forEach(i => {
-        msg += `• ${i.quantity}x ${i.name} — R$ ${(i.price * i.quantity).toFixed(2)}\n`;
+        msg += `• ${i.quantity}x ${i.name}`;
+        if (i.options && i.options.length > 0) {
+            msg += ` (${i.options.join(', ')})`;
+        }
+        msg += ` — R$ ${(i.price * i.quantity).toFixed(2)}\n`;
     });
 
     msg += `\n*💰 Total a pagar:* R$ ${total.toFixed(2)}\n`;

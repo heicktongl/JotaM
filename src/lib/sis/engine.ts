@@ -23,6 +23,10 @@ export interface ScoredItem {
     serviceType?: string;
     rating?: number;
     created_at?: string;
+    neighborhood?: string;
+    city?: string;
+    views?: number;
+    cart_count?: number;
 }
 
 export interface ScoredStorefront {
@@ -93,11 +97,12 @@ export async function sisSearch(
     // ── 1. Query de Produtos (com joins para scoring) ──────────
     let prodsQuery = supabase
         .from('products')
-        .select('id, name, description, price, image_url, category_id, created_at, seller_id, sellers!products_seller_id_fkey(store_name, username), categories(name)')
+        .select('id, name, description, price, image_url, category_id, created_at, city, neighborhood, seller_id, views, cart_count, sellers!products_seller_id_fkey(store_name, username), categories(name)')
         .eq('is_active', true)
-        .limit(30);
+        .limit(60); // AUMENTADO PARA PERMITIR FILTRO DE CAMADA
 
-    prodsQuery = buildLocationFilter(prodsQuery, location);
+    // SIS-LOCA-HIPERLOCAL: Na busca, trazemos por cidade e depois separamos no front
+    prodsQuery = buildLocationFilter(prodsQuery, { ...location, neighborhood: null });
 
     if (location.categoryId) {
         prodsQuery = prodsQuery.eq('category_id', location.categoryId);
@@ -110,11 +115,11 @@ export async function sisSearch(
     // ── 2. Query de Serviços (com joins para scoring) ──────────
     let servsQuery = supabase
         .from('services')
-        .select('id, name, description, price, image_url, category_id, service_type, created_at, provider_id, service_providers(name, username, rating), categories(name)')
+        .select('id, name, description, price, image_url, category_id, service_type, created_at, city, neighborhood, provider_id, views, cart_count, service_providers(name, username, rating), categories(name)')
         .eq('is_active', true)
-        .limit(30);
+        .limit(60);
 
-    servsQuery = buildLocationFilter(servsQuery, location);
+    servsQuery = buildLocationFilter(servsQuery, { ...location, neighborhood: null });
 
     if (location.categoryId) {
         servsQuery = servsQuery.eq('category_id', location.categoryId);
@@ -134,11 +139,8 @@ export async function sisSearch(
         if (location.city) {
             locQ = locQ.ilike('city', `%${location.city}%`);
         }
-        // Aplica bairro
-        if (location.neighborhood && location.neighborhood !== 'Bairro Desconhecido') {
-            locQ = locQ.ilike('neighborhood', `%${location.neighborhood}%`);
-        }
-
+        // Remove filtro de bairro pra vitrines na query bruta para exibir camada 2
+        
         const { data: lData } = await locQ;
         sellerIds = (lData || []).map((l: any) => l.seller_id).filter(Boolean);
     }
@@ -166,9 +168,9 @@ export async function sisSearch(
         .from('service_providers')
         .select('id, name, username, avatar_url, bio, neighborhood, city, category_id, categories(name)')
         .not('username', 'is', null)
-        .limit(15);
+        .limit(20);
 
-    providersQuery = buildLocationFilter(providersQuery, location);
+    providersQuery = buildLocationFilter(providersQuery, { ...location, neighborhood: null });
 
     if (location.categoryId) {
         providersQuery = providersQuery.eq('category_id', location.categoryId);
@@ -210,6 +212,10 @@ export async function sisSearch(
             score: q.length > 0 ? scoreItem(q, fields) : 0,
             type: 'product',
             created_at: p.created_at,
+            city: p.city,
+            neighborhood: p.neighborhood,
+            views: p.views || 0,
+            cart_count: p.cart_count || 0,
         };
     });
 
@@ -239,6 +245,10 @@ export async function sisSearch(
             serviceType: s.service_type,
             rating: s.service_providers?.rating ?? 5.0,
             created_at: s.created_at,
+            city: s.city,
+            neighborhood: s.neighborhood,
+            views: s.views || 0,
+            cart_count: s.cart_count || 0,
         };
     });
 

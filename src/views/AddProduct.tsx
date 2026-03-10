@@ -34,8 +34,10 @@ export const AddProduct: React.FC = () => {
     name: string;
     required: boolean;
     max_choices: number;
-    items: Array<{ name: string; price: string }>
+    is_variation: boolean;
+    items: Array<{ name: string; price: string; stock: string }>
   }>>([]);
+
   const [openGroupIndex, setOpenGroupIndex] = useState<number | null>(null);
 
   useEffect(() => {
@@ -245,8 +247,10 @@ export const AddProduct: React.FC = () => {
                 name: group.name,
                 required: group.required,
                 max_choices: group.max_choices,
+                is_variation: group.is_variation,
                 position: gIdx,
               })
+
               .select('id')
               .single();
 
@@ -256,8 +260,10 @@ export const AddProduct: React.FC = () => {
                   group_id: savedGroup.id,
                   name: item.name,
                   price: parseFloat(item.price) || 0,
+                  stock: item.stock ? parseInt(item.stock, 10) : null,
                   position: iIdx,
                 }))
+
               );
             }
           }
@@ -555,8 +561,9 @@ export const AddProduct: React.FC = () => {
                 onClick={() => {
                   setComplementGroups(prev => [
                     ...prev,
-                    { name: '', required: false, max_choices: 1, items: [] }
+                    { name: '', required: false, max_choices: 1, is_variation: false, items: [] }
                   ]);
+
                   setOpenGroupIndex(complementGroups.length);
                 }}
                 className="flex items-center gap-1.5 text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-full transition-all"
@@ -610,6 +617,24 @@ export const AddProduct: React.FC = () => {
                       <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
+                          checked={group.is_variation}
+                          onChange={(e) => {
+                            const updated = [...complementGroups];
+                            updated[gIdx].is_variation = e.target.checked;
+                            // Se for variação, geralmente é obrigatório e 1 escolha
+                            if (e.target.checked) {
+                              updated[gIdx].required = true;
+                              updated[gIdx].max_choices = 1;
+                            }
+                            setComplementGroups(updated);
+                          }}
+                          className="w-4 h-4 accent-orange-600"
+                        />
+                        <span className="text-xs font-bold text-orange-600">É uma Variação? (ex: Tamanho)</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
                           checked={group.required}
                           onChange={(e) => {
                             const updated = [...complementGroups];
@@ -635,6 +660,7 @@ export const AddProduct: React.FC = () => {
                         />
                       </div>
                     </div>
+
 
                     {/* Itens do grupo */}
                     <div className="space-y-2">
@@ -667,6 +693,20 @@ export const AddProduct: React.FC = () => {
                               className="w-24 rounded-xl border border-neutral-200 bg-neutral-50 pl-7 pr-2 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-orange-500 focus:outline-none"
                             />
                           </div>
+                          <div className="w-20">
+                            <input
+                              type="number"
+                              placeholder="Qtd."
+                              value={item.stock}
+                              onChange={(e) => {
+                                const updated = [...complementGroups];
+                                updated[gIdx].items[iIdx].stock = e.target.value;
+                                setComplementGroups(updated);
+                              }}
+                              className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-2 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-orange-500 focus:outline-none text-center"
+                            />
+                          </div>
+
                           <button
                             type="button"
                             onClick={() => {
@@ -684,9 +724,10 @@ export const AddProduct: React.FC = () => {
                         type="button"
                         onClick={() => {
                           const updated = [...complementGroups];
-                          updated[gIdx].items.push({ name: '', price: '' });
+                          updated[gIdx].items.push({ name: '', price: '', stock: '' });
                           setComplementGroups(updated);
                         }}
+
                         className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border-2 border-dashed border-neutral-200 text-xs font-bold text-neutral-400 hover:border-orange-400 hover:text-orange-500 transition-all"
                       >
                         <Plus size={12} /> Adicionar item

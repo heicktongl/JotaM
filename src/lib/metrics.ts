@@ -68,3 +68,41 @@ export async function registerView(storeId: string, type: 'shop' | 'provider') {
     return false;
   }
 }
+
+/**
+ * Registra visualização de um item específico (produto ou serviço)
+ */
+export async function registerItemView(itemId: string, type: 'product' | 'service') {
+  try {
+    const rpcName = type === 'product' ? 'increment_product_view' : 'increment_service_view';
+    const { error } = await supabase.rpc(rpcName, { p_id: itemId });
+
+    if (error) {
+       console.warn(`[SIS-ITEM-VIEW] Falha ao registrar view (${type}):`, error.message);
+       return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[SIS-ITEM-VIEW] Erro crítico:', err);
+    return false;
+  }
+}
+
+/**
+ * Registra clique em adicionar ao carrinho
+ */
+export async function registerCartClick(itemId: string, type: 'product' | 'service') {
+  try {
+    const rpcName = type === 'product' ? 'increment_product_cart' : 'increment_service_cart';
+    const { error } = await supabase.rpc(rpcName, { p_id: itemId });
+
+    if (error) {
+       console.warn(`[SIS-CART-CLICK] Falha ao registrar clique (${type}):`, error.message);
+       return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('[SIS-CART-CLICK] Erro crítico:', err);
+    return false;
+  }
+}

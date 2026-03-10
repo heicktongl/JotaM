@@ -47,11 +47,15 @@ export const CartPage: React.FC = () => {
         <div className="space-y-4">
           {items.map((cartItem) => {
             const isProduct = cartItem.type === 'product';
-            const price = isProduct ? (cartItem.item as Product).price : (cartItem.item as Service).pricePerHour;
+            const basePrice = isProduct ? (cartItem.item as Product).price : (cartItem.item as Service).pricePerHour;
+            const optionsPrice = cartItem.selectedOptions.reduce((acc, opt) => acc + opt.price, 0);
+            const itemTotalPrice = basePrice + optionsPrice;
+
 
             return (
               <motion.div
-                key={cartItem.item.id}
+                key={cartItem.cartId}
+
                 layout
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -69,9 +73,20 @@ export const CartPage: React.FC = () => {
                     <div>
                       <h3 className="font-bold text-neutral-900 line-clamp-1">{cartItem.item.name}</h3>
                       <p className="text-xs text-neutral-500 mt-1">{isProduct ? (cartItem.item as Product).seller : (cartItem.item as Service).provider}</p>
+                      
+                      {cartItem.selectedOptions.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {cartItem.selectedOptions.map((opt, idx) => (
+                            <span key={idx} className="text-[10px] bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full font-bold border border-orange-100">
+                              {opt.itemName}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <button
-                      onClick={() => removeFromCart(cartItem.item.id)}
+                      onClick={() => removeFromCart(cartItem.cartId)}
+
                       className="text-neutral-400 hover:text-red-500 transition-colors p-1"
                     >
                       <Trash2 size={18} />
@@ -79,24 +94,26 @@ export const CartPage: React.FC = () => {
                   </div>
 
                   <div className="flex items-center justify-between mt-2">
-                    <p className="font-black text-neutral-900">R$ {price.toFixed(2)}</p>
+                    <p className="font-black text-neutral-900">R$ {itemTotalPrice.toFixed(2)}</p>
+
 
                     {isProduct ? (
                       <div className="flex h-9 items-center rounded-xl border border-neutral-200 bg-neutral-50 px-1">
                         <button
-                          onClick={() => updateQuantity(cartItem.item.id, cartItem.quantity - 1)}
+                          onClick={() => updateQuantity(cartItem.cartId, cartItem.quantity - 1)}
                           className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-500 hover:bg-white hover:shadow-sm"
                         >
                           <Minus size={14} />
                         </button>
                         <span className="w-6 text-center text-sm font-bold text-neutral-900">{cartItem.quantity}</span>
                         <button
-                          onClick={() => updateQuantity(cartItem.item.id, cartItem.quantity + 1)}
+                          onClick={() => updateQuantity(cartItem.cartId, cartItem.quantity + 1)}
                           className="flex h-7 w-7 items-center justify-center rounded-lg text-neutral-500 hover:bg-white hover:shadow-sm"
                         >
                           <Plus size={14} />
                         </button>
                       </div>
+
                     ) : (
                       <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-lg">
                         {cartItem.quantity} hora(s)

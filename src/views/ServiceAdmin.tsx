@@ -71,7 +71,6 @@ export const ServiceAdmin: React.FC = () => {
         if (provErr) throw provErr;
         setProvider(provData);
 
-        // 2. Busca agenda (Appointments) com Join na View 'user_profiles' para o nome do Cliente
         const { data: appointsData, error: appErr } = await supabase
           .from('appointments')
           .select(`
@@ -80,7 +79,7 @@ export const ServiceAdmin: React.FC = () => {
             scheduled_at,
             consumer_id,
             services ( name ),
-            user_profiles!appointments_consumer_id_fkey ( name, avatar_url )
+            profiles!appointments_consumer_id_fkey ( name, avatar_url )
           `)
           .eq('provider_id', provData.id)
           .order('scheduled_at', { ascending: true });
@@ -90,8 +89,8 @@ export const ServiceAdmin: React.FC = () => {
         const formatted = (appointsData as any[]).map(a => ({
           ...a,
           users: {
-            name: a.user_profiles?.name || 'Cliente Sem Nome',
-            avatar: a.user_profiles?.avatar_url || null
+            name: a.profiles?.name || 'Cliente Sem Nome',
+            avatar: a.profiles?.avatar_url || null
           }
         }));
 

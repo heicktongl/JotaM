@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { ChevronLeft, MapPin, Star, ShieldCheck, Minus, Plus, ShoppingBag, ChevronRight, Loader2, Zap, Calendar, Repeat, X, Clock } from 'lucide-react';
+import { ChevronLeft, MapPin, Star, ShieldCheck, Minus, Plus, ShoppingBag, ChevronRight, Loader2, Zap, Calendar, Repeat, X, Clock, Heart } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useLocationScope } from '../context/LocationContext';
 import { calculateProximityLabel, extractBairroName } from '../utils/sis-loca';
@@ -15,6 +15,9 @@ import {
   openWhatsApp
 } from '../lib/msgZapeficiente';
 import { trackEvent } from '../lib/olheiro';
+import { registerItemView, registerCartClick } from '../lib/metrics';
+import { SelectedOption } from '../context/CartContext';
+
 
 export const ItemDetail: React.FC = () => {
   const { type, id } = useParams<{ type: 'product' | 'service', id: string }>();
@@ -24,6 +27,8 @@ export const ItemDetail: React.FC = () => {
   const [quantity, setQuantity] = useState(1);
   const [item, setItem] = useState<ItemType | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [itemCity, setItemCity] = useState<string | null>(null);
   const [itemNeighborhood, setItemNeighborhood] = useState<string | null>(null);
   
@@ -92,6 +97,8 @@ export const ItemDetail: React.FC = () => {
             if (data.seller_id) {
               trackEvent({ sellerId: data.seller_id, eventType: 'view', productId: data.id });
             }
+            // 📊 Métricas SIS — view de produto
+            registerItemView(data.id, 'product');
           }
         } else {
           const { data, error } = await supabase
@@ -140,6 +147,8 @@ export const ItemDetail: React.FC = () => {
               providerPhone: phone,
               avatar_url: data.service_providers?.avatar_url
             } as any);
+            // 📊 Métricas SIS — view de serviço
+            registerItemView(data.id, 'service');
           }
         }
       } catch (err) {
@@ -177,6 +186,59 @@ export const ItemDetail: React.FC = () => {
     };
     fetchItem();
   }, [id, type]);
+
+  // Verificar se é favorito
+  useEffect(() => {
+    const checkFavorite = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !id) return;
+
+      const { data } = await supabase
+        .from('favorites')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('item_id', id)
+        .maybeSingle();
+
+      setIsFavorited(!!data);
+    };
+    checkFavorite();
+  }, [id]);
+
+  const toggleFavorite = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      sessionStorage.setItem('sovix_redirect_after_login', window.location.pathname);
+      navigate('/login');
+      return;
+    }
+
+    setFavoriteLoading(true);
+    try {
+      if (isFavorited) {
+        await supabase
+          .from('favorites')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('item_id', id);
+        setIsFavorited(false);
+      } else {
+        await supabase
+          .from('favorites')
+          .insert({
+            user_id: user.id,
+            item_id: id,
+            item_type: type
+          });
+        setIsFavorited(true);
+      }
+    } catch (err) {
+      console.error('Erro ao toggle favorite:', err);
+    } finally {
+      setFavoriteLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -229,7 +291,31 @@ export const ItemDetail: React.FC = () => {
   };
 
   const handleAddToCart = () => {
-    addToCart(item as any, type as 'product' | 'service', quantity);
+    // Transformar Record<string, string[]> em SelectedOption[]
+    const options: SelectedOption[] = [];
+    
+    Object.entries(selectedComplements).forEach(([groupId, itemIds]) => {
+      const group = complementGroups.find(g => g.id === groupId);
+      if (!group) return;
+      
+      (itemIds as string[]).forEach(itemId => {
+        const cItem = group.items.find(i => i.id === itemId);
+        if (cItem) {
+          options.push({
+            groupId,
+            groupName: group.name,
+            itemId,
+            itemName: cItem.name,
+            price: cItem.price
+          });
+        }
+      });
+    });
+
+    addToCart(item as any, type as 'product' | 'service', quantity, options);
+    
+    // 📊 Métricas SIS — clique no carrinho
+    registerCartClick(item.id, type as 'product' | 'service');
     // 👁️ Olheiro — add_to_cart
     if ((item as any).sellerId || (item as any).providerId) {
       const sid = (item as any).sellerId || (item as any).providerId;
@@ -238,13 +324,19 @@ export const ItemDetail: React.FC = () => {
         eventType: 'add_to_cart',
         productId: type === 'product' ? item.id : undefined,
         serviceId: type === 'service' ? item.id : undefined,
-        metadata: { quantity, price: (item as any).price || (item as any).pricePerHour },
+        metadata: { 
+          quantity, 
+          price: (item as any).price || (item as any).pricePerHour,
+          options: options.map(o => o.itemName)
+        },
       });
     }
     navigate('/cart');
   };
 
   const handleImmediateOrder = () => {
+    // 📊 Métricas SIS — interação de serviço conta como "carrinho"
+    registerCartClick(item.id, 'service');
     const msg = buildImmediateServiceMessage(item?.name || '', (item as any).response_time_mins || 30);
     openWhatsApp((item as any).providerPhone || '', msg);
   };
@@ -270,7 +362,20 @@ export const ItemDetail: React.FC = () => {
         <div className="relative h-80 w-full bg-neutral-200">
           <img src={item.image} alt={item.name} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30" />
-          <button onClick={() => navigate(-1)} className="absolute top-6 left-6 flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md hover:bg-white/40"><ChevronLeft size={24} /></button>
+          <button onClick={() => navigate(-1)} className="absolute top-6 left-6 flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md hover:bg-white/40 shadow-lg transition-all active:scale-90"><ChevronLeft size={24} /></button>
+          
+          <button 
+            onClick={toggleFavorite}
+            disabled={favoriteLoading}
+            className={`absolute top-6 right-6 flex h-10 w-10 items-center justify-center rounded-full border transition-all active:scale-[0.85] shadow-lg ${
+              isFavorited 
+                ? 'bg-rose-500 border-rose-500 text-white' 
+                : 'bg-white/20 border-white/20 text-white backdrop-blur-md hover:bg-white/40'
+            }`}
+          >
+            <Heart size={20} fill={isFavorited ? 'currentColor' : 'none'} className={favoriteLoading ? 'animate-pulse' : ''} />
+          </button>
+
           <div className="absolute bottom-6 left-6 right-6">
             <div className="flex items-center gap-2 mb-2">
               <span className="inline-flex items-center rounded-full bg-orange-600 px-3 py-1 text-xs font-bold text-white shadow-sm">{item.category}</span>
