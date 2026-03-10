@@ -24,6 +24,8 @@ import { SellerSetup } from './views/SellerSetup';
 import { ServiceSetup } from './views/ServiceSetup';
 import { ThemeGallery } from './views/ThemeGallery';
 import { CreatePost } from './views/CreatePost';
+import { FavoritesPage } from './views/FavoritesPage';
+import { OrderHistoryPage } from './views/OrderHistoryPage';
 import { FloatingCart } from './components/FloatingCart';
 
 export default function App() {
@@ -97,6 +99,15 @@ export default function App() {
                   <CartPage />
                 </motion.div>
               } />
+              <Route path="/orders" element={
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                >
+                  <OrderHistoryPage />
+                </motion.div>
+              } />
               <Route path="/checkout" element={
                 <motion.div
                   initial={{ opacity: 0, x: 20 }}
@@ -122,6 +133,15 @@ export default function App() {
                   exit={{ opacity: 0 }}
                 >
                   <ProfilePage />
+                </motion.div>
+              } />
+              <Route path="/favorites" element={
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                >
+                  <FavoritesPage />
                 </motion.div>
               } />
               <Route path="/settings" element={
