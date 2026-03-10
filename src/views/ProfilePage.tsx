@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Settings, Heart, Clock, ChevronRight, LogOut, Store, Bike, Briefcase,
@@ -396,20 +396,26 @@ export const ProfilePage: React.FC = () => {
               <section>
                 <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-3">Minha Conta</h3>
                 <div className="bg-white rounded-3xl border border-neutral-100 overflow-hidden shadow-sm">
-                  <button className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100">
+                  <Link 
+                    to="/favorites"
+                    className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100"
+                  >
                     <div className="flex items-center gap-3">
                       <div className="p-2 rounded-xl bg-orange-50 text-orange-600"><Heart size={18} /></div>
                       <span className="font-bold text-neutral-900">Favoritos</span>
                     </div>
                     <ChevronRight size={18} className="text-neutral-400" />
-                  </button>
-                  <button className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100">
+                  </Link>
+                  <Link 
+                    to="/orders"
+                    className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100"
+                  >
                     <div className="flex items-center gap-3">
                       <div className="p-2 rounded-xl bg-blue-50 text-blue-600"><Clock size={18} /></div>
                       <span className="font-bold text-neutral-900">Histórico de Pedidos</span>
                     </div>
                     <ChevronRight size={18} className="text-neutral-400" />
-                  </button>
+                  </Link>
                   <button
                     onClick={() => navigate('/settings')}
                     className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors"

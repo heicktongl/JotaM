@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Share2, Clock, MapPin, Star, ChevronRight, ChevronLeft, Check, Heart, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { VitrineTheme } from '../../lib/themeRegistry';
+import { AvailabilityBadge } from '../../components/AvailabilityBadge';
 
 interface ProfileData {
     displayName: string;
@@ -21,6 +22,7 @@ interface ProfileData {
     profileCity: string | null;
     profileNeighborhood: string | null;
     storeLocations: any[];
+    availability: any[];
     activeTab: 'all' | 'products' | 'services';
     isOwner: boolean;
     onShare: () => void;
@@ -175,18 +177,8 @@ export const LanchoneteTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
 
                 {/* Info Cards (Status & Location) */}
                 <div className="mt-8 space-y-3">
-                    {/* Status */}
-                    <div className="bg-emerald-50 border border-emerald-100 rounded-3xl p-4 flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-                            <div className="w-6 h-6 rounded-full border border-emerald-600 flex items-center justify-center">
-                                <div className="w-3 h-3 border-b-2 border-r-2 border-emerald-600 transform rotate-45 -mt-1" />
-                            </div>
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-emerald-900">Aberto agora</h4>
-                            <p className="text-xs font-semibold text-emerald-700/80">Fecha às 23:00 • Entrega em 30-45 min</p>
-                        </div>
-                    </div>
+                    {/* Status Automatizado pelo TTDD-T */}
+                    <AvailabilityBadge availability={data.availability} />
 
                     {/* Location */}
                     <div className="bg-white border border-neutral-100 rounded-3xl p-4 flex items-center gap-4 shadow-sm">

@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Share2, MapPin, Star, Heart, Loader2, ShoppingBag, Clock, Leaf, Plus, MoreHorizontal, ArrowLeft } from 'lucide-react';
 import { VitrineTheme } from '../../lib/themeRegistry';
+import { AvailabilityBadge } from '../../components/AvailabilityBadge';
 
 interface ProfileData {
     displayName: string;
@@ -20,6 +21,7 @@ interface ProfileData {
     profileCity: string | null;
     profileNeighborhood: string | null;
     storeLocations: any[];
+    availability: any[];
     activeTab: 'all' | 'products' | 'services';
     isOwner: boolean;
     onShare: () => void;
@@ -159,16 +161,8 @@ export const BioBurgerTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
 
                 {/* Info Block (Horario e Local) */}
                 <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-neutral-100/50 mt-6 flex flex-col gap-5">
-                    {/* Status */}
-                    <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-[#f4f3ed] flex items-center justify-center text-[var(--theme-primary)] shrink-0 border border-neutral-100">
-                             <Clock size={18} />
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-neutral-900 text-sm">Aberto Agora</h4>
-                            <p className="text-xs font-medium text-neutral-500">Fecha às 23:00 • Entrega em 30-45 min</p>
-                        </div>
-                    </div>
+                    {/* Status Automatizado pelo TTDD-T */}
+                    <AvailabilityBadge availability={data.availability} showIcon={true} className="border-none p-0 bg-transparent shadow-none" />
                     
                     <div className="h-px w-full bg-neutral-100" />
 

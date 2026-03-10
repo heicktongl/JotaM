@@ -32,12 +32,18 @@ import { BioBurgerTheme } from './themes/BioBurgerTheme';
 import { DynamicThemeProvider, useDynamicTheme } from '../contexts/DynamicThemeContext';
 import { ThemeCustomization } from '../lib/themeEngine';
 import { registerView } from '../lib/metrics';
+import { AvailabilityBadge } from '../components/AvailabilityBadge';
 
 
 type Product = Database['public']['Tables']['products']['Row'];
 type Service = Database['public']['Tables']['services']['Row'];
 type StoreLocation = Database['public']['Tables']['store_locations']['Row'];
-type Availability = Database['public']['Tables']['provider_availability']['Row'];
+type Availability = {
+  day_of_week: number;
+  start_time: string | null;
+  end_time: string | null;
+  is_enabled: boolean | null;
+};
 
 type ActiveTab = 'all' | 'products' | 'services';
 
@@ -132,6 +138,14 @@ export const SellerProfile: React.FC = () => {
 
         // SIS-VIEW-COUNTER: Registro inteligente de visualização
         registerView(sellerData.id, 'shop').then();
+
+        // Buscar horários do vendedor
+        const { data: availData } = await supabase
+          .from('seller_availability')
+          .select('*')
+          .eq('seller_id', targetId)
+          .order('day_of_week', { ascending: true });
+        setAvailability(availData ?? []);
       } else {
         // 2. Tenta buscar em Service Providers
         const { data: providerData, error: providerErr } = await supabase
@@ -360,7 +374,9 @@ export const SellerProfile: React.FC = () => {
     isFollowLoading,
     createdAt,
     views,
-    isVerified
+    isVerified,
+    availability,
+    profileType
   };
 
   return (
@@ -487,6 +503,11 @@ const SellerProfileContent: React.FC<{ data: any }> = ({ data }) => {
               <p className="mt-3 text-neutral-600 max-w-md mx-auto leading-relaxed text-sm" style={{ fontFamily: activeTheme.layout.fontFamilyBody }}>
                 {data.bio ? data.bio : (data.profileType === 'provider' ? 'Especialista profissional e de alta qualidade da Sovix.' : 'Especialista em produtos locais e de alta qualidade da Sovix.')}
               </p>
+
+              {/* Status de Funcionamento Automatizado TTDD-T */}
+              <div className="mt-6 w-full max-w-sm mx-auto">
+                <AvailabilityBadge availability={data.availability} />
+              </div>
             </div>
 
             {/* Métricas (Avaliação, Itens, Seguidores) */}
