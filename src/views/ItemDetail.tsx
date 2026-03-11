@@ -427,7 +427,7 @@ export const ItemDetail: React.FC = () => {
               </p>
               <div className="mt-2 flex items-center gap-2 text-sm font-medium text-neutral-500">
                 <MapPin size={16} className="text-orange-500" />
-                {calculateProximityLabel(location, { city: itemCity, neighborhood: itemNeighborhood })}
+                {calculateProximityLabel(location, { city: itemCity, neighborhood: itemNeighborhood }, bairrosDisponiveis)}
               </div>
             </div>
             {!isProduct && (

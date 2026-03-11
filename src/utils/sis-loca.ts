@@ -22,17 +22,19 @@ export const normalizeLoc = (s: string | null | undefined): string => {
 
 /**
  * Calcula o rótulo de proximidade entre o usuário e o item
+ * Suporta lógica de cobertura hiperlocal (SIS-LOCA)
  */
 export const calculateProximityLabel = (
   userLoc: LocationIdentifier | null,
-  itemLoc: LocationIdentifier | null
+  itemLoc: LocationIdentifier | null,
+  bairrosDisponiveis: string[] | null = []
 ): string => {
   if (!userLoc || !itemLoc || !itemLoc.city) return 'Localização indefinida';
 
   const userCity = normalizeLoc(userLoc.city);
   const itemCity = normalizeLoc(itemLoc.city);
 
-  // 1. Cidades Diferentes (Bloqueio Total já tratado pelo Guard, mas aqui damos fallback)
+  // 1. Cidades Diferentes (Bloqueio Total já tratado pelo Guard)
   if (userCity !== itemCity) {
     return `${itemLoc.neighborhood || 'Bairro'}, ${itemLoc.city}`;
   }
@@ -42,15 +44,25 @@ export const calculateProximityLabel = (
     return `Em ${itemLoc.city}`;
   }
 
-  // 3. Mesma Cidade, Bairros Iguais
   const userN = normalizeLoc(userLoc.neighborhood);
   const itemN = normalizeLoc(itemLoc.neighborhood);
 
+  // 3. Mesma Cidade, Bairros Iguais (Item está no bairro do usuário)
   if (userN === itemN && itemN !== '') {
     return 'No seu bairro';
   }
 
-  // 4. Mesma Cidade, Bairros Diferentes
+  // 4. Bairros diferentes, mas o item ATENDE o bairro do usuário (SIS-LOCA)
+  if (bairrosDisponiveis && bairrosDisponiveis.length > 0) {
+    const supportsUserBairro = bairrosDisponiveis.some(b => 
+      normalizeLoc(extractBairroName(b)) === userN
+    );
+    if (supportsUserBairro) {
+      return 'Atende seu bairro';
+    }
+  }
+
+  // 5. Mesma Cidade, Bairros Diferentes (Sem cobertura garantida ou cobertura geral não especificada)
   if (itemLoc.neighborhood) {
     return `Na sua cidade • ${itemLoc.neighborhood}`;
   }

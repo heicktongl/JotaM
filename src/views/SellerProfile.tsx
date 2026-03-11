@@ -29,6 +29,7 @@ import { LocationGuard } from '../components/LocationGuard';
 import { THEME_REGISTRY } from '../lib/themeRegistry';
 import { LanchoneteTheme } from './themes/LanchoneteTheme';
 import { BioBurgerTheme } from './themes/BioBurgerTheme';
+import { GourmetProTheme } from './themes/GourmetProTheme';
 import { DynamicThemeProvider, useDynamicTheme } from '../contexts/DynamicThemeContext';
 import { ThemeCustomization } from '../lib/themeEngine';
 import { registerView } from '../lib/metrics';
@@ -417,6 +418,24 @@ const SellerProfileContent: React.FC<{ data: any }> = ({ data }) => {
         bypass={data.isOwner}
       >
         <BioBurgerTheme
+          data={{
+            ...data,
+            theme: activeTheme,
+          }}
+        />
+      </LocationGuard>
+    );
+  }
+
+  if (activeTheme.id === 'gourmet_pro_v1') {
+    return (
+      <LocationGuard
+        itemCity={data.profileCity}
+        itemNeighborhood={data.profileNeighborhood}
+        itemDisplayName={data.displayName}
+        bypass={data.isOwner}
+      >
+        <GourmetProTheme
           data={{
             ...data,
             theme: activeTheme,

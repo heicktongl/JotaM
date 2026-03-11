@@ -181,6 +181,43 @@ export const THEME_REGISTRY: VitrineTheme[] = [
         priority_score: 10,
         isPremium: true,
         price: 49.90
+    },
+    {
+        id: 'gourmet_pro_v1',
+        name: 'Gourmet Pro V1',
+        description: 'Estética refinada com fontes clássicas e layout imersivo para vitrines de alto padrão.',
+        longDescription: 'O Gourmet Pro V1 é a escolha definitiva para quem busca sofisticação. Inspirado nas tendências internacionais de design gastronômico, utiliza a tipografia atemporal Playfair Display combinada com o frescor da Plus Jakarta Sans. Possui um Hero imersivo com gradiente suave, avatares circulares com bordas premium e cards estilo "glass" que realçam a qualidade dos seus produtos e serviços. Ideal para docerias, boutiques e marcas que prezam pela excelência visual.',
+        targetType: 'both',
+        thumbnail: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDyHHUznoHm5WO-vNyH7xQpQGiajAPl2IgpaBQV4gG46OvyJzxS4ruDbcnfF-CvDbUGh2wGhD7etsh4bkyDd9x_5iKs0hXYI3jIPKqJkEOyp1QRmAc7NActdMcujS0eUIjiKMghICN2RcmWwA1DSDfuj2mCZeZPCp66YdiKwQL8P1HKPBOIcvnChliN3PvcFVBboXAUVKiOqiB0oY4mneAoD95RLUTWZcJR7FKY-9kvJpnpbYIoJG3f8-FsIJXRPaQfO8DnqrawiRCD',
+        colors: {
+            primary: '#7C3AED',
+            background: '#FFF5F7',
+            surface: '#FFFFFF',
+            text: '#1F2937',
+            textMuted: '#6B7280',
+        },
+        layout: {
+            coverStyle: 'full',
+            cardStyle: 'glass',
+            ctaLabel: 'Ver Cardápio',
+            ctaIcon: 'shopping-bag',
+            showRating: true,
+            showPortfolio: true,
+            fontFamilyHeading: '"Playfair Display", serif',
+            fontFamilyBody: '"Plus Jakarta Sans", sans-serif'
+        },
+        features: [
+            'Tipografia elegante Serif/Sans-Serif',
+            'Layout Imersivo com Gradientes',
+            'Avatar Premium com Borda Iluminada',
+            'Cards com Efeito Glassmorphism',
+            'Otimizado para Vitrines Visuais',
+            'Totalmente Responsivo e Dinâmico'
+        ],
+        categories: ['doceria', 'gourmet', 'restaurante', 'boutique', 'moda'],
+        priority_score: 10,
+        isPremium: true,
+        price: 49.90
     }
 ];
 

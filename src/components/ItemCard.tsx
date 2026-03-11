@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import { useLocationScope } from '../context/LocationContext';
 import { calculateProximityLabel } from '../utils/sis-loca';
 
-export type ItemType = (Product & { target_type?: 'product'; created_at?: string }) | (Service & { target_type?: 'service'; created_at?: string });
+export type ItemType = ((Product & { target_type?: 'product'; created_at?: string; bairros_disponiveis?: string[] | null }) | (Service & { target_type?: 'service'; created_at?: string; bairros_disponiveis?: string[] | null }));
 
 interface CardProps {
   item: ItemType;
@@ -45,7 +45,7 @@ export const ItemCard: React.FC<CardProps> = ({ item, type }) => {
           <div className="absolute top-3 right-3">
             <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-neutral-700 backdrop-blur-md shadow-sm">
               <MapPin size={12} className="text-orange-500" />
-              {calculateProximityLabel(location, item as any)}
+              {calculateProximityLabel(location, item as any, (item as any).bairros_disponiveis)}
             </span>
           </div>
         </div>
