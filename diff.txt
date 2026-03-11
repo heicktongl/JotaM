@@ -1,0 +1,1630 @@
+﻿diff --git a/src/components/ItemCard.tsx b/src/components/ItemCard.tsx
+index 24a8275..da36360 100644
+--- a/src/components/ItemCard.tsx
++++ b/src/components/ItemCard.tsx
+@@ -3,6 +3,8 @@ import { motion } from 'motion/react';
+ import { MapPin, ShoppingBag, Star, ArrowRight, Zap, Calendar, Repeat } from 'lucide-react';
+ import { Product, Service } from '../data';
+ import { Link } from 'react-router-dom';
++import { useLocationScope } from '../context/LocationContext';
++import { calculateProximityLabel } from '../utils/sis-loca';
+ 
+ export type ItemType = (Product & { target_type?: 'product'; created_at?: string }) | (Service & { target_type?: 'service'; created_at?: string });
+ 
+@@ -12,6 +14,7 @@ interface CardProps {
+ }
+ 
+ export const ItemCard: React.FC<CardProps> = ({ item, type }) => {
++  const { location } = useLocationScope();
+   const isProduct = type === 'product';
+   const product = item as Product;
+   const service = item as Service;
+@@ -42,7 +45,7 @@ export const ItemCard: React.FC<CardProps> = ({ item, type }) => {
+           <div className="absolute top-3 right-3">
+             <span className="inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-bold text-neutral-700 backdrop-blur-md shadow-sm">
+               <MapPin size={12} className="text-orange-500" />
+-              No seu bairro
++              {calculateProximityLabel(location, item as any)}
+             </span>
+           </div>
+         </div>
+diff --git a/src/context/LocationContext.tsx b/src/context/LocationContext.tsx
+index 4077078..71201d2 100644
+--- a/src/context/LocationContext.tsx
++++ b/src/context/LocationContext.tsx
+@@ -10,6 +10,7 @@ export interface LocationData {
+   city: string;
+   lat: number;
+   lng: number;
++  timestamp?: number;
+ }
+ 
+ interface LocationContextType {
+@@ -32,7 +33,13 @@ const SCOPE_STORAGE_KEY = 'sovix_scope_v1';
+ const readCachedLocation = (): LocationData | null => {
+   try {
+     const raw = localStorage.getItem(LOCATION_STORAGE_KEY);
+-    return raw ? (JSON.parse(raw) as LocationData) : null;
++    if (!raw) return null;
++    const parsed = JSON.parse(raw) as LocationData;
++    // Basic validation to prevent injected garbage
++    if (typeof parsed.lat === 'number' && typeof parsed.lng === 'number' && typeof parsed.city === 'string') {
++      return parsed;
++    }
++    return null;
+   } catch {
+     return null;
+   }
+@@ -54,11 +61,12 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
+   const [error, setError] = useState<string | null>(null);
+ 
+   const handleLocationUpdate = async (loc: LocationData) => {
+-    setLocation(loc);
++    const locWithTime = { ...loc, timestamp: Date.now() };
++    setLocation(locWithTime);
+ 
+     // Persist├¬ncia imediata no localStorage para eliminar glitch de carregamento futuro
+     try {
+-      localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(loc));
++      localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(locWithTime));
+     } catch { /* storage cheio, ignora */ }
+ 
+     // Se a localiza├º├úo veio com "Bairro Desconhecido", rebaixamos o escopo graciosamente para a cidade.
+@@ -111,6 +119,53 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
+     }
+   };
+ 
++  React.useEffect(() => {
++    const checkBackgroundLocation = () => {
++      // Background location refresh logic
++      if (!location || !navigator.geolocation) return;
++      
++      const MAX_AGE_MS = 5 * 60 * 1000; // 5 minutos
++      const lastUpdate = location.timestamp || 0;
++      
++      if (Date.now() - lastUpdate > MAX_AGE_MS) {
++        // Soft refresh sem UI loader for├ºado (se falhar, mant├®m o antigo)
++        navigator.geolocation.getCurrentPosition(async (pos) => {
++          const { latitude, longitude } = pos.coords;
++          
++          // C├ílculo de Haversine para > 500m
++          const R = 6371e3; // metres
++          const ¤å1 = location.lat * Math.PI/180; // ¤å, ╬╗ in radians
++          const ¤å2 = latitude * Math.PI/180;
++          const ╬ö¤å = (latitude - location.lat) * Math.PI/180;
++          const ╬ö╬╗ = (longitude - location.lng) * Math.PI/180;
++
++          const a = Math.sin(╬ö¤å/2) * Math.sin(╬ö¤å/2) +
++                    Math.cos(¤å1) * Math.cos(¤å2) *
++                    Math.sin(╬ö╬╗/2) * Math.sin(╬ö╬╗/2);
++          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
++          const d = R * c; // in metres
++
++          // Se moveu mais de 500m ou passou tempo consider├ível
++          if (d > 500 || (Date.now() - lastUpdate > MAX_AGE_MS * 2)) {
++             try {
++                const detailedLoc = await getDetailedLocation(latitude, longitude);
++                handleLocationUpdate(detailedLoc);
++             } catch(e) {
++                console.error("Erro background geoloc", e);
++             }
++          }
++        }, () => {}, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
++      }
++    };
++
++    // Executa ao focar a window para re-avalia├º├úo inteligente
++    window.addEventListener('focus', checkBackgroundLocation);
++    // Executa uma vez no load se j├í tiver location cached antiga
++    checkBackgroundLocation();
++    
++    return () => window.removeEventListener('focus', checkBackgroundLocation);
++  }, [location]);
++
+   const requestLocation = () => {
+     setIsLoading(true);
+     setError(null);
+diff --git a/src/data.ts b/src/data.ts
+index 1d28f1f..90d1847 100644
+--- a/src/data.ts
++++ b/src/data.ts
+@@ -8,6 +8,8 @@ export interface Product {
+   username: string;
+   distance: string;
+   description: string;
++  city?: string | null;
++  neighborhood?: string | null;
+ }
+ 
+ export interface Service {
+@@ -25,6 +27,8 @@ export interface Service {
+   response_time_mins?: number;
+   billing_cycle?: string;
+   providerPhone?: string;
++  city?: string | null;
++  neighborhood?: string | null;
+ }
+ 
+ export const MOCK_PRODUCTS: Product[] = [
+diff --git a/src/views/AddProduct.tsx b/src/views/AddProduct.tsx
+index bc12f1f..a2e3de6 100644
+--- a/src/views/AddProduct.tsx
++++ b/src/views/AddProduct.tsx
+@@ -5,7 +5,7 @@ import { ChevronLeft, Plus, X, Loader2, Phone, ArrowRight, ChevronDown, ChevronU
+ import { supabase } from '../lib/supabase';
+ import { useAuth } from '../hooks/useAuth';
+ import { Logo } from '../components/Logo';
+-
++import { extractBairroName } from '../utils/sis-loca';
+ export const AddProduct: React.FC = () => {
+   const navigate = useNavigate();
+   const location = useLocation();
+@@ -15,6 +15,12 @@ export const AddProduct: React.FC = () => {
+   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+   const [saving, setSaving] = useState(false);
++  
++  // Controle de Multi-Bairros (Hyperlocal)
++  const [bairrosAtendidos, setBairrosAtendidos] = useState<string[]>([]);
++  const [isAllBairros, setIsAllBairros] = useState(true);
++  const [selectedBairros, setSelectedBairros] = useState<string[]>([]);
++
+   const [formData, setFormData] = useState({
+     name: '',
+     description: '',
+@@ -60,10 +66,12 @@ export const AddProduct: React.FC = () => {
+             });
+             Promise.all(filePromises).then(files => setImages(files));
+           }
+-          // Restaurar complementos
++          // Restaurar complementos e bairros
+           if (parsed.complementGroups) {
+             setComplementGroups(parsed.complementGroups);
+           }
++          if (parsed.isAllBairros !== undefined) setIsAllBairros(parsed.isAllBairros);
++          if (parsed.selectedBairros) setSelectedBairros(parsed.selectedBairros);
+         }
+       } catch (e) {
+         console.error('[LembreteZap] Erro ao restaurar rascunho:', e);
+@@ -85,7 +93,17 @@ export const AddProduct: React.FC = () => {
+           }));
+         }
+       });
+-  }, []);
++
++    // 3. Buscar Bairros de Atendimento do Seller Logado
++    const fetchSellerData = async () => {
++       if (!user?.id) return;
++       const { data } = await supabase.from('sellers').select('bairros_atendidos').eq('user_id', user.id).single();
++       if (data && data.bairros_atendidos) {
++          setBairrosAtendidos(data.bairros_atendidos);
++       }
++    };
++    fetchSellerData();
++  }, [user]);
+ 
+   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+     const files = Array.from(e.target.files || []);
+@@ -111,6 +129,14 @@ export const AddProduct: React.FC = () => {
+     setImagePreviews(prev => prev.filter((_, i) => i !== index));
+   };
+ 
++  const toggleBairro = (n: string) => {
++    if (selectedBairros.includes(n)) {
++      setSelectedBairros(prev => prev.filter(b => b !== n));
++    } else {
++      setSelectedBairros(prev => [...prev, n]);
++    }
++  };
++
+   const uploadFile = async (file: File, path: string): Promise<string | null> => {
+     const { error: uploadError } = await supabase.storage
+       .from('avatars')
+@@ -180,7 +206,9 @@ export const AddProduct: React.FC = () => {
+         mainImageUrl = await uploadFile(file, path);
+       }
+ 
+-      // 4. Inserir o produto com a localiza├º├úo correta da loja
++      // 4. Inserir o produto com a localiza├º├úo correta da loja e o limite de bairros
++      const finalBairrosDisponiveis = isAllBairros ? [] : selectedBairros;
++
+       const { error } = await supabase.from('products').insert({
+         seller_id: sellerData.id,
+         category_id: formData.category_id || null,
+@@ -192,6 +220,7 @@ export const AddProduct: React.FC = () => {
+         is_active: true,
+         neighborhood: storeLocation?.neighborhood || null,
+         city: storeLocation?.city || null,
++        bairros_disponiveis: finalBairrosDisponiveis,
+       });
+ 
+       if (error) throw error;
+@@ -256,7 +285,9 @@ export const AddProduct: React.FC = () => {
+     const draft = {
+       formData,
+       imagePreviews,   // base64 ÔÇö sobrevive ao redirect
+-      complementGroups // grupos e itens
++      complementGroups, // grupos e itens
++      isAllBairros,
++      selectedBairros
+     };
+     sessionStorage.setItem('lembretezap_product_draft', JSON.stringify(draft));
+     sessionStorage.setItem('sovix_pending_publish', location.pathname);
+@@ -468,6 +499,50 @@ export const AddProduct: React.FC = () => {
+             </div>
+           </section>
+ 
++          {/* Disponibilidade por Bairro */}
++          {bairrosAtendidos.length > 0 && (
++            <section className="space-y-4">
++              <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Disponibilidade (Hiperlocal)</h3>
++              <div className="rounded-2xl border border-neutral-200 bg-white p-5 space-y-4">
++                <div className="flex flex-col gap-3">
++                  <label className="flex items-center gap-3 cursor-pointer">
++                    <input
++                      type="radio"
++                      checked={isAllBairros}
++                      onChange={() => setIsAllBairros(true)}
++                      className="w-5 h-5 accent-orange-500 cursor-pointer"
++                    />
++                    <span className="font-bold text-neutral-800">Dispon├¡vel em todos os bairros da vitrine</span>
++                  </label>
++                  <label className="flex items-center gap-3 cursor-pointer">
++                    <input
++                      type="radio"
++                      checked={!isAllBairros}
++                      onChange={() => setIsAllBairros(false)}
++                      className="w-5 h-5 accent-orange-500 cursor-pointer"
++                    />
++                    <span className="font-bold text-neutral-800">Escolher bairros espec├¡ficos</span>
++                  </label>
++                </div>
++                
++                {!isAllBairros && (
++                  <div className="pt-3 border-t border-neutral-100 flex flex-wrap gap-2">
++                    {bairrosAtendidos.map(b => (
++                      <button
++                        key={b}
++                        type="button"
++                        onClick={() => toggleBairro(b)}
++                        className={`px-4 py-2 rounded-xl text-sm font-bold transition-all border ${selectedBairros.includes(b) ? 'bg-orange-600 border-orange-600 text-white shadow-md' : 'bg-neutral-50 border-neutral-200 text-neutral-600 hover:border-orange-500'}`}
++                      >
++                        {extractBairroName(b)}
++                      </button>
++                    ))}
++                  </div>
++                )}
++              </div>
++            </section>
++          )}
++
+           {/* ====== SE├ç├âO DE COMPLEMENTOS ====== */}
+           <section className="space-y-4">
+             <div className="flex items-center justify-between">
+diff --git a/src/views/AddService.tsx b/src/views/AddService.tsx
+index 7d35fcb..db09e5f 100644
+--- a/src/views/AddService.tsx
++++ b/src/views/AddService.tsx
+@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
+ import { useAuth } from '../hooks/useAuth';
+ import { useLocationScope } from '../context/LocationContext';
+ import { Logo } from '../components/Logo';
+-
++import { extractBairroName } from '../utils/sis-loca';
+ export const AddService: React.FC = () => {
+     const navigate = useNavigate();
+     const location = useLocation();
+@@ -20,6 +20,11 @@ export const AddService: React.FC = () => {
+ 
+     const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+     const [saving, setSaving] = useState(false);
++    
++    // Controle de Multi-Bairros (Hyperlocal)
++    const [bairrosAtendidos, setBairrosAtendidos] = useState<string[]>([]);
++    const [isAllBairros, setIsAllBairros] = useState(true);
++    const [selectedBairros, setSelectedBairros] = useState<string[]>([]);
+     const [formData, setFormData] = useState({
+         name: '',
+         description: '',
+@@ -73,6 +78,8 @@ export const AddService: React.FC = () => {
+                     });
+                     Promise.all(filePromises).then(files => setImages(files));
+                 }
++                if (parsed.isAllBairros !== undefined) setIsAllBairros(parsed.isAllBairros);
++                if (parsed.selectedBairros) setSelectedBairros(parsed.selectedBairros);
+             } catch (e) {
+                 console.error('Erro ao ler draft:', e);
+             }
+@@ -93,7 +100,17 @@ export const AddService: React.FC = () => {
+                     }));
+                 }
+             });
+-    }, []);
++
++        // 3. Buscar Bairros de Atendimento do Provider Logado
++        const fetchProviderData = async () => {
++            if (!user?.id) return;
++            const { data } = await supabase.from('service_providers').select('bairros_atendidos').eq('user_id', user.id).single();
++            if (data && data.bairros_atendidos) {
++                setBairrosAtendidos(data.bairros_atendidos);
++            }
++        };
++        fetchProviderData();
++    }, [user]);
+ 
+     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+         const files = Array.from(e.target.files || []);
+@@ -120,6 +137,14 @@ export const AddService: React.FC = () => {
+         setImagePreviews(prev => prev.filter((_, i) => i !== index));
+     };
+ 
++    const toggleBairro = (n: string) => {
++        if (selectedBairros.includes(n)) {
++            setSelectedBairros(prev => prev.filter(b => b !== n));
++        } else {
++            setSelectedBairros(prev => [...prev, n]);
++        }
++    };
++
+     const uploadFile = async (file: File, path: string): Promise<string | null> => {
+         const { error: uploadError } = await supabase.storage
+             .from('avatars')
+@@ -189,6 +214,7 @@ export const AddService: React.FC = () => {
+                 is_active: true,
+                 neighborhood: userLocation?.neighborhood || null,
+                 city: userLocation?.city || null,
++                bairros_disponiveis: isAllBairros ? [] : selectedBairros,
+                 service_type: formData.service_type,
+                 is_home_service: homeService,
+             };
+@@ -254,6 +280,8 @@ export const AddService: React.FC = () => {
+             useCustomSchedule,
+             customAvailability,
+             imagePreviews,   // base64 ÔÇö sobrevive ao redirect
++            isAllBairros,
++            selectedBairros
+         };
+         sessionStorage.setItem('sovix_service_draft', JSON.stringify(draft));
+         sessionStorage.setItem('sovix_pending_publish', location.pathname);
+@@ -666,6 +694,50 @@ export const AddService: React.FC = () => {
+                         )}
+                     </section>
+ 
++                    {/* Disponibilidade por Bairro */}
++                    {bairrosAtendidos.length > 0 && (
++                        <section className="space-y-4">
++                            <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Disponibilidade (Hiperlocal)</h3>
++                            <div className="rounded-2xl border border-neutral-200 bg-white p-5 space-y-4">
++                                <div className="flex flex-col gap-3">
++                                  <label className="flex items-center gap-3 cursor-pointer">
++                                    <input
++                                      type="radio"
++                                      checked={isAllBairros}
++                                      onChange={() => setIsAllBairros(true)}
++                                      className="w-5 h-5 accent-orange-500 cursor-pointer"
++                                    />
++                                    <span className="font-bold text-neutral-800">Dispon├¡vel em todos os bairros da vitrine</span>
++                                  </label>
++                                  <label className="flex items-center gap-3 cursor-pointer">
++                                    <input
++                                      type="radio"
++                                      checked={!isAllBairros}
++                                      onChange={() => setIsAllBairros(false)}
++                                      className="w-5 h-5 accent-orange-500 cursor-pointer"
++                                    />
++                                    <span className="font-bold text-neutral-800">Escolher bairros espec├¡ficos</span>
++                                  </label>
++                                </div>
++                                
++                                {!isAllBairros && (
++                                    <div className="pt-3 border-t border-neutral-100 flex flex-wrap gap-2">
++                                        {bairrosAtendidos.map(b => (
++                                            <button
++                                                key={b}
++                                                type="button"
++                                                onClick={() => toggleBairro(b)}
++                                                className={`px-4 py-2 rounded-xl text-sm font-bold transition-all border ${selectedBairros.includes(b) ? 'bg-orange-600 border-orange-600 text-white shadow-md' : 'bg-neutral-50 border-neutral-200 text-neutral-600 hover:border-orange-500'}`}
++                                            >
++                                                {extractBairroName(b)}
++                                            </button>
++                                        ))}
++                                    </div>
++                                )}
++                            </div>
++                        </section>
++                    )}
++
+                     {/* A├º├Áes */}
+                     <div className="pt-8 flex flex-col sm:flex-row gap-4">
+                         <button
+diff --git a/src/views/ConsumerFeed.tsx b/src/views/ConsumerFeed.tsx
+index ab7f3ab..bc73f3f 100644
+--- a/src/views/ConsumerFeed.tsx
++++ b/src/views/ConsumerFeed.tsx
+@@ -1,5 +1,7 @@
+ import React from 'react';
++import { Link } from 'react-router-dom';
+ import { motion } from 'motion/react';
++import { extractBairroName } from '../utils/sis-loca';
+ import { SlidersHorizontal, PackageSearch, MapPin, Loader2 } from 'lucide-react';
+ import { supabase } from '../lib/supabase';
+ import { ItemCard } from '../components/ItemCard';
+@@ -14,7 +16,10 @@ interface FeedProduct {
+   price: number;
+   image_url: string | null;
+   category_id: string | null;
+-  sellers: { store_name: string; username: string } | null;
++  city: string | null;
++  neighborhood: string | null;
++  bairros_disponiveis?: string[] | null;
++  sellers: { store_name: string; username: string; bairros_atendidos?: string[] | null } | null;
+ }
+ 
+ interface FeedService {
+@@ -23,7 +28,10 @@ interface FeedService {
+   price: number;
+   image_url: string | null;
+   category_id: string | null;
+-  service_providers: { name: string; username?: string; rating: number } | null;
++  city: string | null;
++  neighborhood: string | null;
++  bairros_disponiveis?: string[] | null;
++  service_providers: { name: string; username?: string; rating: number; bairros_atendidos?: string[] | null } | null;
+ }
+ 
+ export const ConsumerFeed: React.FC = () => {
+@@ -39,38 +47,79 @@ export const ConsumerFeed: React.FC = () => {
+     }
+   }, [location, isLocLoading, locError, requestLocation]);
+ 
++  // Fun├º├úo robusta de match para evitar erros de acento ("S├úo Jo├úo" vs "Sao Joao")
++  const normalizeBairro = (b: string | null | undefined) => {
++    if (!b) return '';
++    return b.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
++  };
++
+   React.useEffect(() => {
+     const fetchData = async () => {
+       setLoading(true);
+       try {
+-        const prodSelect = 'id, name, price, image_url, category_id, sellers!products_seller_id_fkey(store_name, username)';
+-        const svcSelect = 'id, name, price, image_url, category_id, service_providers(name, rating)';
++        const prodSelect = 'id, name, price, image_url, category_id, city, neighborhood, bairros_disponiveis, sellers!products_seller_id_fkey(store_name, username, bairros_atendidos)';
++        const svcSelect = 'id, name, price, image_url, category_id, city, neighborhood, bairros_disponiveis, service_providers(name, rating, bairros_atendidos)';
++
++        // Buscamos um limite maior (200) global no DB e filtramos rigorosamente os bairros e cidades no cliente JS
++        // (Sem ilike do Supabase para evitar conflito de acentos do Postgres)
++        let prodQuery = supabase.from('products').select(prodSelect).eq('is_active', true).order('created_at', { ascending: false }).limit(200);
++        let svcQuery = supabase.from('services').select(svcSelect).eq('is_active', true).order('created_at', { ascending: false }).limit(200);
++
++        const [prodResult, svcResult] = await Promise.all([prodQuery, svcQuery]);
+ 
+-        // DIRETRIZ M├üXIMA HIPER-LOCAL: filtrar APENAS pelo bairro do usu├írio.
+-        // Se scope for 'city' (bairro desconhecido), usa cidade.
+-        // Em nenhuma hip├│tese expande para al├®m desse escopo.
+-        let prodQuery = supabase.from('products').select(prodSelect).eq('is_active', true).limit(30);
+-        let svcQuery = supabase.from('services').select(svcSelect).eq('is_active', true).limit(30);
++        let finalProducts = (prodResult.data ?? []) as unknown as FeedProduct[];
++        let finalServices = (svcResult.data ?? []) as unknown as FeedService[];
+ 
+-        // SIS-LOCA-HIPERLOCAL: Filtro rigoroso de localidade
++        console.log('[Feed] Location Payload:', location);
++        console.log('[Feed] Produtos Retornados do Banco:', finalProducts);
++
++        // Filtro de Cidade E Bairro combinados no Front-End para mitigar erros de acentua├º├úo
+         if (location) {
+-          // 1. Sempre travar na cidade se existir (evita cross-city bleeding)
+-          if (location.city) {
+-            prodQuery = prodQuery.ilike('city', `%${location.city}%`);
+-            svcQuery = svcQuery.ilike('city', `%${location.city}%`);
+-          }
++          const userCity = location.city ? normalizeBairro(location.city) : '';
++          const userBairro = location.neighborhood && location.neighborhood !== 'Bairro Desconhecido' ? normalizeBairro(location.neighborhood) : '';
+           
+-          // 2. Se o escopo for mais restrito que cidade (bairro ou exato), aplicar bairro
+-          if (scope !== 'city' && location.neighborhood && location.neighborhood !== 'Bairro Desconhecido') {
+-            prodQuery = prodQuery.ilike('neighborhood', `%${location.neighborhood}%`);
+-            svcQuery = svcQuery.ilike('neighborhood', `%${location.neighborhood}%`);
+-          }
++          finalProducts = finalProducts.filter(p => {
++             const baseCity = normalizeBairro(p.city);
++             
++             // Filtro de Cidade (Sempre trava na cidade para evitar cross-city bleeding)
++             if (userCity && baseCity !== userCity) return false;
++
++             // Filtro de Bairro (Se o escopo for mais profundo que cidade)
++             if (scope !== 'city' && userBairro) {
++               const baseBairro = normalizeBairro(p.neighborhood);
++               if (baseBairro === userBairro) return true;
++               if (p.bairros_disponiveis && p.bairros_disponiveis.some(b => normalizeBairro(extractBairroName(b)) === userBairro)) return true;
++               if ((!p.bairros_disponiveis || p.bairros_disponiveis.length === 0) && p.sellers?.bairros_atendidos) {
++                  if (p.sellers.bairros_atendidos.some(b => normalizeBairro(extractBairroName(b)) === userBairro)) return true;
++               }
++               return false;
++             }
++             
++             return true;
++          });
++
++          finalServices = finalServices.filter(s => {
++             const baseCity = normalizeBairro(s.city);
++             if (userCity && baseCity !== userCity) return false;
++
++             if (scope !== 'city' && userBairro) {
++               const baseBairro = normalizeBairro(s.neighborhood);
++               if (baseBairro === userBairro) return true;
++               if (s.bairros_disponiveis && s.bairros_disponiveis.some(b => normalizeBairro(extractBairroName(b)) === userBairro)) return true;
++               if ((!s.bairros_disponiveis || s.bairros_disponiveis.length === 0) && s.service_providers?.bairros_atendidos) {
++                  if (s.service_providers.bairros_atendidos.some(b => normalizeBairro(extractBairroName(b)) === userBairro)) return true;
++               }
++               return false;
++             }
++
++             return true;
++          });
+         }
+ 
+-        const [prodResult, svcResult] = await Promise.all([prodQuery, svcQuery]);
++        console.log('[Feed] Produtos DEPOIS do filtro hiperlocal:', finalProducts);
+ 
+-        setProducts((prodResult.data ?? []) as unknown as FeedProduct[]);
+-        setServices((svcResult.data ?? []) as unknown as FeedService[]);
++        setProducts(finalProducts.slice(0, 30));
++        setServices(finalServices.slice(0, 30));
+       } catch (err) {
+         console.error('Erro ao carregar feed:', err);
+       } finally {
+@@ -121,6 +170,21 @@ export const ConsumerFeed: React.FC = () => {
+         </div>
+       )}
+ 
++      {/* Alerta de Bairro Desconhecido (Fallback) */}
++      {location && location.neighborhood === 'Bairro Desconhecido' && (
++        <div className="mx-auto max-w-7xl px-6 pt-4">
++          <div className="rounded-2xl bg-orange-50 border border-orange-100 p-4 flex items-start gap-3">
++            <MapPin className="text-orange-500 shrink-0 mt-0.5" size={20} />
++            <div>
++              <h3 className="text-sm font-bold text-orange-900 leading-tight">Bairro n├úo encontrado no mapa</h3>
++              <p className="text-sm text-orange-700/80 mt-1">
++                N├úo conseguimos identificar seu bairro exato. Estamos mostrando os melhores resultados de toda a cidade de <strong>{location.city}</strong>.
++              </p>
++            </div>
++          </div>
++        </div>
++      )}
++
+       {/* Main Feed */}
+       <main className="mx-auto max-w-7xl px-6 pt-6 flex-1 flex flex-col">
+         {!location ? (
+@@ -166,6 +230,8 @@ export const ConsumerFeed: React.FC = () => {
+                     username: product.sellers?.username ?? '',
+                     distance: 'ÔÇô',
+                     description: '',
++                    city: product.city,
++                    neighborhood: product.neighborhood
+                   }}
+                   type="product"
+                 />
+@@ -185,6 +251,8 @@ export const ConsumerFeed: React.FC = () => {
+                     username: '',
+                     rating: service.service_providers?.rating ?? 5.0,
+                     distance: 'ÔÇô',
++                    city: service.city,
++                    neighborhood: service.neighborhood
+                   }}
+                   type="service"
+                 />
+diff --git a/src/views/DeliveryAreaSettings.tsx b/src/views/DeliveryAreaSettings.tsx
+index 4b70dd8..6edafd7 100644
+--- a/src/views/DeliveryAreaSettings.tsx
++++ b/src/views/DeliveryAreaSettings.tsx
+@@ -70,29 +70,47 @@ export const DeliveryAreaSettings: React.FC = () => {
+ 
+       if (neighData) setAvailableNeighborhoods(neighData);
+ 
+-      // 2.2 Perfil atual do entregador
+-      const { data: profile } = await supabase
+-        .from('delivery_profiles')
+-        .select('id')
++      // 2.2 Perfil atual do vendedor/prestador (Busca o seller ativo)
++      let profileType = '';
++      let profileId = '';
++      let bairrosAtd = [];
++
++      // Tenta buscar como seller
++      const { data: seller } = await supabase
++        .from('sellers')
++        .select('id, bairros_atendidos')
+         .eq('user_id', user.id)
+         .single();
++      
++      if (seller) {
++        profileType = 'seller';
++        profileId = seller.id;
++        bairrosAtd = seller.bairros_atendidos || [];
++      } else {
++        // Tenta buscar como service_provider
++        const { data: provider } = await supabase
++          .from('service_providers')
++          .select('id, bairros_atendidos')
++          .eq('user_id', user.id)
++          .single();
++          
++        if (provider) {
++          profileType = 'provider';
++          profileId = provider.id;
++          bairrosAtd = provider.bairros_atendidos || [];
++        }
++      }
+ 
+-      if (!profile) return;
++      if (!profileId) return;
+ 
+-      // 2.3 ├ürea de atua├º├úo salva
+-      const { data: area } = await supabase
+-        .from('delivery_areas')
+-        .select('*')
+-        .eq('delivery_profile_id', profile.id)
+-        .single();
++      // Armazenamos info persistida
++      (window as any).__sovix_profile_type = profileType;
++      (window as any).__sovix_profile_id = profileId;
+ 
+-      if (area) {
+-        if (area.area_type === 'condo') setIsCondoOnly(true);
+-        if (area.area_type === 'city') setIsWholeCity(true);
+-        if (area.area_type === 'custom' && area.neighborhood_ids && neighData) {
+-          const preSelected = neighData.filter(n => area.neighborhood_ids.includes(n.id));
+-          setSelectedNeighborhoods(preSelected);
+-        }
++      // 2.3 ├ürea de atua├º├úo salva (Herdada dos bairros_atendidos)
++      if (bairrosAtd.length > 0 && neighData) {
++        const preSelected = neighData.filter(n => bairrosAtd.includes(n.name));
++        setSelectedNeighborhoods(preSelected);
+       }
+     };
+ 
+@@ -119,48 +137,39 @@ export const DeliveryAreaSettings: React.FC = () => {
+     if (isSelected) {
+       setSelectedNeighborhoods(ps => ps.filter(sn => sn.id !== n.id));
+     } else {
++      if (selectedNeighborhoods.length >= 3) {
++        alert("Voc├¬ pode adicionar no m├íximo 3 bairros para manter o padr├úo hiperlocal.");
++        return;
++      }
+       setSelectedNeighborhoods(ps => [...ps, n]);
+     }
+   };
+ 
+   const handleSave = async () => {
+     if (!user) return;
+-    setSaving(true);
+-    try {
+-      const { data: profile } = await supabase
+-        .from('delivery_profiles')
+-        .select('id')
+-        .eq('user_id', user.id)
+-        .single();
+-
+-      if (!profile) {
+-        alert("Perfil de entregador n├úo encontrado.");
++    const profileType = (window as any).__sovix_profile_type;
++    const profileId = (window as any).__sovix_profile_id;
++    
++    if (!profileId || !profileType) {
++        alert("Conta comercial n├úo encontrada.");
+         return;
+-      }
+-
+-      const areaType = isCondoOnly ? 'condo' : isWholeCity ? 'city' : 'custom';
+-      const neighborhoodIds = areaType === 'custom' ? selectedNeighborhoods.map(n => n.id) : [];
+-
+-      // Verifica se j├í existe, se n├úo da update, se sim insere. O Supabase upsert faz isso mais f├ícil
+-      const payload = {
+-        delivery_profile_id: profile.id,
+-        area_type: areaType,
+-        neighborhood_ids: neighborhoodIds
+-      };
++    }
+ 
+-      const { data: existing } = await supabase.from('delivery_areas').select('id').eq('delivery_profile_id', profile.id).single();
++    setSaving(true);
++    try {
++      // Salva array das STRINGS (nomes dos bairros) no banco master do usu├írio
++      const neighborhoodNames = selectedNeighborhoods.map(n => n.name);
++      
++      const tableName = profileType === 'seller' ? 'sellers' : 'service_providers';
+ 
+-      let error;
+-      if (existing) {
+-        const { error: err } = await supabase.from('delivery_areas').update(payload).eq('id', existing.id);
+-        error = err;
+-      } else {
+-        const { error: err } = await supabase.from('delivery_areas').insert([payload]);
+-        error = err;
+-      }
++      const { error } = await supabase
++        .from(tableName as any)
++        .update({ bairros_atendidos: neighborhoodNames })
++        .eq('id', profileId);
+ 
+       if (error) throw error;
+-      alert('├ürea de atua├º├úo atualizada com sucesso!');
++      
++      alert('├üreas de cobertura salvas com sucesso!');
+       navigate('/admin/delivery');
+     } catch (err) {
+       console.error('Erro ao salvar ├írea:', err);
+@@ -241,23 +250,13 @@ export const DeliveryAreaSettings: React.FC = () => {
+                 </motion.div>
+               )}
+             </AnimatePresence>
+-
+-            <div
+-              onClick={handleWholeCityToggle}
+-              className={`p-6 rounded-3xl border-2 transition-all cursor-pointer flex flex-col justify-between h-full min-h-[180px] ${isWholeCity ? 'bg-blue-50 border-blue-500 shadow-lg shadow-blue-500/10' : 'bg-white border-neutral-100 shadow-sm hover:border-neutral-200'}`}
+-            >
+-              <div className="flex items-center justify-between mb-4">
+-                <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-colors ${isWholeCity ? 'bg-blue-600 text-white' : 'bg-neutral-100 text-neutral-400'}`}>
+-                  <Globe size={24} />
+-                </div>
+-                <div className={`h-6 w-6 rounded-full border-2 flex items-center justify-center transition-all ${isWholeCity ? 'bg-blue-600 border-blue-600' : 'border-neutral-200'}`}>
+-                  {isWholeCity && <Check size={14} className="text-white" />}
+-                </div>
+-              </div>
+-              <div>
+-                <span className="font-bold text-lg text-neutral-900 block">Cidade Toda</span>
+-                <span className="text-sm text-neutral-500">Receba pedidos de qualquer lugar da cidade.</span>
+-              </div>
++            
++            {/* Aviso de recomenda├º├úo UX */}
++            <div className="p-4 rounded-2xl bg-orange-50/80 border border-orange-100 flex items-start gap-3 col-span-1 md:col-span-2">
++                <Globe className="text-orange-500 mt-0.5 shrink-0" size={20} />
++                <p className="text-sm font-medium text-orange-900 leading-snug">
++                  Adicione apenas bairros onde voc├¬ realmente consegue entregar com facilidade ou possui filial. Limite de 3 bairros.
++                </p>
+             </div>
+           </div>
+ 
+@@ -271,7 +270,7 @@ export const DeliveryAreaSettings: React.FC = () => {
+           </div>
+ 
+           <AnimatePresence mode="wait">
+-            {!isCondoOnly && !isWholeCity && (
++            {!isCondoOnly && (
+               <motion.section
+                 initial={{ opacity: 0, height: 0 }}
+                 animate={{ opacity: 1, height: 'auto' }}
+diff --git a/src/views/ItemDetail.tsx b/src/views/ItemDetail.tsx
+index 88fa6aa..d571fba 100644
+--- a/src/views/ItemDetail.tsx
++++ b/src/views/ItemDetail.tsx
+@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
+ import { motion } from 'motion/react';
+ import { ChevronLeft, MapPin, Star, ShieldCheck, Minus, Plus, ShoppingBag, ChevronRight, Loader2, Zap, Calendar, Repeat, X, Clock } from 'lucide-react';
+ import { useCart } from '../context/CartContext';
++import { useLocationScope } from '../context/LocationContext';
++import { calculateProximityLabel, extractBairroName } from '../utils/sis-loca';
+ import { supabase } from '../lib/supabase';
+ import { ItemType } from '../components/ItemCard';
+ import { LocationGuard } from '../components/LocationGuard';
+@@ -18,11 +20,16 @@ export const ItemDetail: React.FC = () => {
+   const { type, id } = useParams<{ type: 'product' | 'service', id: string }>();
+   const navigate = useNavigate();
+   const { addToCart } = useCart();
++  const { location } = useLocationScope();
+   const [quantity, setQuantity] = useState(1);
+   const [item, setItem] = useState<ItemType | null>(null);
+   const [loading, setLoading] = useState(true);
+   const [itemCity, setItemCity] = useState<string | null>(null);
+   const [itemNeighborhood, setItemNeighborhood] = useState<string | null>(null);
++  
++  // Hiperlocal
++  const [bairrosDisponiveis, setBairrosDisponiveis] = useState<string[]>([]);
++  const [bairrosAtendidos, setBairrosAtendidos] = useState<string[]>([]);
+ 
+   const [showScheduleModal, setShowScheduleModal] = useState(false);
+   const [selectedDate, setSelectedDate] = useState<string>('');
+@@ -34,6 +41,12 @@ export const ItemDetail: React.FC = () => {
+   const [complementGroups, setComplementGroups] = useState<ComplementGroup[]>([]);
+   const [selectedComplements, setSelectedComplements] = useState<Record<string, string[]>>({});
+ 
++  // Fun├º├úo robusta de match para evitar erros de acento ("S├úo Jo├úo" vs "Sao Joao")
++  const normalizeBairro = (b: string | null | undefined) => {
++    if (!b) return '';
++    return b.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
++  };
++
+   useEffect(() => {
+     const fetchItem = async () => {
+       if (!id || !type) return;
+@@ -47,7 +60,8 @@ export const ItemDetail: React.FC = () => {
+               sellers!products_seller_id_fkey (
+                 store_name,
+                 username,
+-                avatar_url
++                avatar_url,
++                bairros_atendidos
+               )
+             `)
+             .eq('id', id)
+@@ -58,6 +72,8 @@ export const ItemDetail: React.FC = () => {
+             const username = data.sellers?.username || '';
+             setItemCity(data.city ?? null);
+             setItemNeighborhood(data.neighborhood ?? null);
++            setBairrosDisponiveis(data.bairros_disponiveis || []);
++            setBairrosAtendidos(data.sellers?.bairros_atendidos || []);
+             setItem({
+               id: data.id,
+               name: data.name,
+@@ -88,7 +104,8 @@ export const ItemDetail: React.FC = () => {
+                 rating,
+                 phone,
+                 whatsapp,
+-                avatar_url
++                avatar_url,
++                bairros_atendidos
+               )
+             `)
+             .eq('id', id)
+@@ -101,6 +118,8 @@ export const ItemDetail: React.FC = () => {
+             const phone = data.service_providers?.whatsapp || data.service_providers?.phone || '';
+             setItemCity(data.city ?? null);
+             setItemNeighborhood(data.neighborhood ?? null);
++            setBairrosDisponiveis(data.bairros_disponiveis || []);
++            setBairrosAtendidos(data.service_providers?.bairros_atendidos || []);
+             setItem({
+               id: data.id,
+               name: data.name,
+@@ -260,6 +279,38 @@ export const ItemDetail: React.FC = () => {
+           </div>
+         </div>
+ 
++        {/* --- BANNER ├üREA N├âO COBERTA --- */}
++        {(() => {
++          if (!location || location.scope === 'city' || !location.neighborhood || location.neighborhood === 'Bairro Desconhecido') return null;
++          
++          const userBairro = normalizeBairro(location.neighborhood);
++          let isOutOfRange = true;
++
++          const baseItemBairro = normalizeBairro(itemNeighborhood);
++
++          if (baseItemBairro === userBairro) {
++            isOutOfRange = false;
++          } else if (bairrosDisponiveis && bairrosDisponiveis.some(b => normalizeBairro(extractBairroName(b)) === userBairro)) {
++            isOutOfRange = false;
++          } else if ((!bairrosDisponiveis || bairrosDisponiveis.length === 0) && bairrosAtendidos && bairrosAtendidos.some(b => normalizeBairro(extractBairroName(b)) === userBairro)) {
++            isOutOfRange = false;
++          }
++
++          if (!isOutOfRange) return null;
++
++          return (
++            <div className="bg-orange-50 border-b border-orange-100 px-6 py-4 flex items-start gap-3">
++              <div className="shrink-0 p-2 bg-orange-100 rounded-full text-orange-600 mt-0.5">
++                <MapPin size={16} />
++              </div>
++              <div>
++                <p className="text-sm font-bold text-orange-800">Fora da ├írea de cobertura garantida</p>
++                <p className="text-xs text-orange-600 mt-0.5">Entrega pode n├úo estar dispon├¡vel para seu bairro. Confirme com o vendedor.</p>
++              </div>
++            </div>
++          );
++        })()}
++
+         <main className="mx-auto max-w-3xl px-6 pt-6">
+           <div className="flex items-center justify-between border-b border-neutral-200 pb-6">
+             <div>
+@@ -271,7 +322,7 @@ export const ItemDetail: React.FC = () => {
+               </p>
+               <div className="mt-2 flex items-center gap-2 text-sm font-medium text-neutral-500">
+                 <MapPin size={16} className="text-orange-500" />
+-                No seu bairro
++                {calculateProximityLabel(location, { city: itemCity, neighborhood: itemNeighborhood })}
+               </div>
+             </div>
+             {!isProduct && (
+diff --git a/src/views/ProfilePage.tsx b/src/views/ProfilePage.tsx
+index 8ed248b..9b9044d 100644
+--- a/src/views/ProfilePage.tsx
++++ b/src/views/ProfilePage.tsx
+@@ -310,7 +310,7 @@ export const ProfilePage: React.FC = () => {
+                     <div className="border-t border-neutral-100">
+                       <button
+                         onClick={() => navigate('/admin/delivery')}
+-                        className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors border-b border-neutral-100"
++                        className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors"
+                       >
+                         <div className="flex items-center gap-3">
+                           <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600"><Bike size={18} /></div>
+@@ -318,16 +318,6 @@ export const ProfilePage: React.FC = () => {
+                         </div>
+                         <ChevronRight size={18} className="text-neutral-400" />
+                       </button>
+-                      <button
+-                        onClick={() => navigate('/admin/delivery/area')}
+-                        className="w-full flex items-center justify-between p-4 hover:bg-neutral-50 transition-colors"
+-                      >
+-                        <div className="flex items-center gap-3">
+-                          <div className="p-2 rounded-xl bg-blue-50 text-blue-600"><MapPin size={18} /></div>
+-                          <span className="font-bold text-neutral-900">Configurar ├ürea de Atua├º├úo</span>
+-                        </div>
+-                        <ChevronRight size={18} className="text-neutral-400" />
+-                      </button>
+                     </div>
+                   </div>
+                 </section>
+diff --git a/src/views/SellerSetup.tsx b/src/views/SellerSetup.tsx
+index f08268b..0945b48 100644
+--- a/src/views/SellerSetup.tsx
++++ b/src/views/SellerSetup.tsx
+@@ -14,12 +14,14 @@ import {
+     XCircle,
+     Navigation,
+     Camera,
+-    Palette
++    Palette,
++    Clock
+ } from 'lucide-react';
+ import { useAuth } from '../hooks/useAuth';
+ import { supabase } from '../lib/supabase';
+ import { AvatarUploader } from '../components/AvatarUploader';
+ import { getDetailedLocation } from '../utils/geolocation';
++import { SISBairro, extractBairroName, fetchNeighborhoodsByCity } from '../utils/sis-loca';
+ 
+ interface StoreLocation {
+     label: string;
+@@ -62,7 +64,7 @@ const createEmptyLocation = (isPrimary: boolean, index: number): StoreLocation =
+     gpsAccuracy: null,
+ });
+ 
+-const MAX_LOCATIONS = 5;
++const MAX_LOCATIONS = 1;
+ 
+ export const SellerSetup: React.FC = () => {
+     const navigate = useNavigate();
+@@ -80,6 +82,32 @@ export const SellerSetup: React.FC = () => {
+     const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+     const [coverUrl, setCoverUrl] = useState<string | null>(null);
+ 
++    const [bairrosAtendidos, setBairrosAtendidos] = useState<string[]>([]);
++    const [newBairroForm, setNewBairroForm] = useState<SISBairro>({ bairro: '', rua: '', numero: '', complemento: '' });
++    const [bairroSuggestions, setBairroSuggestions] = useState<string[]>([]);
++    const [showSuggestions, setShowSuggestions] = useState(false);
++    const MAX_BAIRROS = 3;
++
++    // Buscar Sugest├Áes de Bairro (Sis-Loca)
++    useEffect(() => {
++        const primaryCity = locations.find(l => l.is_primary)?.city;
++        if (primaryCity) {
++            fetchNeighborhoodsByCity(supabase, primaryCity).then(sugs => setBairroSuggestions(sugs));
++        }
++    }, [locations]);
++
++    // Hor├írios de atendimento (grade semanal)
++    const DAYS = ['Segunda', 'Ter├ºa', 'Quarta', 'Quinta', 'Sexta', 'S├íbado', 'Domingo'];
++    const [availability, setAvailability] = useState(
++        DAYS.map((day, i) => ({
++            day,
++            dayIndex: i,
++            enabled: i < 5, // Seg-Sex habilitado por padr├úo
++            start: '09:00',
++            end: '18:00',
++        }))
++    );
++
+     // Verifica se o usu├írio j├í ├® vendedor
+     useEffect(() => {
+         if (authLoading) return;
+@@ -103,6 +131,7 @@ export const SellerSetup: React.FC = () => {
+                 setAvatarUrl(data.avatar_url || null);
+                 setCoverUrl(data.cover_url || null);
+                 if (data.theme_id) setThemeId(data.theme_id);
++                if (data.bairros_atendidos) setBairrosAtendidos(data.bairros_atendidos);
+                 // Busca localiza├º├Áes se existir
+                 const { data: locs } = await supabase
+                     .from('store_locations')
+@@ -131,6 +160,28 @@ export const SellerSetup: React.FC = () => {
+                         gpsAccuracy: null
+                     })));
+                 }
++
++                // Carregar hor├írios salvos
++                const { data: avData } = await supabase
++                    .from('seller_availability')
++                    .select('*')
++                    .eq('seller_id', data.id)
++                    .order('day_of_week');
++
++                if (avData && avData.length > 0) {
++                    setAvailability(prev => prev.map((slot, i) => {
++                        const saved = avData.find(a => a.day_of_week === i);
++                        if (saved) {
++                            return {
++                                ...slot,
++                                enabled: saved.is_enabled,
++                                start: saved.start_time?.slice(0, 5) || '09:00',
++                                end: saved.end_time?.slice(0, 5) || '18:00',
++                            };
++                        }
++                        return slot;
++                    }));
++                }
+             }
+             setIsChecking(false);
+         };
+@@ -385,6 +436,7 @@ export const SellerSetup: React.FC = () => {
+                         store_name: storeName.trim(),
+                         username: cleanUsername,
+                         theme_id: themeId,
++                        bairros_atendidos: bairrosAtendidos
+                     })
+                     .eq('id', existingSellerId);
+ 
+@@ -420,6 +472,7 @@ export const SellerSetup: React.FC = () => {
+                         store_name: storeName.trim(),
+                         username: cleanUsername,
+                         theme_id: themeId,
++                        bairros_atendidos: bairrosAtendidos
+                     })
+                     .select('id')
+                     .single();
+@@ -461,8 +514,27 @@ export const SellerSetup: React.FC = () => {
+                     setIsLoading(false);
+                     return;
+                 }
+-                navigate('/profile');
+             }
++
++            const sellerId = existingSellerId || (await supabase.from('sellers').select('id').eq('user_id', user.id).single()).data?.id;
++
++            if (sellerId) {
++                // 3) Salvar hor├írios de funcionamento
++                const availabilityRows = availability.map((slot) => ({
++                    seller_id: sellerId,
++                    day_of_week: slot.dayIndex,
++                    is_enabled: slot.enabled,
++                    start_time: slot.start,
++                    end_time: slot.end,
++                }));
++
++                // Upsert: insere ou atualiza baseado na constraint unique(seller_id, day_of_week)
++                await supabase
++                    .from('seller_availability')
++                    .upsert(availabilityRows, { onConflict: 'seller_id,day_of_week' });
++            }
++
++            navigate('/profile');
+         } catch {
+             setError('Ocorreu um erro ao salvar a loja.');
+             setIsLoading(false);
+@@ -644,8 +716,7 @@ export const SellerSetup: React.FC = () => {
+                         <div>
+                             <p className="text-sm font-bold text-blue-900">Onde fica sua loja?</p>
+                             <p className="text-xs text-blue-600 mt-1">
+-                                Informe o CEP de cada ponto de venda. Voc├¬ pode ter at├® {MAX_LOCATIONS} pontos em bairros diferentes.
+-                                ├ë necess├írio pelo menos 1 ponto de venda.
++                                Informe o CEP do seu local base. Este ├® o ponto principal da sua vitrine.
+                             </p>
+                         </div>
+                     </div>
+@@ -881,17 +952,266 @@ export const SellerSetup: React.FC = () => {
+                         </AnimatePresence>
+                     </div>
+ 
+-                    {/* Bot├úo adicionar ponto */}
+-                    {locations.length < MAX_LOCATIONS && (
+-                        <button
+-                            type="button"
+-                            onClick={addLocation}
+-                            className="w-full flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-neutral-300 py-4 text-sm font-bold text-neutral-500 hover:border-orange-400 hover:text-orange-600 hover:bg-orange-50 transition-all"
+-                        >
+-                            <Plus size={18} />
+-                            Adicionar Ponto de Venda ({locations.length}/{MAX_LOCATIONS})
+-                        </button>
+-                    )}
++                    {/* ====== HOR├üRIOS DE FUNCIONAMENTO ====== */}
++                    <div className="relative py-2 mt-8">
++                        <div className="absolute inset-0 flex items-center">
++                            <div className="w-full border-t border-neutral-200" />
++                        </div>
++                        <div className="relative flex justify-center">
++                            <span className="bg-neutral-50 px-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">
++                                Hor├írios de Funcionamento
++                            </span>
++                        </div>
++                    </div>
++
++                    <div className="bg-white rounded-3xl border border-neutral-200 p-6 shadow-sm overflow-hidden mt-2 mb-6">
++                        <div className="flex items-center gap-3 mb-6">
++                            <div className="w-10 h-10 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600">
++                                <Clock size={20} />
++                            </div>
++                            <div>
++                                <h3 className="text-sm font-black text-neutral-900">Dias e Hor├írios</h3>
++                                <p className="text-[11px] text-neutral-400 font-medium">Configure quando sua loja est├í aberta.</p>
++                            </div>
++                        </div>
++
++                        <div className="space-y-3">
++                            {availability.map((slot, i) => (
++                                <div key={slot.day} className={`flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-2xl border transition-all ${slot.enabled ? 'bg-white border-neutral-200 shadow-sm' : 'bg-neutral-50 border-transparent opacity-70'}`}>
++                                    <div className="flex items-center justify-between sm:w-1/3">
++                                        <label className="flex items-center gap-3 cursor-pointer">
++                                            <input
++                                                type="checkbox"
++                                                checked={slot.enabled}
++                                                onChange={(e) => {
++                                                    setAvailability(prev => {
++                                                        const newArr = [...prev];
++                                                        newArr[i].enabled = e.target.checked;
++                                                        return newArr;
++                                                    });
++                                                }}
++                                                className="w-5 h-5 rounded-md border-neutral-300 text-orange-500 focus:ring-orange-500"
++                                            />
++                                            <span className={`font-bold text-sm ${slot.enabled ? 'text-neutral-900' : 'text-neutral-500'}`}>{slot.day}</span>
++                                        </label>
++                                        {!slot.enabled && <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider sm:hidden">Fechado</span>}
++                                    </div>
++                                    
++                                    {slot.enabled ? (
++                                        <div className="flex items-center gap-2 sm:flex-1">
++                                            <input
++                                                type="time"
++                                                value={slot.start}
++                                                onChange={(e) => {
++                                                    setAvailability(prev => {
++                                                        const newArr = [...prev];
++                                                        newArr[i].start = e.target.value;
++                                                        return newArr;
++                                                    });
++                                                }}
++                                                className="flex-1 rounded-xl bg-neutral-50 border border-neutral-200 p-2.5 text-sm font-bold text-neutral-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
++                                            />
++                                            <span className="text-neutral-400 font-medium text-xs">at├®</span>
++                                            <input
++                                                type="time"
++                                                value={slot.end}
++                                                onChange={(e) => {
++                                                    setAvailability(prev => {
++                                                        const newArr = [...prev];
++                                                        newArr[i].end = e.target.value;
++                                                        return newArr;
++                                                    });
++                                                }}
++                                                className="flex-1 rounded-xl bg-neutral-50 border border-neutral-200 p-2.5 text-sm font-bold text-neutral-900 focus:border-orange-500 focus:ring-1 focus:ring-orange-500"
++                                            />
++                                        </div>
++                                    ) : (
++                                        <div className="hidden sm:block sm:flex-1 text-center">
++                                            <span className="text-xs font-bold text-neutral-400 uppercase tracking-wider bg-neutral-100 px-3 py-1 rounded-lg">Fechado</span>
++                                        </div>
++                                    )}
++                                </div>
++                            ))}
++                        </div>
++                    </div>
++
++                    {/* Bairros Atendidos */}
++                    <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm mt-6">
++                        <div className="flex items-start gap-3">
++                            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-purple-500/20 shrink-0">
++                                <Navigation size={20} />
++                            </div>
++                            <div className="flex-1">
++                                <h3 className="text-sm font-black text-neutral-900">Bairros Atendidos</h3>
++                                <p className="text-xs text-neutral-500 mt-1">
++                                    Al├®m do seu Local Base, em quais bairros voc├¬ entrega ou atende? (M├íximo {MAX_BAIRROS}).
++                                </p>
++                                
++                                <div className="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2 mb-4">
++                                    <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
++                                    <p className="text-xs text-amber-700 font-medium">
++                                        Adicione apenas bairros onde voc├¬ realmente consegue entregar com facilidade ou possui filial.
++                                    </p>
++                                </div>
++
++                                {/* Lista de Bairros Adicionados */}
++                                <div className="flex flex-col gap-3 mb-6">
++                                    {bairrosAtendidos.map((bRaw, idx) => {
++                                        let parsed: SISBairro | null = null;
++                                        try { parsed = JSON.parse(bRaw) as SISBairro; } catch {}
++                                        const nomeBairro = parsed ? parsed.bairro : bRaw;
++                                        const temDetalhes = parsed && (parsed.rua || parsed.numero || parsed.complemento);
++                                        
++                                        return (
++                                            <div key={idx} className="flex items-center justify-between p-3 bg-purple-50 border border-purple-100 rounded-xl">
++                                                <div className="flex items-start gap-3">
++                                                    <MapPin size={18} className="text-purple-500 mt-0.5 shrink-0" />
++                                                    <div>
++                                                        <p className="text-sm font-bold text-purple-900">{nomeBairro}</p>
++                                                        {temDetalhes && (
++                                                            <p className="text-xs text-purple-600 mt-0.5">
++                                                                {parsed?.rua}{parsed?.numero ? `, ${parsed.numero}` : ''}{parsed?.complemento ? ` - ${parsed.complemento}` : ''}
++                                                            </p>
++                                                        )}
++                                                    </div>
++                                                </div>
++                                                <button 
++                                                    type="button" 
++                                                    onClick={() => setBairrosAtendidos(prev => prev.filter((_, i) => i !== idx))}
++                                                    className="p-2 text-purple-400 hover:text-red-500 hover:bg-white rounded-lg transition-colors flex-shrink-0"
++                                                >
++                                                    <Trash2 size={16} />
++                                                </button>
++                                            </div>
++                                        );
++                                    })}
++                                    {bairrosAtendidos.length === 0 && (
++                                        <div className="text-sm text-neutral-400 font-medium italic p-4 text-center border border-dashed border-neutral-200 rounded-xl">
++                                            Nenhum bairro adicional cadastrado.
++                                        </div>
++                                    )}
++                                </div>
++
++                                {/* Formulario para Adicionar Bairro */}
++                                {bairrosAtendidos.length < MAX_BAIRROS && (
++                                    <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-200 space-y-4">
++                                        <h4 className="text-xs font-bold text-neutral-600 uppercase tracking-wider">Adicionar Novo Bairro</h4>
++                                        
++                                        <div>
++                                            <label className="block text-xs font-bold text-neutral-500 mb-1.5">Nome do Bairro *</label>
++                                            <div className="relative">
++                                                <input
++                                                    type="text"
++                                                    value={newBairroForm.bairro}
++                                                    onChange={e => {
++                                                        setNewBairroForm(prev => ({ ...prev, bairro: e.target.value }));
++                                                        setShowSuggestions(true);
++                                                    }}
++                                                    onFocus={() => setShowSuggestions(true)}
++                                                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
++                                                    placeholder="Ex: Centro"
++                                                    className="w-full rounded-xl border border-neutral-200 p-3 text-sm font-bold text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
++                                                />
++                                                {/* Dropdown de Sugest├Áes Sis-Loca */}
++                                                <AnimatePresence>
++                                                    {showSuggestions && bairroSuggestions.length > 0 && (
++                                                        <motion.div 
++                                                            initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }}
++                                                            className="absolute z-10 w-full mt-1 bg-white border border-neutral-200 rounded-xl shadow-lg max-h-48 overflow-y-auto"
++                                                        >
++                                                            {bairroSuggestions
++                                                                .filter(s => s.toLowerCase().includes(newBairroForm.bairro.toLowerCase()))
++                                                                .map((sug, i) => (
++                                                                    <button
++                                                                        key={i}
++                                                                        type="button"
++                                                                        className="w-full text-left px-4 py-2.5 text-sm font-bold text-neutral-700 hover:bg-purple-50 hover:text-purple-700 transition-colors"
++                                                                        onClick={() => {
++                                                                            setNewBairroForm(prev => ({ ...prev, bairro: sug }));
++                                                                            setShowSuggestions(false);
++                                                                        }}
++                                                                    >
++                                                                        {sug}
++                                                                    </button>
++                                                            ))}
++                                                        </motion.div>
++                                                    )}
++                                                </AnimatePresence>
++                                            </div>
++                                        </div>
++
++                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
++                                            <div>
++                                                <label className="block text-xs font-bold text-neutral-500 mb-1.5">Rua (Opcional)</label>
++                                                <input
++                                                    type="text"
++                                                    value={newBairroForm.rua}
++                                                    onChange={e => setNewBairroForm(prev => ({ ...prev, rua: e.target.value }))}
++                                                    placeholder="Ex: Av. Brasil"
++                                                    className="w-full rounded-xl bg-white border border-neutral-200 p-3 text-sm font-medium text-neutral-700 focus:outline-none focus:border-purple-500"
++                                                />
++                                            </div>
++                                            <div className="grid grid-cols-2 gap-4">
++                                                <div>
++                                                    <label className="block text-xs font-bold text-neutral-500 mb-1.5">N├║mero</label>
++                                                    <input
++                                                        type="text"
++                                                        value={newBairroForm.numero}
++                                                        onChange={e => setNewBairroForm(prev => ({ ...prev, numero: e.target.value }))}
++                                                        placeholder="123"
++                                                        className="w-full rounded-xl bg-white border border-neutral-200 p-3 text-sm font-medium text-neutral-700 focus:outline-none focus:border-purple-500"
++                                                    />
++                                                </div>
++                                                <div>
++                                                    <label className="block text-xs font-bold text-neutral-500 mb-1.5">Compl.</label>
++                                                    <input
++                                                        type="text"
++                                                        value={newBairroForm.complemento}
++                                                        onChange={e => setNewBairroForm(prev => ({ ...prev, complemento: e.target.value }))}
++                                                        placeholder="Sala 2"
++                                                        className="w-full rounded-xl bg-white border border-neutral-200 p-3 text-sm font-medium text-neutral-700 focus:outline-none focus:border-purple-500"
++                                                    />
++                                                </div>
++                                            </div>
++                                        </div>
++
++                                        <button
++                                            type="button"
++                                            onClick={() => {
++                                                if (newBairroForm.bairro.trim()) {
++                                                    const bairroData: SISBairro = {
++                                                        bairro: newBairroForm.bairro.trim(),
++                                                        rua: newBairroForm.rua?.trim() || undefined,
++                                                        numero: newBairroForm.numero?.trim() || undefined,
++                                                        complemento: newBairroForm.complemento?.trim() || undefined,
++                                                    };
++                                                    
++                                                    // Checagem para evitar que o usuario adicione o mesmo bairro 2x
++                                                    const alreadyExists = bairrosAtendidos.some(bRaw => {
++                                                        try {
++                                                            return (JSON.parse(bRaw) as SISBairro).bairro.toLowerCase() === bairroData.bairro.toLowerCase();
++                                                        } catch {
++                                                            return bRaw.toLowerCase() === bairroData.bairro.toLowerCase();
++                                                        }
++                                                    });
++
++                                                    if (!alreadyExists) {
++                                                        setBairrosAtendidos(prev => [...prev, JSON.stringify(bairroData)]);
++                                                    }
++                                                    
++                                                    setNewBairroForm({ bairro: '', rua: '', numero: '', complemento: '' });
++                                                }
++                                            }}
++                                            disabled={!newBairroForm.bairro.trim()}
++                                            className="w-full px-4 py-3 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-xl font-bold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
++                                        >
++                                            Adicionar ├á Lista de Atendimento
++                                        </button>
++                                    </div>
++                                )}
++                            </div>
++                        </div>
++                    </div>
+ 
+                     {/* Bot├úo criar */}
+                     <button
+diff --git a/src/views/ServiceSetup.tsx b/src/views/ServiceSetup.tsx
+index ffbeaef..58b1fb7 100644
+--- a/src/views/ServiceSetup.tsx
++++ b/src/views/ServiceSetup.tsx
+@@ -1,13 +1,14 @@
+-import React, { useState } from 'react';
++import React, { useState, useEffect } from 'react';
+ import { useNavigate } from 'react-router-dom';
+ import { motion, AnimatePresence } from 'motion/react';
+-import { ChevronLeft, Briefcase, Loader2, LogOut, FileText, Pickaxe, CheckCircle2, Clock, Zap, Calendar, User, Building2, Palette } from 'lucide-react';
++import { ChevronLeft, Briefcase, Loader2, LogOut, FileText, Pickaxe, CheckCircle2, Clock, Zap, Calendar, User, Building2, Palette, Navigation, AlertCircle, XCircle, MapPin, Trash2 } from 'lucide-react';
+ import { useAuth } from '../hooks/useAuth';
+ import { supabase } from '../lib/supabase';
+ import { Logo } from '../components/Logo';
+ import { AvatarUploader } from '../components/AvatarUploader';
+ import { PortfolioUploader } from '../components/PortfolioUploader';
+ import { useLocationScope } from '../context/LocationContext';
++import { SISBairro, extractBairroName, fetchNeighborhoodsByCity } from '../utils/sis-loca';
+ 
+ export const ServiceSetup: React.FC = () => {
+     const navigate = useNavigate();
+@@ -30,6 +31,19 @@ export const ServiceSetup: React.FC = () => {
+     // URLs das fotos de portf├│lio capturadas pelo PortfolioUploader
+     const [portfolioUrls, setPortfolioUrls] = useState<string[]>([]);
+ 
++    const [bairrosAtendidos, setBairrosAtendidos] = useState<string[]>([]);
++    const [newBairroForm, setNewBairroForm] = useState<SISBairro>({ bairro: '', rua: '', numero: '', complemento: '' });
++    const [bairroSuggestions, setBairroSuggestions] = useState<string[]>([]);
++    const [showSuggestions, setShowSuggestions] = useState(false);
++    const MAX_BAIRROS = 3;
++
++    // Buscar Sugest├Áes de Bairro (Sis-Loca)
++    useEffect(() => {
++        if (location?.city) {
++            fetchNeighborhoodsByCity(supabase, location.city).then(sugs => setBairroSuggestions(sugs));
++        }
++    }, [location]);
++
+     // Hor├írios de atendimento (grade semanal)
+     const DAYS = ['Segunda', 'Ter├ºa', 'Quarta', 'Quinta', 'Sexta', 'S├íbado', 'Domingo'];
+     const [availability, setAvailability] = useState(
+@@ -63,6 +77,7 @@ export const ServiceSetup: React.FC = () => {
+                     if (data.theme_id) setThemeId(data.theme_id);
+                     setExistingProviderId(data.id);
+                     if (data.provider_type) setProviderType(data.provider_type as 'autonomo' | 'empresa');
++                    if (data.bairros_atendidos) setBairrosAtendidos(data.bairros_atendidos);
+ 
+                     // Carregar hor├írios salvos
+                     const { data: avData } = await supabase
+@@ -129,6 +144,7 @@ export const ServiceSetup: React.FC = () => {
+                 neighborhood: location?.neighborhood === 'Bairro Desconhecido' ? null : (location?.neighborhood || null),
+                 provider_type: providerType,
+                 theme_id: themeId,
++                bairros_atendidos: bairrosAtendidos,
+             };
+ 
+             let result;
+@@ -409,6 +425,184 @@ export const ServiceSetup: React.FC = () => {
+                             </button>
+                         </div>
+ 
++                        {/* ====== BAIRROS ATENDIDOS ====== */}
++                        <div className="bg-white p-6 rounded-3xl border border-neutral-100 shadow-sm mt-6">
++                            <div className="flex items-start gap-3">
++                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-purple-500/20 shrink-0">
++                                    <Navigation size={20} />
++                                </div>
++                                <div className="flex-1">
++                                    <h3 className="text-sm font-black text-neutral-900">Bairros Atendidos</h3>
++                                    <p className="text-xs text-neutral-500 mt-1">
++                                        Em quais bairros voc├¬ presta servi├ºo? (M├íximo {MAX_BAIRROS}).
++                                    </p>
++                                    
++                                    <div className="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2 mb-4">
++                                        <AlertCircle size={14} className="text-amber-600 shrink-0 mt-0.5" />
++                                        <p className="text-xs text-amber-700 font-medium">
++                                            Adicione apenas bairros onde voc├¬ tem disponibilidade para atender.
++                                        </p>
++                                    </div>
++
++                                    {/* Lista de Bairros Adicionados */}
++                                    <div className="flex flex-col gap-3 mb-6">
++                                        {bairrosAtendidos.map((bRaw, idx) => {
++                                            let parsed: SISBairro | null = null;
++                                            try { parsed = JSON.parse(bRaw) as SISBairro; } catch {}
++                                            const nomeBairro = parsed ? parsed.bairro : bRaw;
++                                            const temDetalhes = parsed && (parsed.rua || parsed.numero || parsed.complemento);
++                                            
++                                            return (
++                                                <div key={idx} className="flex items-center justify-between p-3 bg-purple-50 border border-purple-100 rounded-xl">
++                                                    <div className="flex items-start gap-3">
++                                                        <MapPin size={18} className="text-purple-500 mt-0.5 shrink-0" />
++                                                        <div>
++                                                            <p className="text-sm font-bold text-purple-900">{nomeBairro}</p>
++                                                            {temDetalhes && (
++                                                                <p className="text-xs text-purple-600 mt-0.5">
++                                                                    {parsed?.rua}{parsed?.numero ? `, ${parsed.numero}` : ''}{parsed?.complemento ? ` - ${parsed.complemento}` : ''}
++                                                                </p>
++                                                            )}
++                                                        </div>
++                                                    </div>
++                                                    <button 
++                                                        type="button" 
++                                                        onClick={() => setBairrosAtendidos(prev => prev.filter((_, i) => i !== idx))}
++                                                        className="p-2 text-purple-400 hover:text-red-500 hover:bg-white rounded-lg transition-colors flex-shrink-0"
++                                                    >
++                                                        <XCircle size={16} />
++                                                    </button>
++                                                </div>
++                                            );
++                                        })}
++                                        {bairrosAtendidos.length === 0 && (
++                                            <div className="text-sm text-neutral-400 font-medium italic p-4 text-center border border-dashed border-neutral-200 rounded-xl">
++                                                Nenhum bairro adicional cadastrado.
++                                            </div>
++                                        )}
++                                    </div>
++
++                                    {/* Formulario para Adicionar Bairro */}
++                                    {bairrosAtendidos.length < MAX_BAIRROS && (
++                                        <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-200 space-y-4">
++                                            <h4 className="text-xs font-bold text-neutral-600 uppercase tracking-wider">Adicionar Novo Bairro</h4>
++                                            
++                                            <div>
++                                                <label className="block text-xs font-bold text-neutral-500 mb-1.5">Nome do Bairro *</label>
++                                                <div className="relative">
++                                                    <input
++                                                        type="text"
++                                                        value={newBairroForm.bairro}
++                                                        onChange={e => {
++                                                            setNewBairroForm(prev => ({ ...prev, bairro: e.target.value }));
++                                                            setShowSuggestions(true);
++                                                        }}
++                                                        onFocus={() => setShowSuggestions(true)}
++                                                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
++                                                        placeholder="Ex: Centro"
++                                                        className="w-full rounded-xl border border-neutral-200 p-3 text-sm font-bold text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
++                                                    />
++                                                    {/* Dropdown de Sugest├Áes Sis-Loca */}
++                                                    <AnimatePresence>
++                                                        {showSuggestions && bairroSuggestions.length > 0 && (
++                                                            <motion.div 
++                                                                initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }}
++                                                                className="absolute z-10 w-full mt-1 bg-white border border-neutral-200 rounded-xl shadow-lg max-h-48 overflow-y-auto"
++                                                            >
++                                                                {bairroSuggestions
++                                                                    .filter(s => s.toLowerCase().includes(newBairroForm.bairro.toLowerCase()))
++                                                                    .map((sug, i) => (
++                                                                        <button
++                                                                            key={i}
++                                                                            type="button"
++                                                                            className="w-full text-left px-4 py-2.5 text-sm font-bold text-neutral-700 hover:bg-purple-50 hover:text-purple-700 transition-colors"
++                                                                            onClick={() => {
++                                                                                setNewBairroForm(prev => ({ ...prev, bairro: sug }));
++                                                                                setShowSuggestions(false);
++                                                                            }}
++                                                                        >
++                                                                            {sug}
++                                                                        </button>
++                                                                ))}
++                                                            </motion.div>
++                                                        )}
++                                                    </AnimatePresence>
++                                                </div>
++                                            </div>
++
++                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
++                                                <div>
++                                                    <label className="block text-xs font-bold text-neutral-500 mb-1.5">Rua (Opcional)</label>
++                                                    <input
++                                                        type="text"
++                                                        value={newBairroForm.rua}
++                                                        onChange={e => setNewBairroForm(prev => ({ ...prev, rua: e.target.value }))}
++                                                        placeholder="Ex: Av. Brasil"
++                                                        className="w-full rounded-xl bg-white border border-neutral-200 p-3 text-sm font-medium text-neutral-700 focus:outline-none focus:border-purple-500"
++                                                    />
++                                                </div>
++                                                <div className="grid grid-cols-2 gap-4">
++                                                    <div>
++                                                        <label className="block text-xs font-bold text-neutral-500 mb-1.5">N├║mero</label>
++                                                        <input
++                                                            type="text"
++                                                            value={newBairroForm.numero}
++                                                            onChange={e => setNewBairroForm(prev => ({ ...prev, numero: e.target.value }))}
++                                                            placeholder="123"
++                                                            className="w-full rounded-xl bg-white border border-neutral-200 p-3 text-sm font-medium text-neutral-700 focus:outline-none focus:border-purple-500"
++                                                        />
++                                                    </div>
++                                                    <div>
++                                                        <label className="block text-xs font-bold text-neutral-500 mb-1.5">Compl.</label>
++                                                        <input
++                                                            type="text"
++                                                            value={newBairroForm.complemento}
++                                                            onChange={e => setNewBairroForm(prev => ({ ...prev, complemento: e.target.value }))}
++                                                            placeholder="Sala 2"
++                                                            className="w-full rounded-xl bg-white border border-neutral-200 p-3 text-sm font-medium text-neutral-700 focus:outline-none focus:border-purple-500"
++                                                        />
++                                                    </div>
++                                                </div>
++                                            </div>
++
++                                            <button
++                                                type="button"
++                                                onClick={() => {
++                                                    if (newBairroForm.bairro.trim()) {
++                                                        const bairroData: SISBairro = {
++                                                            bairro: newBairroForm.bairro.trim(),
++                                                            rua: newBairroForm.rua?.trim() || undefined,
++                                                            numero: newBairroForm.numero?.trim() || undefined,
++                                                            complemento: newBairroForm.complemento?.trim() || undefined,
++                                                        };
++                                                        
++                                                        // Checagem para evitar que o usuario adicione o mesmo bairro 2x
++                                                        const alreadyExists = bairrosAtendidos.some(bRaw => {
++                                                            try {
++                                                                return (JSON.parse(bRaw) as SISBairro).bairro.toLowerCase() === bairroData.bairro.toLowerCase();
++                                                            } catch {
++                                                                return bRaw.toLowerCase() === bairroData.bairro.toLowerCase();
++                                                            }
++                                                        });
++
++                                                        if (!alreadyExists) {
++                                                            setBairrosAtendidos(prev => [...prev, JSON.stringify(bairroData)]);
++                                                        }
++                                                        
++                                                        setNewBairroForm({ bairro: '', rua: '', numero: '', complemento: '' });
++                                                    }
++                                                }}
++                                                disabled={!newBairroForm.bairro.trim()}
++                                                className="w-full px-4 py-3 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-xl font-bold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
++                                            >
++                                                Adicionar ├á Lista de Atendimento
++                                            </button>
++                                        </div>
++                                    )}
++                                </div>
++                            </div>
++                        </div>
++
+                         {/* ====== FOTOS DO SERVI├çO (PORTF├ôLIO) ====== */}
+                         <div className="bg-white p-6 rounded-3xl border border-neutral-100 shadow-sm">
+                             <div className="flex items-center justify-between mb-1">

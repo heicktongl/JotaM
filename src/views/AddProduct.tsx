@@ -14,12 +14,16 @@ export const AddProduct: React.FC = () => {
   const [showPhoneGate, setShowPhoneGate] = useState(false);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [popularCategories] = useState(['Frutas', 'Verduras', 'Grãos', 'Laticínios', 'Artesanato', 'Bebidas']);
   const [saving, setSaving] = useState(false);
   
   // Controle de Multi-Bairros (Hyperlocal)
   const [bairrosAtendidos, setBairrosAtendidos] = useState<string[]>([]);
   const [isAllBairros, setIsAllBairros] = useState(true);
   const [selectedBairros, setSelectedBairros] = useState<string[]>([]);
+  
+  // Tipo de Preço: 'single' ou 'variations'
+  const [priceType, setPriceType] = useState<'single' | 'variations'>('single');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -29,13 +33,15 @@ export const AddProduct: React.FC = () => {
     stock: '',
   });
 
+  const [customCategory, setCustomCategory] = useState('');
+
   // Estado dos grupos de complemento
   const [complementGroups, setComplementGroups] = useState<Array<{
     name: string;
     required: boolean;
     max_choices: number;
     is_variation: boolean;
-    items: Array<{ name: string; price: string; stock: string }>
+    items: Array<{ name: string; price: string; stock: string; image_url?: string }>
   }>>([]);
 
   const [openGroupIndex, setOpenGroupIndex] = useState<number | null>(null);
@@ -92,6 +98,12 @@ export const AddProduct: React.FC = () => {
           setFormData(f => ({
             ...f,
             category_id: f.category_id || defaultCategoryId || data[0].id
+          }));
+        } else {
+          // Se o banco estiver vazio, garante que pelo menos a opção de 'Nova' esteja disponível
+          setFormData(f => ({
+            ...f,
+            category_id: f.category_id || defaultCategoryId || 'new'
           }));
         }
       });
@@ -176,7 +188,59 @@ export const AddProduct: React.FC = () => {
 
     setSaving(true);
     try {
-      // 1. Buscar o perfil de vendedor do usuário logado
+      // 0. Tratar Categoria Dinâmica
+      let finalCategoryId = formData.category_id;
+      
+      if (formData.category_id === 'new') {
+        if (!customCategory.trim()) {
+          alert('Por favor, digite o nome da nova categoria.');
+          setSaving(false);
+          return;
+        }
+
+        // Busca se já existe (case-insensitive)
+        const { data: existingCat } = await supabase
+          .from('categories')
+          .select('id')
+          .ilike('name', customCategory.trim())
+          .eq('type', 'product')
+          .maybeSingle();
+
+        if (existingCat) {
+          finalCategoryId = existingCat.id;
+        } else {
+          // Cria nova categoria global para a comunidade
+          const { data: newCat, error: catErr } = await supabase
+            .from('categories')
+            .insert({
+              name: customCategory.trim(),
+              type: 'product',
+              icon: 'Puzzle' // Ícone padrão para novas categorias
+            })
+            .select('id')
+            .single();
+
+          if (catErr) throw catErr;
+          finalCategoryId = newCat.id;
+        }
+      }
+
+      // 1. Validação de Preço/Variação
+      if (priceType === 'single' && (!formData.price || parseFloat(formData.price) <= 0)) {
+        alert('Por favor, informe um preço válido.');
+        setSaving(false);
+        return;
+      }
+      if (priceType === 'variations') {
+        const variationGroup = complementGroups.find(g => g.is_variation);
+        if (!variationGroup || variationGroup.items.length === 0 || variationGroup.items.some(i => !i.name || !i.price)) {
+          alert('Por favor, preencha todas as variações com nome e preço.');
+          setSaving(false);
+          return;
+        }
+      }
+
+      // 2. Buscar o perfil de vendedor do usuário logado
       const { data: sellerData, error: sellerErr } = await supabase
         .from('sellers')
         .select('id')
@@ -189,9 +253,7 @@ export const AddProduct: React.FC = () => {
         return;
       }
 
-      // 2. Buscar a localização OFICIAL da loja (is_primary = true)
-      //    Isso é crítico: o produto deve ser indexado pela localização da LOJA,
-      //    e não pelo GPS momentâneo do dispositivo do vendedor.
+      // 3. Buscar a localização OFICIAL da loja
       const { data: storeLocation } = await supabase
         .from('store_locations')
         .select('neighborhood, city')
@@ -199,7 +261,7 @@ export const AddProduct: React.FC = () => {
         .eq('is_primary', true)
         .maybeSingle();
 
-      // 3. Upload da foto principal do produto
+      // 4. Upload da foto principal
       let mainImageUrl: string | null = null;
       if (images.length > 0) {
         const file = images[0];
@@ -208,64 +270,66 @@ export const AddProduct: React.FC = () => {
         mainImageUrl = await uploadFile(file, path);
       }
 
-      // 4. Inserir o produto com a localização correta da loja e o limite de bairros
+      // 5. Determinar preço base (se variações, usa o menor preço)
+      let finalPrice = parseFloat(formData.price) || 0;
+      if (priceType === 'variations') {
+        const variationGroup = complementGroups.find(g => g.is_variation);
+        if (variationGroup) {
+          finalPrice = Math.min(...variationGroup.items.map(i => parseFloat(i.price)));
+        }
+      }
+
       const finalBairrosDisponiveis = isAllBairros ? [] : selectedBairros;
 
-      const { error } = await supabase.from('products').insert({
+      // 6. Inserir o produto
+      const { data: productRef, error: productErr } = await supabase.from('products').insert({
         seller_id: sellerData.id,
-        category_id: formData.category_id || null,
+        category_id: finalCategoryId || null,
         name: formData.name,
         description: formData.description,
-        price: parseFloat(formData.price),
-        stock: parseInt(formData.stock, 10),
+        price: finalPrice,
+        stock: priceType === 'single' ? (parseInt(formData.stock, 10) || 0) : 0, // Se variações, estoque é somado/gerido nos itens
         image_url: mainImageUrl,
         is_active: true,
         neighborhood: storeLocation?.neighborhood || null,
         city: storeLocation?.city || null,
         bairros_disponiveis: finalBairrosDisponiveis,
-      });
+      }).select('id').single();
 
-      if (error) throw error;
+      if (productErr || !productRef) throw productErr;
 
-      // 5. Salvar complementos (se houver)
+      // 7. Salvar Variações e Complementos
       if (complementGroups.length > 0) {
-        const { data: insertedProduct } = await supabase
-          .from('products')
-          .select('id')
-          .eq('seller_id', sellerData.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
+        for (let gIdx = 0; gIdx < complementGroups.length; gIdx++) {
+          const group = complementGroups[gIdx];
+          
+          // Se o tipo de preço for 'single', ignora grupos que marcados como variação (limpeza)
+          if (priceType === 'single' && group.is_variation) continue;
 
-        if (insertedProduct) {
-          for (let gIdx = 0; gIdx < complementGroups.length; gIdx++) {
-            const group = complementGroups[gIdx];
-            const { data: savedGroup } = await supabase
-              .from('product_complement_groups')
-              .insert({
-                product_id: insertedProduct.id,
-                name: group.name,
-                required: group.required,
-                max_choices: group.max_choices,
-                is_variation: group.is_variation,
-                position: gIdx,
-              })
+          const { data: savedGroup } = await supabase
+            .from('product_complement_groups')
+            .insert({
+              product_id: productRef.id,
+              name: group.name,
+              required: group.required,
+              max_choices: group.max_choices,
+              is_variation: group.is_variation,
+              position: gIdx,
+            })
+            .select('id')
+            .single();
 
-              .select('id')
-              .single();
-
-            if (savedGroup && group.items.length > 0) {
-              await supabase.from('product_complement_items').insert(
-                group.items.map((item, iIdx) => ({
-                  group_id: savedGroup.id,
-                  name: item.name,
-                  price: parseFloat(item.price) || 0,
-                  stock: item.stock ? parseInt(item.stock, 10) : null,
-                  position: iIdx,
-                }))
-
-              );
-            }
+          if (savedGroup && group.items.length > 0) {
+            await supabase.from('product_complement_items').insert(
+              group.items.map((item, iIdx) => ({
+                group_id: savedGroup.id,
+                name: item.name,
+                price: parseFloat(item.price) || 0,
+                stock: item.stock ? parseInt(item.stock, 10) : null,
+                position: iIdx,
+                image_url: item.image_url || null,
+              }))
+            );
           }
         }
       }
@@ -447,114 +511,236 @@ export const AddProduct: React.FC = () => {
             </div>
           </section>
 
-          {/* Pricing and Stock */}
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-6">
-              <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Preço e Categoria</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-bold text-neutral-700 mb-2">Preço (R$)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="0,00"
-                    className="w-full rounded-2xl border border-neutral-200 bg-white px-5 py-3 text-neutral-900 focus:border-orange-500 focus:ring-0 transition-all"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-neutral-700 mb-2">Categoria</label>
-                  <select
-                    className="w-full rounded-2xl border border-neutral-200 bg-white px-5 py-3 text-neutral-900 focus:border-orange-500 focus:ring-0 transition-all appearance-none"
-                    value={formData.category_id}
-                    onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                  >
-                    {categories.length === 0 ? (
-                      <option value="">Carregando categorias...</option>
-                    ) : (
-                      categories.map(cat => (
-                        <option key={cat.id} value={cat.id}>{cat.name}</option>
-                      ))
-                    )}
-                  </select>
-                </div>
+          {/* Pricing and Stock Section */}
+          <section className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Preçário e Variações</h3>
+              
+              {/* Toggle de Tipo de Preço */}
+              <div className="flex bg-neutral-100 p-1 rounded-2xl w-fit">
+                <button
+                  type="button"
+                  onClick={() => setPriceType('single')}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${priceType === 'single' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+                >
+                  Preço Único
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPriceType('variations');
+                    // Garante que exista pelo menos um grupo de variação ao ativar
+                    if (complementGroups.filter(g => g.is_variation).length === 0) {
+                      setComplementGroups(prev => [
+                        { name: 'Tamanho', required: true, max_choices: 1, is_variation: true, items: [{ name: '', price: '', stock: '' }] },
+                        ...prev
+                      ]);
+                      setOpenGroupIndex(0);
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${priceType === 'variations' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+                >
+                  Variações
+                </button>
               </div>
             </div>
 
-            <div className="space-y-6">
-              <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Estoque</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-bold text-neutral-700 mb-2">Quantidade Inicial</label>
-                  <input
-                    type="number"
-                    required
-                    placeholder="Ex: 50"
-                    className="w-full rounded-2xl border border-neutral-200 bg-white px-5 py-3 text-neutral-900 focus:border-orange-500 focus:ring-0 transition-all"
-                    value={formData.stock}
-                    onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                  />
-                </div>
-                <div className="flex items-center gap-3 p-4 rounded-2xl bg-orange-50 border border-orange-100">
-                  <div className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
-                  <p className="text-xs font-bold text-orange-700">O estoque será atualizado automaticamente após cada venda.</p>
-                </div>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <AnimatePresence mode="wait">
+                {priceType === 'single' ? (
+                  <motion.div
+                    key="single-price"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                    className="space-y-4"
+                  >
+                    <div>
+                      <label className="block text-sm font-bold text-neutral-700 mb-2">Preço do Produto (R$)</label>
+                      <div className="relative">
+                        <span className="absolute left-5 top-1/2 -translate-y-1/2 text-neutral-400 font-bold">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required={priceType === 'single'}
+                          placeholder="0,00"
+                          className="w-full rounded-2xl border border-neutral-200 bg-white pl-12 pr-5 py-4 text-lg font-bold text-neutral-900 focus:border-orange-500 focus:ring-0 transition-all shadow-sm"
+                          value={formData.price}
+                          onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-neutral-700 mb-2">Quantidade em Estoque</label>
+                      <input
+                        type="number"
+                        required={priceType === 'single'}
+                        placeholder="Ex: 50"
+                        className="w-full rounded-2xl border border-neutral-200 bg-white px-5 py-4 text-neutral-900 focus:border-orange-500 focus:ring-0 transition-all shadow-sm"
+                        value={formData.stock}
+                        onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                      />
+                    </div>
+                    <div className="flex items-center gap-3 p-4 rounded-2xl bg-orange-50 border border-orange-100 shadow-sm shadow-orange-600/5">
+                      <div className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+                      <p className="text-[11px] font-bold text-orange-700 leading-tight">Vendas atualizam o estoque automaticamente.</p>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="variation-price"
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    className="md:col-span-2 space-y-6"
+                  >
+                    {complementGroups.map((group, gIdx) => {
+                      if (!group.is_variation) return null;
+                      return (
+                        <div key={gIdx} className="rounded-[32px] border border-neutral-200 bg-white shadow-xl overflow-hidden border-orange-100">
+                          <div className="p-6 bg-orange-50/50 flex items-center justify-between border-b border-orange-100">
+                            <div className="flex-1 max-w-xs">
+                              <label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mb-1 block">Nome da Grade</label>
+                              <input
+                                type="text"
+                                placeholder="Ex: Tamanho ou Sabor"
+                                value={group.name}
+                                onChange={(e) => {
+                                  const updated = [...complementGroups];
+                                  updated[gIdx].name = e.target.value;
+                                  setComplementGroups(updated);
+                                }}
+                                className="w-full text-lg font-bold text-neutral-900 bg-transparent outline-none placeholder:text-orange-200"
+                              />
+                            </div>
+                            <p className="text-[11px] font-bold text-orange-600/60 text-right bg-orange-100/50 px-3 py-1 rounded-full">Configure os preços e fotos abaixo</p>
+                          </div>
+
+                          <div className="p-6 space-y-4">
+                            <div className="grid grid-cols-1 gap-3">
+                              {group.items.map((item, iIdx) => (
+                                <motion.div 
+                                  layout
+                                  key={iIdx} 
+                                  className="flex flex-col sm:flex-row items-center gap-4 p-4 rounded-[24px] bg-neutral-50 border border-neutral-200 group hover:border-orange-300 transition-all"
+                                >
+                                  {/* Seletor de Foto da Galeria */}
+                                  <div className="shrink-0 flex flex-col gap-2">
+                                    <div className="flex flex-wrap gap-1.5 justify-center">
+                                      {imagePreviews.map((preview, pIdx) => (
+                                        <button
+                                          key={pIdx}
+                                          type="button"
+                                          onClick={() => {
+                                            const updated = [...complementGroups];
+                                            updated[gIdx].items[iIdx].image_url = preview;
+                                            setComplementGroups(updated);
+                                          }}
+                                          className={`relative w-10 h-10 rounded-xl overflow-hidden border-2 transition-all ${item.image_url === preview ? 'border-orange-500 scale-110 shadow-lg' : 'border-neutral-200 opacity-40 grayscale hover:grayscale-0 hover:opacity-100'}`}
+                                        >
+                                          <img src={preview} className="w-full h-full object-cover" alt="" />
+                                        </button>
+                                      ))}
+                                      {imagePreviews.length === 0 && (
+                                        <div className="w-10 h-10 rounded-xl border-2 border-dashed border-neutral-200 bg-white flex items-center justify-center text-neutral-300">
+                                          <Plus size={16} />
+                                        </div>
+                                      )}
+                                    </div>
+                                    <span className="text-[9px] font-bold text-center text-neutral-400 uppercase">Vincular Foto</span>
+                                  </div>
+
+                                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-12 gap-3 w-full">
+                                    <div className="sm:col-span-5">
+                                      <input
+                                        type="text"
+                                        placeholder="Opção (Ex: 500ml ou Chocolate)"
+                                        value={item.name}
+                                        onChange={(e) => {
+                                          const updated = [...complementGroups];
+                                          updated[gIdx].items[iIdx].name = e.target.value;
+                                          setComplementGroups(updated);
+                                        }}
+                                        className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm font-bold text-neutral-900 focus:border-orange-500 outline-none"
+                                      />
+                                    </div>
+                                    <div className="sm:col-span-4 relative">
+                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-neutral-400">R$</span>
+                                      <input
+                                        type="number"
+                                        step="0.01"
+                                        placeholder="Preço"
+                                        value={item.price}
+                                        onChange={(e) => {
+                                          const updated = [...complementGroups];
+                                          updated[gIdx].items[iIdx].price = e.target.value;
+                                          setComplementGroups(updated);
+                                        }}
+                                        className="w-full rounded-xl border border-neutral-200 bg-white pl-9 pr-4 py-3 text-sm font-bold text-neutral-900 focus:border-orange-500 outline-none"
+                                      />
+                                    </div>
+                                    <div className="sm:col-span-3">
+                                      <input
+                                        type="number"
+                                        placeholder="Estoque"
+                                        value={item.stock}
+                                        onChange={(e) => {
+                                          const updated = [...complementGroups];
+                                          updated[gIdx].items[iIdx].stock = e.target.value;
+                                          setComplementGroups(updated);
+                                        }}
+                                        className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-3 text-sm font-bold text-neutral-900 focus:border-orange-500 outline-none text-center"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = [...complementGroups];
+                                      updated[gIdx].items = updated[gIdx].items.filter((_, i) => i !== iIdx);
+                                      setComplementGroups(updated);
+                                    }}
+                                    className="h-10 w-10 flex items-center justify-center rounded-full text-neutral-300 hover:bg-white hover:text-red-500 hover:shadow-sm transition-all shadow-none sm:self-center"
+                                  >
+                                    <X size={18} />
+                                  </button>
+                                </motion.div>
+                              ))}
+                            </div>
+                            
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = [...complementGroups];
+                                updated[gIdx].items.push({ name: '', price: '', stock: '' });
+                                setComplementGroups(updated);
+                              }}
+                              className="w-full flex items-center justify-center gap-2 py-4 rounded-[20px] border-2 border-dashed border-orange-200 text-sm font-bold text-orange-600 hover:bg-orange-50 transition-all"
+                            >
+                              <Plus size={18} /> Adicionar Nova Opção de Variação
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </section>
 
-          {/* Disponibilidade por Bairro */}
-          {bairrosAtendidos.length > 0 && (
-            <section className="space-y-4">
-              <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Disponibilidade (Hiperlocal)</h3>
-              <div className="rounded-2xl border border-neutral-200 bg-white p-5 space-y-4">
-                <div className="flex flex-col gap-3">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="radio"
-                      checked={isAllBairros}
-                      onChange={() => setIsAllBairros(true)}
-                      className="w-5 h-5 accent-orange-500 cursor-pointer"
-                    />
-                    <span className="font-bold text-neutral-800">Disponível em todos os bairros da vitrine</span>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="radio"
-                      checked={!isAllBairros}
-                      onChange={() => setIsAllBairros(false)}
-                      className="w-5 h-5 accent-orange-500 cursor-pointer"
-                    />
-                    <span className="font-bold text-neutral-800">Escolher bairros específicos</span>
-                  </label>
-                </div>
-                
-                {!isAllBairros && (
-                  <div className="pt-3 border-t border-neutral-100 flex flex-wrap gap-2">
-                    {bairrosAtendidos.map(b => (
-                      <button
-                        key={b}
-                        type="button"
-                        onClick={() => toggleBairro(b)}
-                        className={`px-4 py-2 rounded-xl text-sm font-bold transition-all border ${selectedBairros.includes(b) ? 'bg-orange-600 border-orange-600 text-white shadow-md' : 'bg-neutral-50 border-neutral-200 text-neutral-600 hover:border-orange-500'}`}
-                      >
-                        {extractBairroName(b)}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </section>
-          )}
-
-          {/* ====== SEÇÃO DE COMPLEMENTOS ====== */}
-          <section className="space-y-4">
+          {/* ====== SEÇÃO DE COMPLEMENTOS ADICIONAIS ====== */}
+          <section className="space-y-4 pt-4 border-t border-neutral-100">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Puzzle size={14} className="text-orange-500" />
-                <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Complementos (Opcional)</h3>
+                <div className="p-2 rounded-xl bg-neutral-100 text-neutral-600">
+                  <Puzzle size={16} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-neutral-900">Complementos Adicionais</h3>
+                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Ex: Granola, Sabores Extras, Caldas</p>
+                </div>
               </div>
               <button
                 type="button"
@@ -563,180 +749,290 @@ export const AddProduct: React.FC = () => {
                     ...prev,
                     { name: '', required: false, max_choices: 1, is_variation: false, items: [] }
                   ]);
-
                   setOpenGroupIndex(complementGroups.length);
                 }}
-                className="flex items-center gap-1.5 text-xs font-bold text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100 px-3 py-1.5 rounded-full transition-all"
+                className="flex items-center gap-1.5 text-xs font-bold text-neutral-500 hover:text-neutral-700 bg-neutral-100 hover:bg-neutral-200 px-4 py-2 rounded-full transition-all shadow-sm"
               >
-                <Plus size={12} /> Novo Grupo
+                <Plus size={14} /> Novo Grupo de Adicionais
               </button>
             </div>
 
-            {complementGroups.length === 0 && (
-              <p className="text-xs text-neutral-400 text-center py-4 border-2 border-dashed border-neutral-200 rounded-2xl">
-                Sem complementos. Adicione grupos como "Tamanho", "Adicionais", etc.
-              </p>
+            {complementGroups.filter(g => !g.is_variation).length === 0 && (
+              <div className="py-8 px-4 border border-dashed border-neutral-200 rounded-[24px] bg-white text-center">
+                <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Sem complementos adicionais</p>
+                <p className="text-[10px] text-neutral-300 mt-1">Clique no botão acima para adicionar opcionais</p>
+              </div>
             )}
 
-            {complementGroups.map((group, gIdx) => (
-              <div key={gIdx} className="rounded-2xl border border-neutral-200 bg-white overflow-hidden">
-                {/* Cabeçalho do grupo */}
-                <div className="p-4 flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setOpenGroupIndex(openGroupIndex === gIdx ? null : gIdx)}
-                    className="flex-1 flex items-center gap-2 text-left"
-                  >
-                    {openGroupIndex === gIdx ? <ChevronUp size={16} className="text-neutral-400 shrink-0" /> : <ChevronDown size={16} className="text-neutral-400 shrink-0" />}
-                    <input
-                      type="text"
-                      placeholder="Nome do grupo (ex: Tamanho)"
-                      value={group.name}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => {
-                        const updated = [...complementGroups];
-                        updated[gIdx].name = e.target.value;
-                        setComplementGroups(updated);
-                      }}
-                      className="flex-1 text-sm font-bold text-neutral-900 bg-transparent outline-none placeholder:text-neutral-400 placeholder:font-normal"
-                    />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setComplementGroups(prev => prev.filter((_, i) => i !== gIdx))}
-                    className="h-7 w-7 flex items-center justify-center rounded-full text-neutral-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-
-                {openGroupIndex === gIdx && (
-                  <div className="px-4 pb-4 space-y-4 border-t border-neutral-100 pt-4">
-                    {/* Configurações do grupo */}
-                    <div className="flex flex-wrap items-center gap-4">
-                      <label className="flex items-center gap-2 cursor-pointer">
+            <div className="space-y-4">
+              {complementGroups.map((group, gIdx) => {
+                if (group.is_variation) return null;
+                return (
+                  <div key={gIdx} className="rounded-[24px] border border-neutral-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                    {/* Cabeçalho do grupo */}
+                    <div className="p-4 flex items-center gap-3 bg-neutral-50/50 border-b border-neutral-100">
+                      <button
+                        type="button"
+                        onClick={() => setOpenGroupIndex(openGroupIndex === gIdx ? null : gIdx)}
+                        className="flex-1 flex items-center gap-2 text-left"
+                      >
+                        {openGroupIndex === gIdx ? <ChevronUp size={16} className="text-neutral-400 shrink-0" /> : <ChevronDown size={16} className="text-neutral-400 shrink-0" />}
                         <input
-                          type="checkbox"
-                          checked={group.is_variation}
+                          type="text"
+                          placeholder="Nome (ex: Coberturas)"
+                          value={group.name}
+                          onClick={(e) => e.stopPropagation()}
                           onChange={(e) => {
                             const updated = [...complementGroups];
-                            updated[gIdx].is_variation = e.target.checked;
-                            // Se for variação, geralmente é obrigatório e 1 escolha
-                            if (e.target.checked) {
-                              updated[gIdx].required = true;
-                              updated[gIdx].max_choices = 1;
-                            }
+                            updated[gIdx].name = e.target.value;
                             setComplementGroups(updated);
                           }}
-                          className="w-4 h-4 accent-orange-600"
+                          className="flex-1 text-sm font-bold text-neutral-900 bg-transparent outline-none placeholder:text-neutral-300"
                         />
-                        <span className="text-xs font-bold text-orange-600">É uma Variação? (ex: Tamanho)</span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={group.required}
-                          onChange={(e) => {
-                            const updated = [...complementGroups];
-                            updated[gIdx].required = e.target.checked;
-                            setComplementGroups(updated);
-                          }}
-                          className="w-4 h-4 accent-orange-500"
-                        />
-                        <span className="text-xs font-bold text-neutral-700">Obrigatório</span>
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-neutral-500">Máx. escolhas:</span>
-                        <input
-                          type="number"
-                          min="1"
-                          value={group.max_choices}
-                          onChange={(e) => {
-                            const updated = [...complementGroups];
-                            updated[gIdx].max_choices = parseInt(e.target.value) || 1;
-                            setComplementGroups(updated);
-                          }}
-                          className="w-16 rounded-xl border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs font-bold text-center focus:border-orange-500 focus:outline-none"
-                        />
-                      </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setComplementGroups(prev => prev.filter((_, i) => i !== gIdx))}
+                        className="h-8 w-8 flex items-center justify-center rounded-full text-neutral-300 hover:bg-red-50 hover:text-red-500 transition-colors"
+                      >
+                        <X size={16} />
+                      </button>
                     </div>
 
-
-                    {/* Itens do grupo */}
-                    <div className="space-y-2">
-                      {group.items.map((item, iIdx) => (
-                        <div key={iIdx} className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            placeholder="Nome (ex: Grande)"
-                            value={item.name}
-                            onChange={(e) => {
-                              const updated = [...complementGroups];
-                              updated[gIdx].items[iIdx].name = e.target.value;
-                              setComplementGroups(updated);
-                            }}
-                            className="flex-1 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-orange-500 focus:outline-none"
-                          />
-                          <div className="relative">
-                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-neutral-400 font-bold">R$</span>
+                    {openGroupIndex === gIdx && (
+                      <motion.div 
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        className="px-4 pb-4 space-y-4 pt-4"
+                      >
+                        {/* Configurações do grupo */}
+                        <div className="flex flex-wrap items-center justify-between gap-4 px-1">
+                          <label className="flex items-center gap-2 cursor-pointer bg-neutral-100/50 px-3 py-1.5 rounded-xl">
                             <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              placeholder="0,00"
-                              value={item.price}
+                              type="checkbox"
+                              checked={group.required}
                               onChange={(e) => {
                                 const updated = [...complementGroups];
-                                updated[gIdx].items[iIdx].price = e.target.value;
+                                updated[gIdx].required = e.target.checked;
                                 setComplementGroups(updated);
                               }}
-                              className="w-24 rounded-xl border border-neutral-200 bg-neutral-50 pl-7 pr-2 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-orange-500 focus:outline-none"
+                              className="w-4 h-4 accent-neutral-900 rounded"
                             />
-                          </div>
-                          <div className="w-20">
+                            <span className="text-[11px] font-bold text-neutral-700">Obrigatório</span>
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Max Seleções:</span>
                             <input
                               type="number"
-                              placeholder="Qtd."
-                              value={item.stock}
+                              min="1"
+                              value={group.max_choices}
                               onChange={(e) => {
                                 const updated = [...complementGroups];
-                                updated[gIdx].items[iIdx].stock = e.target.value;
+                                updated[gIdx].max_choices = parseInt(e.target.value) || 1;
                                 setComplementGroups(updated);
                               }}
-                              className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-2 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-orange-500 focus:outline-none text-center"
+                              className="w-12 rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs font-bold text-center focus:border-orange-500 outline-none"
                             />
                           </div>
+                        </div>
 
+                        {/* Itens do grupo */}
+                        <div className="space-y-2">
+                          {group.items.map((item, iIdx) => (
+                            <div key={iIdx} className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                placeholder="Item (ex: Granola)"
+                                value={item.name}
+                                onChange={(e) => {
+                                  const updated = [...complementGroups];
+                                  updated[gIdx].items[iIdx].name = e.target.value;
+                                  setComplementGroups(updated);
+                                }}
+                                className="flex-1 rounded-xl border border-neutral-100 bg-neutral-50 px-3 py-2 text-sm text-neutral-900 focus:border-orange-500 focus:bg-white transition-all outline-none"
+                              />
+                              <div className="relative">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-neutral-400">R$</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="0,00"
+                                  value={item.price}
+                                  onChange={(e) => {
+                                    const updated = [...complementGroups];
+                                    updated[gIdx].items[iIdx].price = e.target.value;
+                                    setComplementGroups(updated);
+                                  }}
+                                  className="w-20 rounded-xl border border-neutral-100 bg-neutral-50 pl-6 pr-2 py-2 text-sm text-neutral-900 focus:border-orange-500 focus:bg-white transition-all outline-none"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = [...complementGroups];
+                                  updated[gIdx].items = updated[gIdx].items.filter((_, i) => i !== iIdx);
+                                  setComplementGroups(updated);
+                                }}
+                                className="h-8 w-8 flex items-center justify-center rounded-full text-neutral-300 hover:bg-neutral-100 hover:text-neutral-500 transition-colors shrink-0"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
                           <button
                             type="button"
                             onClick={() => {
                               const updated = [...complementGroups];
-                              updated[gIdx].items = updated[gIdx].items.filter((_, i) => i !== iIdx);
+                              updated[gIdx].items.push({ name: '', price: '', stock: '' });
                               setComplementGroups(updated);
                             }}
-                            className="h-8 w-8 flex items-center justify-center rounded-full text-neutral-400 hover:bg-red-50 hover:text-red-500 transition-colors shrink-0"
+                            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border-2 border-dashed border-neutral-100 text-xs font-bold text-neutral-400 hover:border-orange-200 hover:text-orange-500 hover:bg-orange-50/20 transition-all mt-2"
                           >
-                            <X size={14} />
+                            <Plus size={14} /> Adicionar Item
                           </button>
                         </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const updated = [...complementGroups];
-                          updated[gIdx].items.push({ name: '', price: '', stock: '' });
-                          setComplementGroups(updated);
-                        }}
-
-                        className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl border-2 border-dashed border-neutral-200 text-xs font-bold text-neutral-400 hover:border-orange-400 hover:text-orange-500 transition-all"
-                      >
-                        <Plus size={12} /> Adicionar item
-                      </button>
-                    </div>
+                      </motion.div>
+                    )}
                   </div>
-                )}
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Disponibilidade por Bairro - Minimalista */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.15em]">Disponibilidade Regional</h3>
+              <span className="text-[9px] font-bold text-neutral-300 uppercase">Opcional</span>
+            </div>
+            
+            <div className="rounded-[24px] bg-neutral-100/50 p-4 border border-transparent hover:border-neutral-200 transition-all">
+              {bairrosAtendidos.length > 0 ? (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsAllBairros(true)}
+                      className={`flex-1 py-2 px-3 rounded-xl text-[11px] font-bold transition-all ${isAllBairros ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+                    >
+                      Todos os Bairros
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAllBairros(false)}
+                      className={`flex-1 py-2 px-3 rounded-xl text-[11px] font-bold transition-all ${!isAllBairros ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+                    >
+                      Bairros Específicos
+                    </button>
+                  </div>
+                  
+                  {!isAllBairros && (
+                    <div className="flex flex-wrap gap-1.5 pt-2">
+                      {bairrosAtendidos.map(b => (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => toggleBairro(b)}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold transition-all border ${selectedBairros.includes(b) ? 'bg-orange-600 border-orange-600 text-white shadow-sm' : 'bg-white border-neutral-100 text-neutral-400 hover:border-orange-200'}`}
+                        >
+                          {extractBairroName(b)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[10px] font-bold text-neutral-400 text-center py-1">
+                  Exibição padrão na sua localização principal.
+                </p>
+              )}
+            </div>
+          </section>
+
+          {/* Categoria do Produto - Sistema Inteligente */}
+          <section className="space-y-4">
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-[10px] font-bold text-neutral-400 uppercase tracking-[0.15em]">Categorização</h3>
+              <p className="text-[9px] font-bold text-neutral-300 uppercase">Organização Global</p>
+            </div>
+            
+            <div className="rounded-[32px] border border-neutral-200 bg-white p-6 space-y-6 shadow-sm">
+              <div className="space-y-3">
+                <label className="block text-sm font-bold text-neutral-700">Escolha uma categoria</label>
+                
+                {/* Categorias Populares / Existentes como Chips */}
+                <div className="flex flex-wrap gap-2">
+                  {categories.map(cat => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setFormData({ ...formData, category_id: cat.id });
+                        setCustomCategory('');
+                      }}
+                      className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all border ${formData.category_id === cat.id ? 'bg-neutral-900 border-neutral-900 text-white shadow-md' : 'bg-neutral-50 border-neutral-100 text-neutral-500 hover:border-neutral-200'}`}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                  
+                  {/* Se o banco estiver vazio, mostra sugestões populares */}
+                  {categories.length === 0 && popularCategories.map(cat => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => {
+                        setFormData({ ...formData, category_id: 'new' });
+                        setCustomCategory(cat);
+                      }}
+                      className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all border ${customCategory === cat ? 'bg-orange-600 border-orange-600 text-white shadow-md' : 'bg-orange-50/50 border-orange-100 text-orange-600/60 hover:border-orange-200'}`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormData({ ...formData, category_id: 'new' });
+                      setCustomCategory('');
+                    }}
+                    className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all border flex items-center gap-1.5 ${formData.category_id === 'new' && !popularCategories.includes(customCategory) ? 'bg-orange-600 border-orange-600 text-white shadow-md' : 'bg-white border-dashed border-neutral-300 text-neutral-400 hover:border-orange-500 hover:text-orange-500'}`}
+                  >
+                    <Plus size={14} /> Outra...
+                  </button>
+                </div>
               </div>
-            ))}
+
+              <AnimatePresence>
+                {formData.category_id === 'new' && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="pt-4 border-t border-neutral-100 space-y-3"
+                  >
+                    <label className="block text-[11px] font-extrabold text-orange-600 uppercase tracking-widest">Nome da Nova Categoria</label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Ex: Artesanato, Doces Caseiros..."
+                        className="w-full rounded-2xl border-2 border-orange-100 bg-orange-50/20 px-5 py-4 text-sm font-bold text-neutral-900 focus:border-orange-500 focus:bg-white outline-none transition-all"
+                        value={customCategory}
+                        onChange={(e) => setCustomCategory(e.target.value)}
+                      />
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                        <Puzzle size={18} className="text-orange-300" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-neutral-400 font-medium leading-relaxed">
+                      Sua sugestão ajudará a organizar a vitrine para todos os usuários do Sovix.
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </section>
           <div className="pt-8 flex flex-col sm:flex-row gap-4">
             <button
