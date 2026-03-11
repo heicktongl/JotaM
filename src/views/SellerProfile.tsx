@@ -203,18 +203,20 @@ export const SellerProfile: React.FC = () => {
         // Buscar horários do prestador
         const { data: availData } = await supabase.from('provider_availability').select('*').eq('provider_id', targetId).order('day_of_week', { ascending: true });
         setAvailability(availData ?? []);
-
-        // Buscar fotos do portfólio
-        const { data: portfolioData } = await supabase
-          .from('provider_portfolio_photos')
-          .select('url')
-          .eq('provider_id', targetId)
-          .order('position', { ascending: true });
-        setPortfolioPhotos(portfolioData?.map(p => p.url) ?? []);
       }
 
       setProducts(productsData);
       setServices(servicesData);
+
+      // Buscar fotos do portfólio (Lojista ou Prestador)
+      const portfolioTable = targetType === 'seller' ? 'seller_portfolio_photos' : 'provider_portfolio_photos';
+      const portfolioFK = targetType === 'seller' ? 'seller_id' : 'provider_id';
+      const { data: portfolioData } = await supabase
+        .from(portfolioTable)
+        .select('url')
+        .eq(portfolioFK, targetId)
+        .order('position', { ascending: true });
+      setPortfolioPhotos(portfolioData?.map(p => p.url) ?? []);
 
       // Buscar seguidores e locations apenas para sellers
       if (targetType === 'seller') {

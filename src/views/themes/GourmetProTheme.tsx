@@ -43,7 +43,7 @@ export const GourmetProTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
     const getGradientSeed = (name: string) => {
         const colors = [
             'from-purple-600 to-indigo-600',
-            'from-orange-500 to-rose-500',
+            'from-neutral-800 to-black',
             'from-pink-500 to-purple-500',
             'from-emerald-500 to-teal-500',
             'from-blue-600 to-cyan-500'
@@ -64,17 +64,20 @@ export const GourmetProTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
     return (
         <div className="min-h-screen bg-[#FFF5F7] dark:bg-[#1A1016] text-[#1F2937] dark:text-[#F3F4F6] font-sans antialiased pb-20 selection:bg-[#7C3AED] selection:text-white overflow-x-hidden">
             {/* Elegant Header / Cover */}
-            <div className={`relative w-full h-80 overflow-hidden rounded-b-[2.5rem] shadow-2xl ${!data.coverUrl ? `bg-gradient-to-br ${fallbackGradient}` : ''}`}>
-                {data.coverUrl && (
+            <div className="relative w-full h-80 overflow-hidden rounded-b-[2.5rem] shadow-2xl bg-neutral-900">
+                {data.coverUrl ? (
                     <img 
                         alt="Capa Gourmet" 
                         className="absolute inset-0 w-full h-full object-cover" 
                         src={data.coverUrl}
                         referrerPolicy="no-referrer"
                     />
+                ) : (
+                    <div className={`absolute inset-0 bg-gradient-to-br ${fallbackGradient}`}></div>
                 )}
-                {/* Gradient Overlay: subtle bottom-up for legibility only */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"></div>
+                
+                {/* Gradient Overlay: subtle bottom-up for legibility only, zero orange at top */}
+                <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
                 
                 {/* Top Actions */}
                 <div className="absolute top-6 left-6 flex items-center gap-3">
@@ -150,7 +153,7 @@ export const GourmetProTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
                 <div className="mt-8 pl-6">
                     <div className="flex justify-between items-center pr-6 mb-4">
                         <h2 className="font-display text-2xl font-bold text-gray-900 dark:text-white" style={{ fontFamily: '"Playfair Display", serif' }}>
-                            Experiência Gourmet
+                            Fotos da Vitrine
                         </h2>
                         <span className="text-purple-600 dark:text-purple-400 text-xs font-bold uppercase tracking-wider">Galeria</span>
                     </div>

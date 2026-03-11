@@ -429,6 +429,8 @@ export const SellerSetup: React.FC = () => {
             return;
         }
 
+        let sellerId = existingSellerId;
+
         try {
             if (existingSellerId) {
                 // Atualiza
@@ -465,7 +467,7 @@ export const SellerSetup: React.FC = () => {
                 }));
                 await supabase.from('store_locations').insert(locationInserts);
 
-                navigate('/profile');
+                // (A navegação foi movida para o final para garantir salvamento de horários)
             } else {
                 // Cria loja e locs
                 const { data: sellerData, error: insertError } = await supabase
@@ -479,6 +481,8 @@ export const SellerSetup: React.FC = () => {
                     })
                     .select('id')
                     .single();
+
+                if (sellerData) sellerId = sellerData.id;
 
                 if (insertError) {
                     if (insertError.code === '23505') {
@@ -519,8 +523,6 @@ export const SellerSetup: React.FC = () => {
                 }
             }
 
-            const sellerId = existingSellerId || (await supabase.from('sellers').select('id').eq('user_id', user.id).single()).data?.id;
-
             if (sellerId) {
                 // 3) Salvar horários de funcionamento
                 const availabilityRows = availability.map((slot) => ({
@@ -548,8 +550,9 @@ export const SellerSetup: React.FC = () => {
             }
 
             navigate('/profile');
-        } catch {
-            setError('Ocorreu um erro ao salvar a loja.');
+        } catch (err: any) {
+            console.error('Erro crítico ao salvar loja:', err);
+            setError(err.message || 'Ocorreu um erro ao salvar a loja.');
             setIsLoading(false);
         }
     };

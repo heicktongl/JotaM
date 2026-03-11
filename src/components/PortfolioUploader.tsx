@@ -21,28 +21,35 @@ interface PhotoItem {
 
 interface PortfolioUploaderProps {
     uid: string;
-    providerId: string | null;
+    providerId?: string | null;
+    sellerId?: string | null;
+    type?: 'provider' | 'seller';
     onPhotosChange?: (urls: string[]) => void;
 }
 
 export const PortfolioUploader: React.FC<PortfolioUploaderProps> = ({
     uid,
     providerId,
+    sellerId,
+    type = 'provider',
     onPhotosChange,
 }) => {
+    const targetId = type === 'seller' ? sellerId : providerId;
+    const tableName = type === 'seller' ? 'seller_portfolio_photos' : 'provider_portfolio_photos';
+    const foreignKey = type === 'seller' ? 'seller_id' : 'provider_id';
     const [photos, setPhotos] = useState<PhotoItem[]>([]);
     const [isLoadingExisting, setIsLoadingExisting] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
     // Carrega fotos existentes do banco quando providerId estiver disponível
     const loadExistingPhotos = useCallback(async () => {
-        if (!providerId) return;
+        if (!targetId) return;
         setIsLoadingExisting(true);
         try {
             const { data, error } = await supabase
-                .from('provider_portfolio_photos')
+                .from(tableName)
                 .select('id, url, position')
-                .eq('provider_id', providerId)
+                .eq(foreignKey, targetId)
                 .order('position', { ascending: true });
 
             if (error) throw error;
@@ -54,7 +61,7 @@ export const PortfolioUploader: React.FC<PortfolioUploaderProps> = ({
         } finally {
             setIsLoadingExisting(false);
         }
-    }, [providerId]);
+    }, [targetId, tableName, foreignKey]);
 
     useEffect(() => {
         loadExistingPhotos();
@@ -134,14 +141,14 @@ export const PortfolioUploader: React.FC<PortfolioUploaderProps> = ({
 
             const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path);
 
-            // Se providerId disponível, salva no banco
+            // Se targetId disponível, salva no banco
             let savedId: string | undefined;
-            if (providerId) {
+            if (targetId) {
                 const position = positionOverride ?? item.position;
                 const { data: inserted, error: insertError } = await supabase
-                    .from('provider_portfolio_photos')
+                    .from(tableName)
                     .insert({
-                        provider_id: providerId,
+                        [foreignKey]: targetId,
                         url: publicUrl,
                         position,
                     })
@@ -192,10 +199,10 @@ export const PortfolioUploader: React.FC<PortfolioUploaderProps> = ({
         }
 
         // Se está salva no banco, deleta
-        if (photo.id && providerId) {
+        if (photo.id && targetId) {
             try {
                 await supabase
-                    .from('provider_portfolio_photos')
+                    .from(tableName)
                     .delete()
                     .eq('id', photo.id);
 
@@ -323,8 +330,8 @@ export const PortfolioUploader: React.FC<PortfolioUploaderProps> = ({
                 </div>
             </div>
 
-            {/* Aviso quando sem providerId (novo perfil) */}
-            {!providerId && totalPhotos > 0 && (
+            {/* Aviso quando sem targetId (novo perfil) */}
+            {!targetId && totalPhotos > 0 && (
                 <p className="text-[10px] text-amber-600 font-bold bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
                     As fotos serão salvas automaticamente após a criação do seu perfil.
                 </p>
