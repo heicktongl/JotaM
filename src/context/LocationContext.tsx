@@ -257,7 +257,7 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const displayLocation = location
-    ? scope === 'condo' ? location.condo
+    ? scope === 'condo' ? `${location.condo} • ${location.neighborhood}`
       : scope === 'neighborhood' ? location.neighborhood
         : location.city
     : 'Definir localização';

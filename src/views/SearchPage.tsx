@@ -261,13 +261,11 @@ export const SearchPage: React.FC = () => {
         let topResults: TopStorefront[] = [];
         const usedIds = new Set<string>();
 
-        const isCompleteSeller = (s: any) =>
-          s.avatar_url && s.cover_url && s.bio && s.whatsapp &&
-          s.products?.length > 0 && s.seller_availability?.length > 0;
+        const isCompleteSeller = (s: any) => 
+          s.username && (s.store_name || s.name); 
 
-        const isCompleteProvider = (p: any) =>
-          p.avatar_url && p.cover_url && p.bio && p.whatsapp &&
-          p.services?.length > 0 && p.provider_availability?.length > 0;
+        const isCompleteProvider = (p: any) => 
+          p.username && p.name;
 
         const formatSellers = (data: any[]): TopStorefront[] =>
           data.filter(s => s.username && isCompleteSeller(s)).map((s) => {
@@ -296,24 +294,32 @@ export const SearchPage: React.FC = () => {
           }
         };
 
-        // SIS-LOCA-HIPERLOCAL: Filtro rigoroso para top vitrines
+        // SIS-LOCA-HIPERLOCAL: Filtro unificado para qualquer vitrine no bairro (Lojas + Prestadores)
         if (neighborhoodFilter) {
+          // 1. Busca Lojas (Sellers)
           let queryLocs = supabase.from('store_locations').select('seller_id').ilike('neighborhood', `%${neighborhoodFilter}%`);
-
-          // Sempre travar na cidade também para evitar vazamento
-          if (cityFilter) {
-            queryLocs = queryLocs.ilike('city', `%${cityFilter}%`);
-          }
-
+          if (cityFilter) queryLocs = queryLocs.ilike('city', `%${cityFilter}%`);
+          
           const { data: locs } = await queryLocs;
           const sIds = (locs || []).map((l: any) => l.seller_id).filter(Boolean);
+          
           if (sIds.length > 0) {
-            const { data } = await supabase.from('sellers')
-              .select('id, store_name, username, avatar_url, cover_url, bio, whatsapp, views, store_locations(neighborhood, city, is_primary), products(id), seller_availability(id)')
-              .in('id', sIds).not('username', 'is', null).order('views', { ascending: false }).limit(20);
-            if (data) addResults(formatSellers(data));
+            const { data: sellersData } = await supabase.from('sellers')
+              .select('id, store_name, username, avatar_url, cover_url, bio, whatsapp, views, store_locations(neighborhood, city, is_primary)')
+              .in('id', sIds).not('username', 'is', null).order('views', { ascending: false });
+            if (sellersData) addResults(formatSellers(sellersData));
           }
-          if (topResults.length > 0) setTopSectionTitle(`Mais acessadas em ${neighborhoodFilter}`);
+
+          // 2. Busca Prestadores (Service Providers)
+          let provQuery = supabase.from('service_providers')
+            .select('id, name, username, avatar_url, bio, neighborhood, city, whatsapp')
+            .ilike('neighborhood', `%${neighborhoodFilter}%`);
+          if (cityFilter) provQuery = provQuery.ilike('city', `%${cityFilter}%`);
+          
+          const { data: provsData } = await provQuery.not('username', 'is', null).limit(10);
+          if (provsData) addResults(formatProviders(provsData));
+
+          if (topResults.length > 0) setTopSectionTitle(`Destaques em ${neighborhoodFilter}`);
         }
 
         if (topResults.length < 7 && cityFilter) {
@@ -495,7 +501,7 @@ export const SearchPage: React.FC = () => {
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles size={16} className="text-orange-500" />
                 <h2 className="font-display text-lg font-bold text-neutral-900">
-                  Destaques da semana em {neighborhoodLabel}
+                  Destaques da semana {neighborhoodFilter ? `em ${neighborhoodFilter}` : `na sua região`}
                 </h2>
               </div>
               {results.products.length === 0 && results.services.length === 0 && !isSearching ? (
@@ -508,23 +514,39 @@ export const SearchPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {[...results.services, ...results.products]
-                    .map(item => ({
-                      ...item,
-                      performanceScore: 
-                        ((item.views || 0) * 1) + 
-                        ((item.cart_count || 0) * 5) + 
-                        ((item.rating || 5) * 10)
-                    }))
-                    .sort((a, b) => b.performanceScore - a.performanceScore)
-                    .slice(0, 10)
-                    .map((item, idx) => (
-                      <SISItemCard 
-                        key={`${item.type}-${item.id}`} 
-                        item={item} 
-                        rank={idx + 1}
-                      />
-                    ))}
+                  {(() => {
+                    const safeNormalize = (b: string | null | undefined) => 
+                      b ? b.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim() : '';
+                    
+                    const userBairro = safeNormalize(neighborhoodFilter);
+
+                    return [...results.services, ...results.products]
+                      .map(item => {
+                        const itemBairro = safeNormalize(item.neighborhood);
+                        const isLocal = userBairro && itemBairro === userBairro;
+                        
+                        // SIS-LOCA-SOBERANIA: Bônus massivo para o bairro atual
+                        const proximityBonus = isLocal ? 1000000 : 0;
+
+                        return {
+                          ...item,
+                          performanceScore: 
+                            proximityBonus +
+                            ((item.views || 0) * 1) + 
+                            ((item.cart_count || 0) * 5) + 
+                            ((item.rating || 5) * 10)
+                        };
+                      })
+                      .sort((a, b) => b.performanceScore - a.performanceScore)
+                      .slice(0, 10)
+                      .map((item, idx) => (
+                        <SISItemCard 
+                          key={`${item.type}-${item.id}`} 
+                          item={item} 
+                          rank={idx + 1}
+                        />
+                      ));
+                  })()}
                 </div>
               )}
             </section>

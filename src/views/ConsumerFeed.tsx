@@ -65,9 +65,32 @@ export const ConsumerFeed: React.FC = () => {
         const svcSelect = 'id, name, price, image_url, category_id, created_at, city, neighborhood, bairros_disponiveis, service_providers(name, rating, bairros_atendidos)';
         const postSelect = '*';
 
-        let prodQuery = supabase.from('products').select(prodSelect).eq('is_active', true).order('created_at', { ascending: false }).limit(200);
-        let svcQuery = supabase.from('services').select(svcSelect).eq('is_active', true).order('created_at', { ascending: false }).limit(200);
-        let postQuery = supabase.from('posts').select(postSelect).order('created_at', { ascending: false }).limit(200);
+        const userCity = location?.city || '';
+        const userBairro = location?.neighborhood && location.neighborhood !== 'Bairro Desconhecido' ? location.neighborhood : '';
+
+        let prodQuery = supabase.from('products').select(prodSelect).eq('is_active', true);
+        let svcQuery = supabase.from('services').select(svcSelect).eq('is_active', true);
+        let postQuery = supabase.from('posts').select(postSelect);
+
+        if (userCity) {
+          prodQuery = prodQuery.eq('city', userCity);
+          svcQuery = svcQuery.eq('city', userCity);
+          postQuery = postQuery.eq('city', userCity);
+        }
+
+        if (scope !== 'city' && userBairro) {
+          // Para posts, o bairro é um campo simples
+          postQuery = postQuery.eq('neighborhood', userBairro);
+          
+          // Para produtos e serviços, precisamos considerar também o array de bairros_disponiveis.
+          // Como o Supabase não faz OR complexo entre colunas de forma simples via query builder básico sem RPC ou filtros de string,
+          // manteremos a filtragem refinada de bairro no front para garantir o match com o array bairros_disponiveis (SIS-LOCA),
+          // mas a trava de CIDADE no servidor já reduz drasticamente o volume e resolve o problema de vazamento global.
+        }
+
+        prodQuery = prodQuery.order('created_at', { ascending: false }).limit(200);
+        svcQuery = svcQuery.order('created_at', { ascending: false }).limit(200);
+        postQuery = postQuery.order('created_at', { ascending: false }).limit(200);
 
         const [prodResult, svcResult, postResult] = await Promise.all([prodQuery, svcQuery, postQuery]);
 
@@ -76,16 +99,16 @@ export const ConsumerFeed: React.FC = () => {
         let finalPosts = (postResult.data ?? []) as unknown as FeedPost[];
 
         if (location) {
-          const userCity = location.city ? normalizeBairro(location.city) : '';
-          const userBairro = location.neighborhood && location.neighborhood !== 'Bairro Desconhecido' ? normalizeBairro(location.neighborhood) : '';
+          const normalizedUserCity = normalizeBairro(location.city);
+          const normalizedUserBairro = userBairro ? normalizeBairro(userBairro) : '';
           
           finalProducts = finalProducts.filter(p => {
              const baseCity = normalizeBairro(p.city);
-             if (userCity && baseCity !== userCity) return false;
-             if (scope !== 'city' && userBairro) {
+             if (normalizedUserCity && baseCity !== normalizedUserCity) return false;
+             if (scope !== 'city' && normalizedUserBairro) {
                const baseBairro = normalizeBairro(p.neighborhood);
-               if (baseBairro === userBairro) return true;
-               if (p.bairros_disponiveis && p.bairros_disponiveis.some(b => normalizeBairro(extractBairroName(b)) === userBairro)) return true;
+               if (baseBairro === normalizedUserBairro) return true;
+               if (p.bairros_disponiveis && p.bairros_disponiveis.some(b => normalizeBairro(extractBairroName(b)) === normalizedUserBairro)) return true;
                return false;
              }
              return true;
@@ -93,11 +116,11 @@ export const ConsumerFeed: React.FC = () => {
 
           finalServices = finalServices.filter(s => {
              const baseCity = normalizeBairro(s.city);
-             if (userCity && baseCity !== userCity) return false;
-             if (scope !== 'city' && userBairro) {
+             if (normalizedUserCity && baseCity !== normalizedUserCity) return false;
+             if (scope !== 'city' && normalizedUserBairro) {
                const baseBairro = normalizeBairro(s.neighborhood);
-               if (baseBairro === userBairro) return true;
-               if (s.bairros_disponiveis && s.bairros_disponiveis.some(b => normalizeBairro(extractBairroName(b)) === userBairro)) return true;
+               if (baseBairro === normalizedUserBairro) return true;
+               if (s.bairros_disponiveis && s.bairros_disponiveis.some(b => normalizeBairro(extractBairroName(b)) === normalizedUserBairro)) return true;
                return false;
              }
              return true;
@@ -105,11 +128,11 @@ export const ConsumerFeed: React.FC = () => {
 
           finalPosts = finalPosts.filter(p => {
             const baseCity = normalizeBairro(p.city);
-            if (userCity && baseCity !== userCity) return false;
+            if (normalizedUserCity && baseCity !== normalizedUserCity) return false;
             
-            if (scope !== 'city' && userBairro) {
+            if (scope !== 'city' && normalizedUserBairro) {
               const baseBairro = normalizeBairro(p.neighborhood);
-              return baseBairro === userBairro;
+              return baseBairro === normalizedUserBairro;
             }
             return true;
           });
