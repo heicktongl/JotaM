@@ -20,6 +20,7 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { AvatarUploader } from '../components/AvatarUploader';
+import { PortfolioUploader } from '../components/PortfolioUploader';
 import { getDetailedLocation } from '../utils/geolocation';
 import { SISBairro, extractBairroName, fetchNeighborhoodsByCity } from '../utils/sis-loca';
 
@@ -86,6 +87,7 @@ export const SellerSetup: React.FC = () => {
     const [newBairroForm, setNewBairroForm] = useState<SISBairro>({ bairro: '', rua: '', numero: '', complemento: '' });
     const [bairroSuggestions, setBairroSuggestions] = useState<string[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
+    const [portfolioUrls, setPortfolioUrls] = useState<string[]>([]);
     const MAX_BAIRROS = 3;
 
     // Buscar Sugestões de Bairro (Sis-Loca)
@@ -436,7 +438,8 @@ export const SellerSetup: React.FC = () => {
                         store_name: storeName.trim(),
                         username: cleanUsername,
                         theme_id: themeId,
-                        bairros_atendidos: bairrosAtendidos
+                        bairros_atendidos: bairrosAtendidos,
+                        updated_at: new Date().toISOString()
                     })
                     .eq('id', existingSellerId);
 
@@ -532,6 +535,16 @@ export const SellerSetup: React.FC = () => {
                 await supabase
                     .from('seller_availability')
                     .upsert(availabilityRows, { onConflict: 'seller_id,day_of_week' });
+
+                // 4) Se for uma nova loja, salvar as fotos do portfólio que já foram enviadas ao storage
+                if (!existingSellerId && portfolioUrls.length > 0) {
+                    const portfolioInserts = portfolioUrls.map((url, index) => ({
+                        seller_id: sellerId,
+                        url,
+                        position: index
+                    }));
+                    await supabase.from('seller_portfolio_photos').insert(portfolioInserts);
+                }
             }
 
             navigate('/profile');
@@ -660,6 +673,28 @@ export const SellerSetup: React.FC = () => {
                         <p className="text-xs text-neutral-500 mt-2 ml-1 font-medium">
                             Seu endereço exclusivo será: <span className="text-orange-600">sovix.com.br/@{username || 'nome_da_vitrine'}</span>
                         </p>
+                    </div>
+
+                    {/* ====== FOTOS DA VITRINE ====== */}
+                    <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm">
+                        <div className="flex items-start gap-3 mb-6">
+                            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center text-white shadow-lg shadow-orange-500/20 shrink-0">
+                                <Camera size={20} />
+                            </div>
+                            <div>
+                                <h3 className="text-sm font-black text-neutral-900">Fotos da Vitrine</h3>
+                                <p className="text-[11px] text-neutral-400 font-medium">
+                                    Adicione até 6 fotos para mostrar seus produtos ou seu espaço.
+                                </p>
+                            </div>
+                        </div>
+
+                        <PortfolioUploader 
+                            uid={user.id} 
+                            sellerId={existingSellerId} 
+                            type="seller" 
+                            onPhotosChange={setPortfolioUrls} 
+                        />
                     </div>
 
                     {/* Separador de Tema e Seleção - Apenas para vitrines já existentes */}
@@ -1212,6 +1247,7 @@ export const SellerSetup: React.FC = () => {
                             </div>
                         </div>
                     </div>
+
 
                     {/* Botão criar */}
                     <button
