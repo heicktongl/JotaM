@@ -73,8 +73,8 @@ export const GourmetProTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
                         referrerPolicy="no-referrer"
                     />
                 )}
-                {/* Gradient Overlay based on HTML design */}
-                <div className="absolute inset-0 bg-gradient-to-b from-orange-500/60 via-purple-900/30 to-[#FFF5F7] dark:to-[#1A1016]"></div>
+                {/* Gradient Overlay: subtle bottom-up for legibility only */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"></div>
                 
                 {/* Top Actions */}
                 <div className="absolute top-6 left-6 flex items-center gap-3">
