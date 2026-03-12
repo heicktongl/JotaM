@@ -234,7 +234,7 @@ export const ConsumerFeed: React.FC = () => {
     <div className="min-h-screen pb-24 flex flex-col overflow-x-hidden">
       {/* Header Section */}
       <header 
-        className="w-full bg-white dark:bg-neutral-900 pt-6 pb-4 px-6 border-b border-neutral-200/50 dark:border-neutral-800/50"
+        className="w-full bg-white dark:bg-neutral-900 pt-6 pb-4 px-6"
       >
         <div className="mx-auto max-w-7xl flex items-center justify-between">
           <Logo />
@@ -247,36 +247,36 @@ export const ConsumerFeed: React.FC = () => {
         </div>
       )}
 
-      {/* Filters - Now scrolling with the page */}
+      {/* Filters - Minimalist & Elegant */}
       {location && (
-        <div className="mx-auto w-full bg-white dark:bg-neutral-900 border-b border-neutral-200/50 dark:border-neutral-800/50">
+        <div className="mx-auto w-full bg-white dark:bg-neutral-900">
           <div className="max-w-7xl mx-auto px-6 py-4">
             <div className="flex items-center gap-3 overflow-x-auto hide-scrollbar">
               <motion.button
                 whileTap={{ scale: 0.96 }}
                 onClick={() => setActiveTab('all')}
-                className={`whitespace-nowrap rounded-2xl px-6 py-2.5 text-sm font-extrabold transition-all ${activeTab === 'all' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30' : 'bg-white dark:bg-black text-neutral-600 dark:text-white hover:bg-neutral-50 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 shadow-sm'}`}
+                className={`whitespace-nowrap rounded-2xl px-6 py-2.5 text-sm font-extrabold transition-all ${activeTab === 'all' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30' : 'bg-neutral-100/50 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-white/10'}`}
               >
                 Tudo
               </motion.button>
               <motion.button
                 whileTap={{ scale: 0.96 }}
                 onClick={() => setActiveTab('products')}
-                className={`whitespace-nowrap rounded-2xl px-6 py-2.5 text-sm font-extrabold transition-all ${activeTab === 'products' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30' : 'bg-white dark:bg-black text-neutral-600 dark:text-white hover:bg-neutral-50 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 shadow-sm'}`}
+                className={`whitespace-nowrap rounded-2xl px-6 py-2.5 text-sm font-extrabold transition-all ${activeTab === 'products' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30' : 'bg-neutral-100/50 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-white/10'}`}
               >
                 Produtos
               </motion.button>
               <motion.button
                 whileTap={{ scale: 0.96 }}
                 onClick={() => setActiveTab('services')}
-                className={`whitespace-nowrap rounded-2xl px-6 py-2.5 text-sm font-extrabold transition-all ${activeTab === 'services' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30' : 'bg-white dark:bg-black text-neutral-600 dark:text-white hover:bg-neutral-50 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 shadow-sm'}`}
+                className={`whitespace-nowrap rounded-2xl px-6 py-2.5 text-sm font-extrabold transition-all ${activeTab === 'services' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30' : 'bg-neutral-100/50 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-white/10'}`}
               >
                 Serviços
               </motion.button>
-              <div className="h-6 w-px bg-neutral-200 dark:bg-neutral-800 mx-1" />
+              
               <motion.button 
                 whileTap={{ scale: 0.96 }}
-                className="flex items-center gap-2 rounded-2xl bg-white dark:bg-black px-6 py-2.5 text-sm font-extrabold text-neutral-600 dark:text-white hover:bg-neutral-50 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-800 shadow-sm transition-all"
+                className="flex items-center gap-2 rounded-2xl bg-neutral-100/50 dark:bg-white/5 px-6 py-2.5 text-sm font-extrabold text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-white/10 transition-all"
               >
                 <SlidersHorizontal size={16} />
                 Filtros
