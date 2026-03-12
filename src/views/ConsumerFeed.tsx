@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { extractBairroName } from '../utils/sis-loca';
 import { SlidersHorizontal, PackageSearch, MapPin, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -45,6 +45,39 @@ export const ConsumerFeed: React.FC = () => {
   const [services, setServices] = React.useState<FeedService[]>([]);
   const [posts, setPosts] = React.useState<FeedPost[]>([]);
   const [loading, setLoading] = React.useState(true);
+
+  // SIS-REFRESH 2.0 - Ultra-Fluid Mechanics
+  const [pullY, setPullY] = React.useState(0);
+  const [isPulling, setIsPulling] = React.useState(false);
+  const startY = React.useRef(0);
+  const threshold = 80;
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (window.scrollY === 0) {
+      startY.current = e.touches[0].clientY;
+      setIsPulling(true);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isPulling) return;
+    const currentY = e.touches[0].clientY;
+    const diff = currentY - startY.current;
+    
+    if (diff > 0 && window.scrollY === 0) {
+      // Resistência elástica mais refinada
+      const resistance = Math.min(diff * 0.4, threshold + 20);
+      setPullY(resistance);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (pullY >= threshold) {
+      handleRefresh();
+    }
+    setPullY(0);
+    setIsPulling(false);
+  };
 
   React.useEffect(() => {
     if (!location && !isLocLoading && !locError) {
@@ -231,8 +264,37 @@ export const ConsumerFeed: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen pb-24 flex flex-col overflow-x-hidden">
-      {/* Header Section */}
+    <div 
+      className="min-h-screen pb-24 flex flex-col overflow-x-hidden"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* SIS-REFRESH 2.0 Indicator */}
+      <AnimatePresence>
+        {(pullY > 5 || isRefreshing) && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ 
+              height: isRefreshing ? 60 : (pullY > threshold ? 70 : pullY),
+              opacity: 1 
+            }}
+            exit={{ height: 0, opacity: 0 }}
+            className="flex items-center justify-center overflow-hidden bg-white dark:bg-neutral-900"
+          >
+            <motion.div
+              style={{ rotate: isRefreshing ? 0 : pullY * 4 }}
+              animate={isRefreshing ? { rotate: 360 } : {}}
+              transition={isRefreshing ? { repeat: Infinity, duration: 1, ease: "linear" } : { type: "tween" }}
+            >
+              <Loader2 
+                size={24} 
+                className={`${pullY >= threshold || isRefreshing ? 'text-orange-600' : 'text-neutral-300 dark:text-neutral-700'}`} 
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <header 
         className="w-full bg-white dark:bg-neutral-900 pt-6 pb-4 px-6"
       >
@@ -241,11 +303,6 @@ export const ConsumerFeed: React.FC = () => {
           <LocationSelector />
         </div>
       </header>
-        {isRefreshing && (
-        <div className="flex justify-center py-4 bg-neutral-50 dark:bg-neutral-950">
-          <Loader2 size={24} className="text-orange-600 animate-spin" />
-        </div>
-      )}
 
       {/* Filters - Minimalist & Elegant */}
       {location && (
