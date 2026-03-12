@@ -10,7 +10,6 @@
   html, body {
     @apply bg-neutral-50 text-neutral-900 antialiased;
     overscroll-behavior-y: none;
-    background-color: #FAFAFA;
   }
 }
 
