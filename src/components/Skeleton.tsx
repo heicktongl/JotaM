@@ -58,3 +58,15 @@ export const PostCardSkeleton = () => (
     </div>
   </div>
 );
+export const CommentSkeleton = () => (
+  <div className="flex gap-4 px-2">
+    <Skeleton className="h-11 w-11 rounded-2xl flex-shrink-0" />
+    <div className="flex-1 space-y-2">
+      <div className="flex justify-between items-center">
+        <Skeleton className="h-3 w-20 rounded-md" />
+        <Skeleton className="h-2 w-12 rounded-md" />
+      </div>
+      <Skeleton className="h-12 w-full rounded-2xl" />
+    </div>
+  </div>
+);

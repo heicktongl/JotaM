@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { toggleLike, checkUserLiked, sharePost, fetchComments, postComment } from '../lib/engage';
+import { toggleLike, checkUserLiked, sharePost, fetchComments, postComment, getUserIdentities } from '../lib/engage';
+import { CommentSkeleton } from './Skeleton';
 
 export interface FeedPost {
   id: string;
@@ -43,6 +44,9 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
   const [newComment, setNewComment] = React.useState('');
   const [isSubmittingComment, setIsSubmittingComment] = React.useState(false);
   const [isLoadingComments, setIsLoadingComments] = React.useState(false);
+  const [identities, setIdentities] = React.useState<any[]>([]);
+  const [selectedIdentity, setSelectedIdentity] = React.useState<any>(null);
+  const [isSelectorOpen, setIsSelectorOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (user) {
@@ -50,15 +54,78 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
     }
   }, [post.id, user]);
 
+  // SIS-IDENT-SYNC: Sincronização Proativa (Auto-Sync)
+  React.useEffect(() => {
+    if (user && !identities.length) {
+      console.log('[SIS-ENGAGE] Auto-Sync Proativo de identidades...');
+      getUserIdentities(user.id).then(data => {
+        setIdentities(data || []);
+      });
+    }
+  }, [user?.id]);
+
   React.useEffect(() => {
     if (isCommentsOpen) {
       setIsLoadingComments(true);
-      fetchComments(post.id)
-        .then(data => setComments(data || []))
-        .catch(err => console.error(err))
-        .finally(() => setIsLoadingComments(false));
+      
+      // Profiling imediato do perfil pessoal enquanto o banco é consultado
+      const emailPrefix = user?.email?.split('@')[0];
+      const rawName = user?.user_metadata?.full_name || user?.user_metadata?.name || emailPrefix || 'Você';
+      
+      // Se o nome for o e-mail ou algo genérico, tratamos como 'Você' para ser mais amigável
+      const friendlyName = (rawName === emailPrefix) ? 'Você' : rawName;
+      
+      const personal = { 
+        id: user?.id, 
+        type: 'personal', 
+        name: friendlyName, 
+        avatar: user?.user_metadata?.avatar_url 
+      };
+
+      // Set inicial síncrono para evitar "undefined"
+      if (!selectedIdentity || selectedIdentity.name === undefined) {
+        setSelectedIdentity(personal);
+      }
+      
+      Promise.all([
+        fetchComments(post.id),
+        user ? getUserIdentities(user.id) : Promise.resolve(identities)
+      ]).then(([commentsData, identitiesData]) => {
+        console.log(`[SIS-ENGAGE] Sincronizando identidades para o usuário:`, user?.id);
+        setComments(commentsData || []);
+        setIdentities(identitiesData || []);
+        
+        const savedIdentityId = localStorage.getItem('sovix_preferred_identity_id');
+        const savedIdentityType = localStorage.getItem('sovix_preferred_identity_type');
+
+        if (savedIdentityId && savedIdentityType) {
+          const matched = identitiesData.find(id => id.id === savedIdentityId && id.type === savedIdentityType);
+          if (matched) {
+            setSelectedIdentity(matched);
+            return;
+          }
+        }
+        
+        // Se após o load as identidades mudarem, mas não houver match com o salvo, 
+        // mantemos o que já estiver setado se não for personal.
+        if (selectedIdentity?.type === 'personal' || !selectedIdentity) {
+          setSelectedIdentity(personal);
+        }
+      }).catch(err => {
+        console.error('[SIS-ENGAGE] Erro no load de comentários:', err);
+      }).finally(() => setIsLoadingComments(false));
     }
-  }, [isCommentsOpen, post.id]);
+  }, [isCommentsOpen, post.id, user?.id]); // Usar user.id para evitar re-runs por referência
+
+  const selectIdentity = (identity: any) => {
+    console.log('[SIS-ENGAGE] Trocando identidade para:', identity?.name, identity?.type);
+    setSelectedIdentity(identity);
+    setIsSelectorOpen(false);
+    if (identity?.id) {
+      localStorage.setItem('sovix_preferred_identity_id', identity.id);
+      localStorage.setItem('sovix_preferred_identity_type', identity.type);
+    }
+  };
 
   const handleLike = async () => {
     if (!user) {
@@ -66,12 +133,23 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
       return;
     }
 
+    // Atualização Otimista
+    const previousIsLiked = isLiked;
+    const previousLikesCount = likesCount;
+    
+    setIsLiked(!previousIsLiked);
+    setLikesCount(prev => previousIsLiked ? prev - 1 : prev + 1);
+
     try {
       const result = await toggleLike(post.id, user.id);
+      // Sincroniza com o valor real do servidor
       setIsLiked(result.liked);
       setLikesCount(result.count);
     } catch (err) {
-      console.error(err);
+      // Reverte em caso de erro
+      setIsLiked(previousIsLiked);
+      setLikesCount(previousLikesCount);
+      console.error('[SIS-ENGAGE] Erro ao curtir:', err);
     }
   };
 
@@ -86,23 +164,85 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
     setIsCommentsOpen(!isCommentsOpen);
   };
 
+  const handleRetrySync = async () => {
+    if (!user) return;
+    setIsSubmittingComment(true);
+    try {
+      console.log(`[SIS-IDENT-SYNC] Forçando Auto-Sync Manual para: ${user.id}`);
+      const data = await getUserIdentities(user.id, true); // Forçar refresh do cache
+      setIdentities(data || []);
+      
+      if (data && data.length > 0) {
+        alert(`Sincronização Automática Concluída!\nEncontramos ${data.length} vitrine(s) vinculada(s).\nSeu ID: ${user.id.slice(0, 8)}...`);
+      } else {
+        alert(`Auto-Sync Sovix: Nenhuma vitrine vinculada encontrada.\nVerifique se este é o perfil correto.\nID: ${user.id.slice(0, 8)}...`);
+      }
+    } catch (err) {
+      alert('Erro na sincronização. Tente novamente em instantes.');
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  };
+
   const handleAddComment = async () => {
     if (!user) {
       navigate('/login');
       return;
     }
-    if (!newComment.trim()) return;
+    
+    // Se ainda estiver carregando a identidade, não faz nada mas não redireciona
+    if (!selectedIdentity) return;
 
+    const content = newComment.trim();
+    if (!content) return;
+
+    // Preparação do Comentário Otimista com Identidade Selecionada
+    const optimisticComment = {
+      id: `temp-${Date.now()}`,
+      post_id: post.id,
+      user_id: user.id,
+      content,
+      author_type: selectedIdentity.type,
+      author_id: selectedIdentity.type !== 'personal' ? selectedIdentity.id : null,
+      created_at: new Date().toISOString(),
+      authorName: selectedIdentity.name,
+      authorAvatar: selectedIdentity.avatar
+    };
+
+    setNewComment('');
+    setComments(prev => [...prev, optimisticComment]);
+    setCommentsCount(prev => prev + 1);
     setIsSubmittingComment(true);
+
     try {
-      await postComment(post.id, user.id, newComment);
-      setNewComment('');
-      setCommentsCount(prev => prev + 1);
-      // Refresh comments
-      const data = await fetchComments(post.id);
-      setComments(data || []);
-    } catch (err) {
-      console.error(err);
+      const data = await postComment(
+        post.id, 
+        user.id, 
+        content, 
+        selectedIdentity.type, 
+        selectedIdentity.type !== 'personal' ? selectedIdentity.id : undefined
+      );
+      if (data) {
+        console.log('[SIS-ENGAGE] Comentário persistido com sucesso no banco:', data.id);
+        const realComment = {
+          ...data,
+          authorName: selectedIdentity.name,
+          authorAvatar: selectedIdentity.avatar
+        };
+        setComments(prev => prev.map(c => c.id === optimisticComment.id ? realComment : c));
+      } else {
+        // Se postComment retornar null, tratamos como falha de persistência
+        throw new Error('O servidor não confirmou o salvamento do seu comentário.');
+      }
+    } catch (err: any) {
+      setComments(prev => prev.filter(c => c.id !== optimisticComment.id));
+      setCommentsCount(prev => prev - 1);
+      setNewComment(content);
+      console.error('[SIS-ENGAGE] Erro ao comentar:', err);
+      
+      // Feedback visual nítido para o usuário
+      const errorMsg = err.message || 'Erro desconhecido';
+      alert(`O sistema negou o comentário.\nMotivo: ${errorMsg}\n\nVerifique sua conexão ou se sua vitrine está ativa.`);
     } finally {
       setIsSubmittingComment(false);
     }
@@ -218,9 +358,18 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
       <div className="px-4 py-3 border-t border-neutral-50 flex items-center gap-6">
         <button 
           onClick={handleLike}
-          className={`flex items-center gap-1.5 transition-all active:scale-90 ${isLiked ? 'text-red-500' : 'text-neutral-400 hover:text-red-500'}`}
+          className={`flex items-center gap-1.5 transition-all active:scale-95 ${isLiked ? 'text-red-500' : 'text-neutral-400 hover:text-red-500'}`}
         >
-          <Heart size={18} fill={isLiked ? 'currentColor' : 'none'} className={isLiked ? 'animate-pulse' : ''} />
+          <motion.div
+            animate={isLiked ? { scale: [1, 1.3, 1] } : { scale: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            <Heart 
+              size={18} 
+              fill={isLiked ? 'currentColor' : 'none'} 
+              className={isLiked ? 'filter drop-shadow-[0_0_8px_rgba(239,68,68,0.4)]' : ''} 
+            />
+          </motion.div>
           <span className="text-[11px] font-bold">{likesCount > 0 ? likesCount : 'Curtir'}</span>
         </button>
         <button 
@@ -257,41 +406,129 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
                 animate={{ y: 0 }}
                 exit={{ y: '100%' }}
                 transition={{ type: 'spring', damping: 32, stiffness: 350, mass: 0.8 }}
-                className="fixed bottom-0 left-0 right-0 z-[101] bg-white rounded-t-[40px] px-6 pb-8 pt-4 shadow-[0_-20px_50px_-20px_rgba(0,0,0,0.15)] overflow-hidden max-h-[92vh] flex flex-col"
+                className="fixed bottom-0 left-0 right-0 z-[101] bg-white rounded-t-[40px] px-4 sm:px-6 pb-8 pt-4 shadow-[0_-20px_50px_-20px_rgba(0,0,0,0.15)] overflow-hidden max-h-[92vh] flex flex-col"
               >
                 <div className="mx-auto w-10 h-1 bg-neutral-100 rounded-full mb-6 cursor-grab active:cursor-grabbing" />
                 
-                <div className="flex items-center justify-between mb-8 px-2">
-                  <div>
-                    <h2 className="text-xl font-black text-neutral-900 tracking-tight">Comentários</h2>
-                    <p className="text-[9px] text-neutral-400 font-bold uppercase tracking-[0.2em] mt-0.5">Interações</p>
+                <div className="flex items-center justify-between mb-8 px-4 sm:px-2 overflow-visible">
+                  <div className="flex items-center gap-3 w-full min-h-[50px]">
+                    {/* Identity Pulse Container */}
+                    <div className="flex items-center gap-2 relative flex-shrink-0 z-20">
+                       {/* Current Active Avatar with Switch Indicator */}
+                       <div 
+                        onClick={() => setIsSelectorOpen(!isSelectorOpen)}
+                        className={`relative h-14 w-14 rounded-full p-0.5 border-2 shadow-xl active:scale-95 transition-all cursor-pointer z-30 bg-white ${isSelectorOpen ? 'border-orange-500 ring-4 ring-orange-500/10' : 'border-neutral-100'}`}
+                      >
+                        <div className="h-full w-full rounded-full overflow-hidden bg-neutral-100">
+                          <img 
+                            src={selectedIdentity?.avatar || (selectedIdentity?.type === 'personal' ? user?.user_metadata?.avatar_url : null) || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedIdentity?.name || 'U')}&background=EA580C&color=FFF`} 
+                            alt="Avatar" 
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedIdentity?.name || 'U')}&background=EA580C&color=FFF`;
+                            }}
+                          />
+                        </div>
+                        
+                        {/* Interactive Hint: Small icon indicating switchable */}
+                        {identities.length > 0 && (
+                          <div className="absolute -bottom-1 -right-1 h-5 w-5 bg-orange-600 border-2 border-white rounded-full flex items-center justify-center text-white shadow-sm">
+                            <Store size={10} strokeWidth={3} />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Identities Slide Out */}
+                      <AnimatePresence>
+                        {isSelectorOpen && (
+                             <motion.div 
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              exit={{ opacity: 0, x: -10 }}
+                              className="flex items-center gap-2.5 bg-neutral-100/50 backdrop-blur-xl p-1.5 pr-4 rounded-full border border-white shadow-inner z-[40]"
+                            >
+                              {/* Option: Personal */}
+                              {selectedIdentity?.type !== 'personal' && (
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); selectIdentity({ id: user?.id, type: 'personal', name: user?.user_metadata?.full_name || user?.user_metadata?.name || 'Você', avatar: user?.user_metadata?.avatar_url }); }}
+                                  className="h-11 w-11 rounded-full overflow-hidden border-2 border-white shadow-sm cursor-pointer hover:scale-105 active:scale-90 transition-all bg-white relative shrink-0 touch-manipulation"
+                                  title="Voltar para perfil pessoal"
+                                >
+                                  <img src={user?.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${user?.user_metadata?.full_name || 'U'}`} className="h-full w-full object-cover" alt="Perfil Pessoal" />
+                                </button>
+                              )}
+
+                            {/* Option: Vitrines */}
+                            {identities.filter(id => id.id !== selectedIdentity?.id).map(id => (
+                               <button 
+                                key={id.id}
+                                onClick={(e) => { e.stopPropagation(); selectIdentity(id); }}
+                                className="h-11 w-11 rounded-full overflow-hidden border-2 border-white shadow-sm cursor-pointer hover:scale-105 active:scale-95 transition-all bg-white relative shrink-0 touch-manipulation ring-offset-2 hover:ring-2 hover:ring-orange-500/20"
+                                title={`Comentar como ${id.name}`}
+                              >
+                                <img src={id.avatar || `https://ui-avatars.com/api/?name=${id.name}`} className="h-full w-full object-cover" alt={id.name} />
+                              </button>
+                            ))}
+
+                            {/* Empty State */}
+                            {identities.length === 0 && selectedIdentity?.type === 'personal' && (
+                              <div className="flex items-center gap-1 group">
+                                <p className="text-[9px] font-black text-neutral-400 uppercase tracking-tight px-2 whitespace-nowrap">
+                                  Perfil Único
+                                </p>
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleRetrySync(); }}
+                                  className="p-1 rounded-full hover:bg-neutral-100 text-neutral-300 hover:text-orange-500 transition-colors"
+                                  title="Sincronizar Vitrine"
+                                >
+                                  <Loader2 size={10} className={isSubmittingComment ? "animate-spin" : ""} />
+                                </button>
+                              </div>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    {/* Header Text */}
+                    <div className="flex-1 min-w-0 relative z-10">
+                      <h2 className="text-lg font-black text-neutral-900 tracking-tight leading-none truncate">
+                        Comentários
+                      </h2>
+                       <p className="text-[10px] text-orange-600 font-bold mt-1 truncate">
+                        {isSelectorOpen ? 'Escolha sua identidade de voz' : (
+                          selectedIdentity?.type === 'personal' 
+                            ? `Você está como ${selectedIdentity?.name}` 
+                            : `Representando ${selectedIdentity?.name}`
+                        )}
+                      </p>
+                    </div>
                   </div>
+
                   <button 
                     onClick={() => setIsCommentsOpen(false)} 
-                    className="h-10 w-10 flex items-center justify-center bg-neutral-50 rounded-full text-neutral-400 hover:bg-neutral-100 transition-colors"
+                    className="h-12 w-12 flex-shrink-0 flex items-center justify-center bg-neutral-50 rounded-full text-neutral-400 hover:bg-neutral-100 transition-colors ml-2"
                   >
-                    <X size={20} />
+                    <X size={24} />
                   </button>
                 </div>
 
                 {/* Comment List */}
                 <div className="flex-1 overflow-y-auto space-y-7 pb-28 pr-1 custom-scrollbar min-h-[400px]">
                   {isLoadingComments ? (
-                    <div className="flex flex-col items-center justify-center py-24">
-                      <div className="relative">
-                        <Loader2 size={32} className="animate-spin text-orange-600 opacity-20" />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="h-1 w-1 bg-orange-600 rounded-full animate-ping" />
-                        </div>
+                    <div className="space-y-6">
+                      {[1, 2, 3].map(i => <CommentSkeleton key={i} />)}
+                      <div className="flex flex-col items-center justify-center py-10 opacity-30">
+                        <Loader2 size={24} className="animate-spin text-orange-600 mb-2" />
+                        <p className="text-[8px] font-black text-neutral-400 uppercase tracking-[0.3em]">Sincronizando...</p>
                       </div>
-                      <p className="text-[9px] font-black text-neutral-300 uppercase tracking-[0.3em] mt-4">Sintonizando...</p>
                     </div>
                   ) : comments.length > 0 ? (
                     comments.map((comment, idx) => (
                       <div key={comment.id || idx} className="group flex gap-4 px-2">
                         <div className="h-11 w-11 rounded-2xl overflow-hidden flex-shrink-0 bg-neutral-100 border border-neutral-50 transition-transform group-hover:scale-105">
                           <img 
-                            src={comment.profiles?.avatar_url || `https://ui-avatars.com/api/?name=${comment.profiles?.full_name || 'U'}&background=F4F4F5&color=71717A`} 
+                            src={comment.authorAvatar || `https://ui-avatars.com/api/?name=${comment.authorName || 'U'}&background=F4F4F5&color=71717A`} 
                             alt="Avatar" 
                             className="h-full w-full object-cover" 
                           />
@@ -299,17 +536,17 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
                         <div className="flex-1 space-y-1.5">
                           <div className="flex items-baseline justify-between gap-2">
                             <span className="text-[10px] font-black text-neutral-900 uppercase tracking-wider">
-                              {comment.profiles?.full_name || 'Usuário Sovix'}
+                              {comment.authorName || 'Usuário Sovix'}
                             </span>
                             <span className="text-[8px] font-bold text-neutral-300 uppercase">
                               {getRelativeTime(comment.created_at)}
                             </span>
                           </div>
-                          <div className="bg-neutral-50/50 p-4 rounded-3xl rounded-tl-none border border-neutral-100/50 transition-colors group-hover:bg-neutral-50">
-                            <p className="text-[13px] text-neutral-600 leading-relaxed font-medium">
-                              {comment.content}
-                            </p>
-                          </div>
+                        <div className="bg-neutral-50/50 p-4 rounded-3xl rounded-tl-none border border-neutral-100/50 transition-colors group-hover:bg-neutral-50">
+                          <p className="text-[14px] text-neutral-600 leading-relaxed font-medium">
+                            {comment.content}
+                          </p>
+                        </div>
                         </div>
                       </div>
                     ))
@@ -326,20 +563,19 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
 
                 {/* Comment Input */}
                 {user && (
-                  <div className="mt-auto absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white to-transparent pt-10 pb-8 px-8">
+                  <div className="mt-auto absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white to-transparent pt-10 pb-8 px-4 sm:px-8">
                     <div className="flex items-center gap-3 bg-neutral-50 p-1.5 pl-5 rounded-[28px] border border-neutral-100 shadow-sm focus-within:border-orange-200 focus-within:bg-white transition-all">
                       <input
-                        autoFocus
                         type="text"
                         placeholder="Adicionar um comentário..."
                         value={newComment}
                         onChange={(e) => setNewComment(e.target.value)}
                         onKeyPress={(e) => e.key === 'Enter' && handleAddComment()}
-                        className="flex-1 bg-transparent border-none py-3 text-sm font-bold text-neutral-900 placeholder:text-neutral-300 outline-none"
+                        className="flex-1 bg-transparent border-none py-3 text-[16px] font-bold text-neutral-900 placeholder:text-neutral-300 outline-none"
                       />
                       <button
                         onClick={handleAddComment}
-                        disabled={isSubmittingComment || !newComment.trim()}
+                        disabled={isSubmittingComment || !newComment.trim() || !selectedIdentity}
                         className="h-11 w-11 flex items-center justify-center rounded-2xl bg-orange-600 text-white shadow-lg shadow-orange-600/30 active:scale-90 disabled:opacity-30 disabled:grayscale transition-all"
                       >
                         {isSubmittingComment ? (
