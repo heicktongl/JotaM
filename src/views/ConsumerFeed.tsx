@@ -181,7 +181,14 @@ export const ConsumerFeed: React.FC = () => {
     if (diff > 0 && window.scrollY === 0) {
       // Resistência logarítmica para sensação de "tensão superficial"
       const resistance = Math.pow(diff, 0.85); 
-      setPullY(Math.min(resistance * 2.5, threshold + 40));
+      const finalY = Math.min(resistance * 2.5, threshold + 40);
+      
+      // Feedback Hático (Android) ao cruzar o threshold
+      if (finalY >= threshold && pullY < threshold) {
+        if ('vibrate' in navigator) navigator.vibrate(10);
+      }
+      
+      setPullY(finalY);
     }
   };
 
@@ -277,7 +284,8 @@ export const ConsumerFeed: React.FC = () => {
 
   return (
     <div 
-      className="min-h-screen pb-24 flex flex-col overflow-x-hidden"
+      className="min-h-screen pb-24 flex flex-col overflow-x-hidden touch-pan-y"
+      style={{ overscrollBehaviorY: 'contain', WebkitOverflowScrolling: 'touch' } as any}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
