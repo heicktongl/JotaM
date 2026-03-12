@@ -21,40 +21,41 @@ export const Skeleton: React.FC<{ className?: string }> = ({ className }) => (
 );
 
 export const ItemCardSkeleton = () => (
-  <div className="rounded-3xl bg-white border border-neutral-100 overflow-hidden shadow-sm">
-    <Skeleton className="aspect-[4/3] w-full" />
+  <div className="rounded-3xl bg-white dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800 overflow-hidden shadow-sm">
+    <Skeleton className="aspect-[4/3] w-full dark:bg-neutral-800" />
     <div className="p-5 space-y-3">
-      <Skeleton className="h-6 w-3/4 rounded-lg" />
-      <Skeleton className="h-4 w-1/2 rounded-lg" />
-      <div className="pt-4 border-t border-neutral-100 flex items-end justify-between">
+      <Skeleton className="h-6 w-3/4 rounded-lg dark:bg-neutral-800" />
+      <Skeleton className="h-4 w-full rounded-lg dark:bg-neutral-800" />
+      <div className="pt-4 border-t border-neutral-100 dark:border-neutral-800 flex items-end justify-between">
         <div className="space-y-2">
-          <Skeleton className="h-3 w-12 rounded-sm" />
-          <Skeleton className="h-8 w-24 rounded-lg" />
+          <Skeleton className="h-3 w-12 rounded-sm dark:bg-neutral-800" />
+          <Skeleton className="h-8 w-24 rounded-lg dark:bg-neutral-800" />
         </div>
-        <Skeleton className="h-10 w-10 rounded-full" />
+        <Skeleton className="h-10 w-10 rounded-full dark:bg-neutral-800" />
       </div>
     </div>
   </div>
 );
 
 export const PostCardSkeleton = () => (
-  <div className="bg-white rounded-3xl border border-neutral-100 p-4 mb-6 shadow-sm">
-    <div className="flex items-center gap-3 mb-4">
-      <Skeleton className="h-10 w-10 rounded-full" />
-      <div className="space-y-2 flex-1">
-        <Skeleton className="h-4 w-32 rounded-lg" />
-        <Skeleton className="h-3 w-20 rounded-lg" />
+  <div className="bg-white dark:bg-neutral-900 rounded-3xl border border-neutral-100 dark:border-neutral-800 overflow-hidden shadow-sm mb-6">
+    <div className="p-4 flex items-center gap-3">
+      <Skeleton className="h-10 w-10 rounded-full flex-shrink-0 dark:bg-neutral-800" />
+      <div className="space-y-2 flex-1 min-w-0">
+        <Skeleton className="h-4 w-32 rounded-lg dark:bg-neutral-800" />
+        <Skeleton className="h-3 w-20 rounded-lg dark:bg-neutral-800" />
       </div>
     </div>
-    <div className="space-y-2 mb-4">
-      <Skeleton className="h-4 w-full rounded-lg" />
-      <Skeleton className="h-4 w-full rounded-lg" />
-      <Skeleton className="h-4 w-2/3 rounded-lg" />
+    <div className="px-4 pb-3 space-y-2">
+      <Skeleton className="h-4 w-full rounded-lg dark:bg-neutral-800" />
+      <Skeleton className="h-4 w-2/3 rounded-lg dark:bg-neutral-800" />
     </div>
-    <Skeleton className="aspect-video w-full rounded-2xl" />
-    <div className="mt-4 pt-4 border-t border-neutral-50 flex gap-6">
-      <Skeleton className="h-4 w-16 rounded-md" />
-      <Skeleton className="h-4 w-16 rounded-md" />
+    <div className="px-4 mb-4">
+      <Skeleton className="aspect-video w-full rounded-2xl dark:bg-neutral-800" />
+    </div>
+    <div className="px-4 py-3 border-t border-neutral-50 dark:border-neutral-800 flex gap-6">
+      <Skeleton className="h-4 w-16 rounded-md dark:bg-neutral-800" />
+      <Skeleton className="h-4 w-16 rounded-md dark:bg-neutral-800" />
     </div>
   </div>
 );
