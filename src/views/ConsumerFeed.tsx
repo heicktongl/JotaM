@@ -232,40 +232,48 @@ export const ConsumerFeed: React.FC = () => {
   };
 
   return (
-    <div 
-      className="min-h-screen pb-24 flex flex-col"
-      }}
-    >
-      <div className="flex-1 flex flex-col overflow-x-hidden">
-      {/* Header Section */}
-      <header 
-        className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl pt-6 pb-4 px-6 shadow-sm border-b border-neutral-100"
+    <div className="min-h-screen pb-24 flex flex-col">
+      <div 
+        className="flex-1 flex flex-col overflow-x-hidden"
         onPointerDown={(e) => {
-          // Detectar início do pull apenas ao tocar no header ou puxar dele
+          // Capturar pull apenas no topo do scroll
           if (window.scrollY <= 10) {
             const startY = e.clientY;
+            let isDragging = false;
+            
             const handleMove = (moveEvent: PointerEvent) => {
               const currentY = moveEvent.clientY;
               const diff = currentY - startY;
-              if (diff > 0 && window.scrollY <= 10) {
-                setPullOffset(diff * 0.4); 
+              
+              if (diff > 5) isDragging = true;
+              
+              if (isDragging && diff > 0 && window.scrollY <= 10) {
+                setPullOffset(diff * 0.4);
               }
             };
+            
             const handleUp = (upEvent: PointerEvent) => {
               const endY = upEvent.clientY;
               const finalDiff = endY - startY;
-              if (finalDiff * 0.4 > PULL_THRESHOLD && !isRefreshing) {
+              
+              if (isDragging && finalDiff * 0.4 > PULL_THRESHOLD && !isRefreshing) {
                 handleRefresh();
               } else {
                 setPullOffset(0);
               }
+              
               window.removeEventListener('pointermove', handleMove);
               window.removeEventListener('pointerup', handleUp);
             };
+            
             window.addEventListener('pointermove', handleMove, { passive: true });
             window.addEventListener('pointerup', handleUp);
           }
         }}
+      >
+      {/* Header Section */}
+      <header 
+        className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl pt-6 pb-4 px-6 shadow-sm border-b border-neutral-100"
       >
         <div className="mx-auto max-w-7xl flex items-center justify-between">
           <Logo />
