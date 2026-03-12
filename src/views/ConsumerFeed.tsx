@@ -165,6 +165,11 @@ export const ConsumerFeed: React.FC = () => {
     }
   }, [location, scope]);
 
+  const handleRefresh = React.useCallback(async () => {
+    setIsRefreshing(true);
+    await fetchData(true);
+  }, [fetchData]);
+
   // SIS-REFRESH: Lógica robusta de Pull-to-Refresh que não bloqueia o scroll
   React.useEffect(() => {
     let startY = 0;
@@ -227,10 +232,6 @@ export const ConsumerFeed: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await fetchData(true);
-  };
 
   const renderMixedFeed = () => {
     const items = [
