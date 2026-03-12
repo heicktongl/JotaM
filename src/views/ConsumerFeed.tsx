@@ -71,7 +71,7 @@ export const ConsumerFeed: React.FC = () => {
 
         let prodQuery = supabase.from('products').select(prodSelect).eq('is_active', true);
         let svcQuery = supabase.from('services').select(svcSelect).eq('is_active', true);
-        let postQuery = supabase.from('posts').select(postSelect);
+        let postQuery = supabase.from('posts_view').select(postSelect);
 
         if (userCity) {
           prodQuery = prodQuery.eq('city', userCity);

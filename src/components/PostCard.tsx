@@ -23,6 +23,8 @@ export interface FeedPost {
   created_at: string;
   likes_count: number;
   comments_count: number;
+  resolved_author_id?: string;
+  resolved_author_username?: string;
 }
 
 interface PostCardProps {
@@ -259,14 +261,15 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
     return then.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
   };
 
-  const canNavigate = isVitrine && post.metadata?.author_username;
+  const authorUser = post.resolved_author_username || post.metadata?.author_username;
+  const canNavigate = isVitrine && authorUser;
 
   const handleHeaderClick = () => {
     if (!canNavigate) return;
     
     const targetPath = post.author_type === 'seller' 
-      ? `/seller/${post.metadata.author_username}`
-      : `/provider/${post.metadata.author_username}`;
+      ? `/seller/${authorUser}`
+      : `/provider/${authorUser}`;
     
     navigate(targetPath);
   };
