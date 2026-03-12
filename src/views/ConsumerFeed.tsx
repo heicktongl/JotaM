@@ -165,6 +165,64 @@ export const ConsumerFeed: React.FC = () => {
     }
   }, [location, scope]);
 
+  // SIS-REFRESH: Lógica robusta de Pull-to-Refresh que não bloqueia o scroll
+  React.useEffect(() => {
+    let startY = 0;
+    let isDragging = false;
+    let initialScroll = 0;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      startY = e.touches[0].clientY;
+      initialScroll = window.scrollY;
+      isDragging = false;
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (initialScroll > 5 || isRefreshing) return;
+      
+      const currentY = e.touches[0].clientY;
+      const diff = currentY - startY;
+
+      // Se começar a puxar para baixo e estiver no topo
+      if (diff > 0 && initialScroll <= 5) {
+        if (!isDragging && diff > 10) {
+          isDragging = true;
+        }
+        
+        if (isDragging) {
+          // Bloqueia o scroll nativo (apenas para cima) enquanto arrasta
+          if (e.cancelable) e.preventDefault();
+          setPullOffset(Math.min(diff * 0.4, PULL_THRESHOLD + 20));
+        }
+      } else if (diff < 0) {
+        // Se mover para cima, cancela qualquer tentativa de pull
+        isDragging = false;
+        setPullOffset(0);
+      }
+    };
+
+    const handleTouchEnd = () => {
+      if (isDragging) {
+        if (pullOffset > PULL_THRESHOLD) {
+          handleRefresh();
+        } else {
+          setPullOffset(0);
+        }
+      }
+      isDragging = false;
+    };
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [pullOffset, isRefreshing, handleRefresh]);
+
   React.useEffect(() => {
     fetchData();
   }, [fetchData]);
@@ -233,58 +291,7 @@ export const ConsumerFeed: React.FC = () => {
 
   return (
     <div className="min-h-screen pb-24 flex flex-col">
-      <div 
-        className="flex-1 flex flex-col overflow-x-hidden"
-        style={{ touchAction: pullOffset > 0 ? 'none' : 'pan-y' }}
-        onPointerDown={(e) => {
-          if (window.scrollY > 10 || isRefreshing) return;
-          
-          const startY = e.clientY;
-          let isDragging = false;
-          
-          const handleMove = (moveEvent: PointerEvent) => {
-            const currentY = moveEvent.clientY;
-            const diff = currentY - startY;
-            
-            // Só ativa se o movimento inicial for para baixo (pull)
-            if (!isDragging && diff > 10) {
-              isDragging = true;
-            }
-            
-            // Se estiver arrastando para cima, aborta para não travar o scroll down
-            if (!isDragging && diff < -10) {
-              cleanup();
-              return;
-            }
-            
-            if (isDragging && diff > 0) {
-              setPullOffset(Math.min(diff * 0.4, PULL_THRESHOLD + 20));
-            }
-          };
-          
-          const handleUp = (upEvent: PointerEvent) => {
-            const endY = upEvent.clientY;
-            const finalDiff = endY - startY;
-            
-            if (isDragging && finalDiff * 0.4 > PULL_THRESHOLD) {
-              handleRefresh();
-            } else {
-              setPullOffset(0);
-            }
-            cleanup();
-          };
-          
-          const cleanup = () => {
-            window.removeEventListener('pointermove', handleMove);
-            window.removeEventListener('pointerup', handleUp);
-            window.removeEventListener('pointercancel', cleanup);
-          };
-          
-          window.addEventListener('pointermove', handleMove, { passive: true });
-          window.addEventListener('pointerup', handleUp);
-          window.addEventListener('pointercancel', cleanup);
-        }}
-      >
+      <div className="flex-1 flex flex-col overflow-x-hidden">
       {/* Header Section */}
       <motion.header 
         className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl pt-6 pb-4 px-6 shadow-sm border-b border-neutral-100"
