@@ -235,40 +235,54 @@ export const ConsumerFeed: React.FC = () => {
     <div className="min-h-screen pb-24 flex flex-col">
       <div 
         className="flex-1 flex flex-col overflow-x-hidden"
+        style={{ touchAction: pullOffset > 0 ? 'none' : 'pan-y' }}
         onPointerDown={(e) => {
-          // Capturar pull apenas no topo do scroll
-          if (window.scrollY <= 10) {
-            const startY = e.clientY;
-            let isDragging = false;
+          if (window.scrollY > 10 || isRefreshing) return;
+          
+          const startY = e.clientY;
+          let isDragging = false;
+          
+          const handleMove = (moveEvent: PointerEvent) => {
+            const currentY = moveEvent.clientY;
+            const diff = currentY - startY;
             
-            const handleMove = (moveEvent: PointerEvent) => {
-              const currentY = moveEvent.clientY;
-              const diff = currentY - startY;
-              
-              if (diff > 5) isDragging = true;
-              
-              if (isDragging && diff > 0 && window.scrollY <= 10) {
-                setPullOffset(diff * 0.4);
-              }
-            };
+            // Só ativa se o movimento inicial for para baixo (pull)
+            if (!isDragging && diff > 10) {
+              isDragging = true;
+            }
             
-            const handleUp = (upEvent: PointerEvent) => {
-              const endY = upEvent.clientY;
-              const finalDiff = endY - startY;
-              
-              if (isDragging && finalDiff * 0.4 > PULL_THRESHOLD && !isRefreshing) {
-                handleRefresh();
-              } else {
-                setPullOffset(0);
-              }
-              
-              window.removeEventListener('pointermove', handleMove);
-              window.removeEventListener('pointerup', handleUp);
-            };
+            // Se estiver arrastando para cima, aborta para não travar o scroll down
+            if (!isDragging && diff < -10) {
+              cleanup();
+              return;
+            }
             
-            window.addEventListener('pointermove', handleMove, { passive: true });
-            window.addEventListener('pointerup', handleUp);
-          }
+            if (isDragging && diff > 0) {
+              setPullOffset(Math.min(diff * 0.4, PULL_THRESHOLD + 20));
+            }
+          };
+          
+          const handleUp = (upEvent: PointerEvent) => {
+            const endY = upEvent.clientY;
+            const finalDiff = endY - startY;
+            
+            if (isDragging && finalDiff * 0.4 > PULL_THRESHOLD) {
+              handleRefresh();
+            } else {
+              setPullOffset(0);
+            }
+            cleanup();
+          };
+          
+          const cleanup = () => {
+            window.removeEventListener('pointermove', handleMove);
+            window.removeEventListener('pointerup', handleUp);
+            window.removeEventListener('pointercancel', cleanup);
+          };
+          
+          window.addEventListener('pointermove', handleMove, { passive: true });
+          window.addEventListener('pointerup', handleUp);
+          window.addEventListener('pointercancel', cleanup);
         }}
       >
       {/* Header Section */}
