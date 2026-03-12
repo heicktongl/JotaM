@@ -160,7 +160,6 @@ export const ConsumerFeed: React.FC = () => {
     } finally {
       setLoading(false);
       setIsRefreshing(false);
-      setPullOffset(0);
     }
   }, [location, scope]);
 
