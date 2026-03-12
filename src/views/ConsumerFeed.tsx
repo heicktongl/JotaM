@@ -316,9 +316,9 @@ export const ConsumerFeed: React.FC = () => {
       <div className="flex-1 flex flex-col overflow-x-hidden">
       {/* Header Section */}
       <motion.header 
-        className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl pt-6 pb-4 px-6 shadow-sm border-b border-neutral-100"
+        className="sticky top-0 z-40 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-xl pt-6 pb-4 px-6 shadow-sm border-b border-neutral-200/50 dark:border-neutral-800/50"
         animate={{ y: pullOffset }}
-        transition={isRefreshing ? { duration: 0.2 } : { type: 'spring', damping: 25, stiffness: 400 }}
+        transition={isRefreshing ? { duration: 0.2 } : { type: 'spring', damping: 28, stiffness: 350 }}
       >
         <div className="mx-auto max-w-7xl flex items-center justify-between">
           <Logo />
@@ -352,33 +352,41 @@ export const ConsumerFeed: React.FC = () => {
         </motion.div>
       </motion.div>
 
-      {/* Filters - Now scrolls with the page */}
+      {/* Filters - Sticky with Glassmorphism */}
       {location && (
-        <div className="mx-auto max-w-7xl px-6 pt-6">
-          <div className="flex items-center gap-3 overflow-x-auto pb-2 hide-scrollbar">
-            <button
-              onClick={() => setActiveTab('all')}
-              className={`whitespace-nowrap rounded-2xl px-5 py-2.5 text-sm font-bold transition-all ${activeTab === 'all' ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20' : 'bg-white text-neutral-600 hover:bg-neutral-50 border border-neutral-200'}`}
-            >
-              Tudo
-            </button>
-            <button
-              onClick={() => setActiveTab('products')}
-              className={`whitespace-nowrap rounded-2xl px-5 py-2.5 text-sm font-bold transition-all ${activeTab === 'products' ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20' : 'bg-white text-neutral-600 hover:bg-neutral-50 border border-neutral-200'}`}
-            >
-              Produtos
-            </button>
-            <button
-              onClick={() => setActiveTab('services')}
-              className={`whitespace-nowrap rounded-2xl px-5 py-2.5 text-sm font-bold transition-all ${activeTab === 'services' ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20' : 'bg-white text-neutral-600 hover:bg-neutral-50 border border-neutral-200'}`}
-            >
-              Serviços
-            </button>
-            <div className="h-8 w-px bg-neutral-200 mx-1" />
-            <button className="flex items-center gap-2 rounded-2xl bg-white px-5 py-2.5 text-sm font-bold text-neutral-600 hover:bg-neutral-50 border border-neutral-200 transition-all">
-              <SlidersHorizontal size={16} />
-              Filtros
-            </button>
+        <div className="sticky top-[81px] z-30 mx-auto w-full bg-neutral-50/70 dark:bg-neutral-950/70 backdrop-blur-lg border-b border-neutral-200/30 dark:border-neutral-800/30">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="flex items-center gap-3 overflow-x-auto hide-scrollbar">
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={() => setActiveTab('all')}
+                className={`whitespace-nowrap rounded-2xl px-6 py-2.5 text-sm font-extrabold transition-all ${activeTab === 'all' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30 scale-105' : 'bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 shadow-sm'}`}
+              >
+                Tudo
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={() => setActiveTab('products')}
+                className={`whitespace-nowrap rounded-2xl px-6 py-2.5 text-sm font-extrabold transition-all ${activeTab === 'products' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30 scale-105' : 'bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 shadow-sm'}`}
+              >
+                Produtos
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={() => setActiveTab('services')}
+                className={`whitespace-nowrap rounded-2xl px-6 py-2.5 text-sm font-extrabold transition-all ${activeTab === 'services' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30 scale-105' : 'bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 shadow-sm'}`}
+              >
+                Serviços
+              </motion.button>
+              <div className="h-6 w-px bg-neutral-200 dark:bg-neutral-700 mx-1" />
+              <motion.button 
+                whileTap={{ scale: 0.96 }}
+                className="flex items-center gap-2 rounded-2xl bg-white dark:bg-neutral-800 px-6 py-2.5 text-sm font-extrabold text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 shadow-sm transition-all"
+              >
+                <SlidersHorizontal size={16} />
+                Filtros
+              </motion.button>
+            </div>
           </div>
         </div>
       )}
