@@ -234,65 +234,68 @@ export const ConsumerFeed: React.FC = () => {
   return (
     <div 
       className="min-h-screen pb-24 flex flex-col"
-      onPointerDown={(e) => {
-        // Detectar início do pull apenas no topo
-        if (window.scrollY <= 10) {
-          const startY = e.clientY;
-          const handleMove = (moveEvent: PointerEvent) => {
-            const currentY = moveEvent.clientY;
-            const diff = currentY - startY;
-            if (diff > 0 && window.scrollY <= 10) {
-              setPullOffset(diff * 0.4); // Resistência de pull
-            }
-          };
-          const handleUp = (upEvent: PointerEvent) => {
-            const endY = upEvent.clientY;
-            const finalDiff = endY - startY;
-            if (finalDiff * 0.4 > PULL_THRESHOLD && !isRefreshing) {
-              handleRefresh();
-            } else {
-              setPullOffset(0);
-            }
-            window.removeEventListener('pointermove', handleMove);
-            window.removeEventListener('pointerup', handleUp);
-          };
-          window.addEventListener('pointermove', handleMove);
-          window.addEventListener('pointerup', handleUp);
-        }
       }}
     >
+      <div className="flex-1 flex flex-col overflow-x-hidden">
       {/* Header Section */}
-      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl pt-6 pb-4 px-6 shadow-sm border-b border-neutral-100">
+      <header 
+        className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl pt-6 pb-4 px-6 shadow-sm border-b border-neutral-100"
+        onPointerDown={(e) => {
+          // Detectar início do pull apenas ao tocar no header ou puxar dele
+          if (window.scrollY <= 10) {
+            const startY = e.clientY;
+            const handleMove = (moveEvent: PointerEvent) => {
+              const currentY = moveEvent.clientY;
+              const diff = currentY - startY;
+              if (diff > 0 && window.scrollY <= 10) {
+                setPullOffset(diff * 0.4); 
+              }
+            };
+            const handleUp = (upEvent: PointerEvent) => {
+              const endY = upEvent.clientY;
+              const finalDiff = endY - startY;
+              if (finalDiff * 0.4 > PULL_THRESHOLD && !isRefreshing) {
+                handleRefresh();
+              } else {
+                setPullOffset(0);
+              }
+              window.removeEventListener('pointermove', handleMove);
+              window.removeEventListener('pointerup', handleUp);
+            };
+            window.addEventListener('pointermove', handleMove, { passive: true });
+            window.addEventListener('pointerup', handleUp);
+          }
+        }}
+      >
         <div className="mx-auto max-w-7xl flex items-center justify-between">
           <Logo />
           <LocationSelector />
         </div>
       </header>
       
-      {/* 
-          SIS-REFRESH: Pull-to-Refresh Premium 
-          Posicionado entre o Header e o Feed como solicitado pelo USER. 
-      */}
       <motion.div 
-        className="flex flex-col items-center justify-center overflow-hidden bg-neutral-50 dark:bg-neutral-900"
+        className="mx-auto w-full max-w-7xl px-6 overflow-hidden flex flex-col items-center justify-center pointer-events-none"
         animate={{ 
-          height: isRefreshing ? 60 : (pullOffset > 0 ? Math.min(pullOffset, PULL_THRESHOLD + 20) : 0),
-          opacity: (isRefreshing || pullOffset > 20) ? 1 : 0
+          height: isRefreshing ? 48 : (pullOffset > 0 ? Math.min(pullOffset, PULL_THRESHOLD) : 0),
+          marginBottom: (isRefreshing || pullOffset > 0) ? 16 : 0
         }}
-        transition={isRefreshing ? { duration: 0.2 } : { type: 'spring', damping: 20, stiffness: 300 }}
+        transition={isRefreshing ? { duration: 0.2 } : { type: 'spring', damping: 25, stiffness: 400 }}
       >
-        <div className="flex items-center gap-2 py-4">
-          <motion.div
-            animate={isRefreshing ? { rotate: 360 } : { rotate: pullOffset * 2 }}
-            transition={isRefreshing ? { repeat: Infinity, duration: 1, ease: "linear" } : { type: 'spring' }}
-            className="text-orange-600"
-          >
-            <Loader2 size={24} className={isRefreshing ? "animate-spin" : ""} />
-          </motion.div>
-          <span className="text-xs font-bold text-neutral-400 uppercase tracking-widest">
-            {isRefreshing ? 'Atualizando Sovix...' : (pullOffset > PULL_THRESHOLD ? 'Solte para atualizar' : 'Puxe para atualizar')}
-          </span>
-        </div>
+        <motion.div
+          animate={isRefreshing ? { 
+            rotate: 360, 
+            scale: 1,
+            opacity: 1
+          } : { 
+            rotate: pullOffset * 3, 
+            scale: Math.max(0, Math.min(pullOffset / PULL_THRESHOLD, 1)),
+            opacity: Math.min(pullOffset / 20, 1)
+          }}
+          transition={isRefreshing ? { repeat: Infinity, duration: 0.8, ease: "linear" } : { type: 'spring' }}
+          className="text-orange-600 bg-white dark:bg-neutral-800 p-2 rounded-full shadow-sm border border-neutral-100 dark:border-neutral-700"
+        >
+          <Loader2 size={18} className={isRefreshing ? "animate-spin" : ""} />
+        </motion.div>
       </motion.div>
 
       {/* Filters - Now scrolls with the page */}
@@ -417,6 +420,7 @@ export const ConsumerFeed: React.FC = () => {
           </div>
         )}
       </main>
+      </div>
 
       <BottomNav />
     </div>
