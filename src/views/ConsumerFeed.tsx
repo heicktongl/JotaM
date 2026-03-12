@@ -160,14 +160,14 @@ export const ConsumerFeed: React.FC = () => {
     await fetchData(true);
   }, [fetchData]);
 
-  // SIS-REFRESH 2.0 - Ultra-Fluid Mechanics
+  // SIS-REFRESH 3.0 - Liquid Flow Dynamics
   const [pullY, setPullY] = React.useState(0);
   const [isPulling, setIsPulling] = React.useState(false);
   const startY = React.useRef(0);
-  const threshold = 80;
+  const threshold = 100; // Aumentado para dar mais "espaço" à física
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (window.scrollY === 0) {
+    if (window.scrollY === 0 && !isRefreshing) {
       startY.current = e.touches[0].clientY;
       setIsPulling(true);
     }
@@ -179,9 +179,9 @@ export const ConsumerFeed: React.FC = () => {
     const diff = currentY - startY.current;
     
     if (diff > 0 && window.scrollY === 0) {
-      // Resistência elástica mais refinada
-      const resistance = Math.min(diff * 0.4, threshold + 20);
-      setPullY(resistance);
+      // Resistência logarítmica para sensação de "tensão superficial"
+      const resistance = Math.pow(diff, 0.85); 
+      setPullY(Math.min(resistance * 2.5, threshold + 40));
     }
   };
 
@@ -282,28 +282,37 @@ export const ConsumerFeed: React.FC = () => {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* SIS-REFRESH 2.0 Indicator */}
+      {/* SIS-REFRESH 3.0 Liquid Indicator */}
       <AnimatePresence>
         {(pullY > 5 || isRefreshing) && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
+            initial={{ opacity: 0, y: -20, scale: 0.8 }}
             animate={{ 
-              height: isRefreshing ? 60 : (pullY > threshold ? 70 : pullY),
-              opacity: 1 
+              opacity: 1, 
+              y: isRefreshing ? 20 : Math.min(pullY * 0.5, 40),
+              scale: isRefreshing ? 1 : Math.min(0.8 + (pullY / threshold) * 0.4, 1.2),
             }}
-            exit={{ height: 0, opacity: 0 }}
-            className="flex items-center justify-center overflow-hidden bg-white dark:bg-neutral-900"
+            exit={{ opacity: 0, scale: 0.5, y: -20, transition: { duration: 0.2 } }}
+            transition={{ type: "spring", stiffness: 300, damping: 20 }}
+            className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] pointer-events-none"
           >
-            <motion.div
-              style={{ rotate: isRefreshing ? 0 : pullY * 4 }}
-              animate={isRefreshing ? { rotate: 360 } : {}}
-              transition={isRefreshing ? { repeat: Infinity, duration: 1, ease: "linear" } : { type: "tween" }}
-            >
-              <Loader2 
-                size={24} 
-                className={`${pullY >= threshold || isRefreshing ? 'text-orange-600' : 'text-neutral-300 dark:text-neutral-700'}`} 
-              />
-            </motion.div>
+            <div className="flex items-center justify-center h-12 w-12 rounded-full bg-white dark:bg-neutral-800 shadow-xl border border-neutral-100 dark:border-neutral-700">
+              <motion.div
+                animate={isRefreshing ? { rotate: 360 } : { rotate: pullY * 2 }}
+                transition={isRefreshing ? { repeat: Infinity, duration: 1, ease: "linear" } : { type: "tween", ease: "easeOut" }}
+                className={`${pullY >= threshold || isRefreshing ? 'text-orange-600' : 'text-neutral-400'}`}
+              >
+                <Loader2 size={24} strokeWidth={3} />
+              </motion.div>
+              
+              {/* Blooming Effect when ready */}
+              {!isRefreshing && pullY >= threshold && (
+                <motion.div 
+                  layoutId="bloom"
+                  className="absolute inset-0 rounded-full bg-orange-500/20 animate-ping"
+                />
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
