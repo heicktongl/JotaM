@@ -249,34 +249,34 @@ export const ConsumerFeed: React.FC = () => {
 
       {/* Filters - Sticky with Glassmorphism */}
       {location && (
-        <div className="sticky top-[81px] z-30 mx-auto w-full bg-neutral-50/70 dark:bg-neutral-950/70 backdrop-blur-lg border-b border-neutral-200/30 dark:border-neutral-800/30">
+        <div className="sticky top-[81px] z-30 mx-auto w-full bg-white/80 dark:bg-neutral-900/80 backdrop-blur-lg border-b border-neutral-200/50 dark:border-neutral-800/50">
           <div className="max-w-7xl mx-auto px-6 py-4">
             <div className="flex items-center gap-3 overflow-x-auto hide-scrollbar">
               <motion.button
                 whileTap={{ scale: 0.96 }}
                 onClick={() => setActiveTab('all')}
-                className={`whitespace-nowrap rounded-2xl px-6 py-2.5 text-sm font-extrabold transition-all ${activeTab === 'all' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30 scale-105' : 'bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 shadow-sm'}`}
+                className={`whitespace-nowrap rounded-2xl px-6 py-2.5 text-sm font-extrabold transition-all ${activeTab === 'all' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30' : 'bg-white/50 dark:bg-neutral-800/50 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-200/60 dark:border-neutral-700/60 shadow-sm'}`}
               >
                 Tudo
               </motion.button>
               <motion.button
                 whileTap={{ scale: 0.96 }}
                 onClick={() => setActiveTab('products')}
-                className={`whitespace-nowrap rounded-2xl px-6 py-2.5 text-sm font-extrabold transition-all ${activeTab === 'products' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30 scale-105' : 'bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 shadow-sm'}`}
+                className={`whitespace-nowrap rounded-2xl px-6 py-2.5 text-sm font-extrabold transition-all ${activeTab === 'products' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30' : 'bg-white/50 dark:bg-neutral-800/50 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-200/60 dark:border-neutral-700/60 shadow-sm'}`}
               >
                 Produtos
               </motion.button>
               <motion.button
                 whileTap={{ scale: 0.96 }}
                 onClick={() => setActiveTab('services')}
-                className={`whitespace-nowrap rounded-2xl px-6 py-2.5 text-sm font-extrabold transition-all ${activeTab === 'services' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30 scale-105' : 'bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 shadow-sm'}`}
+                className={`whitespace-nowrap rounded-2xl px-6 py-2.5 text-sm font-extrabold transition-all ${activeTab === 'services' ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30' : 'bg-white/50 dark:bg-neutral-800/50 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-200/60 dark:border-neutral-700/60 shadow-sm'}`}
               >
                 Serviços
               </motion.button>
               <div className="h-6 w-px bg-neutral-200 dark:bg-neutral-700 mx-1" />
               <motion.button 
                 whileTap={{ scale: 0.96 }}
-                className="flex items-center gap-2 rounded-2xl bg-white dark:bg-neutral-800 px-6 py-2.5 text-sm font-extrabold text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 shadow-sm transition-all"
+                className="flex items-center gap-2 rounded-2xl bg-white/50 dark:bg-neutral-800/50 px-6 py-2.5 text-sm font-extrabold text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-200/60 dark:border-neutral-700/60 shadow-sm transition-all"
               >
                 <SlidersHorizontal size={16} />
                 Filtros
