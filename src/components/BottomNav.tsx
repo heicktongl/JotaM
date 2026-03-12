@@ -46,7 +46,12 @@ export const BottomNav: React.FC = () => {
           store: seller.data?.store_name || '',
           provider: provider.data?.name || ''
         });
-        setRoles({ isSeller: !!seller.data, isProvider: !!provider.data });
+        setRoles({ 
+          isSeller: !!seller.data, 
+          isProvider: !!provider.data,
+          sellerData: seller.data,
+          providerData: provider.data
+        });
       };
       fetchIdentities();
     }
@@ -126,6 +131,22 @@ export const BottomNav: React.FC = () => {
         imageUrls.push(publicUrl);
       }
 
+      const metadata: any = {
+        author_name: selectedRole === 'personal' ? names.personal : (selectedRole === 'seller' ? names.store : names.provider),
+        author_avatar: user.user_metadata?.avatar_url || null,
+        price: selectedRole !== 'personal' && price ? Number(price) : undefined
+      };
+
+      if (selectedRole === 'seller' && roles.sellerData) {
+        metadata.author_id = roles.sellerData.id;
+        metadata.author_username = roles.sellerData.username;
+      } else if (selectedRole === 'provider' && roles.providerData) {
+        metadata.author_id = roles.providerData.id;
+        metadata.author_username = roles.providerData.username;
+      } else {
+        metadata.author_id = user.id;
+      }
+
       await supabase.from('posts').insert({
         user_id: user.id,
         author_type: selectedRole,
@@ -133,11 +154,7 @@ export const BottomNav: React.FC = () => {
         image_urls: imageUrls,
         city: userLoc.city,
         neighborhood: userLoc.neighborhood,
-        metadata: {
-          author_name: selectedRole === 'personal' ? names.personal : (selectedRole === 'seller' ? names.store : names.provider),
-          author_avatar: user.user_metadata?.avatar_url || null,
-          price: selectedRole !== 'personal' && price ? Number(price) : undefined
-        }
+        metadata
       });
 
       setIsSheetOpen(false);

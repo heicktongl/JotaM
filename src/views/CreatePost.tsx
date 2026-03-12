@@ -142,14 +142,19 @@ export const CreatePost: React.FC = () => {
       if (authorType === 'seller' && roles.sellerData) {
         metadata.author_name = roles.sellerData.store_name;
         metadata.author_avatar = roles.sellerData.avatar_url;
+        metadata.author_id = roles.sellerData.id;
+        metadata.author_username = roles.sellerData.username;
       } else if (authorType === 'provider' && roles.providerData) {
         metadata.author_name = roles.providerData.name;
         metadata.author_avatar = roles.providerData.avatar_url;
+        metadata.author_id = roles.providerData.id;
+        metadata.author_username = roles.providerData.username;
       } else {
         // Fallback for Personal profile
-        const { data: profile } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', user.id).maybeSingle();
-        metadata.author_name = profile?.full_name || 'Morador Sovix';
-        metadata.author_avatar = profile?.avatar_url;
+        const { data: profile } = await supabase.from('profiles').select('name, avatar_url').eq('id', user.id).maybeSingle();
+        metadata.author_name = profile?.name || user?.user_metadata?.name || 'Morador Sovix';
+        metadata.author_avatar = profile?.avatar_url || user?.user_metadata?.avatar_url;
+        metadata.author_id = user.id;
       }
 
       // Final fallback to ensure author_name is never null for UI Initials

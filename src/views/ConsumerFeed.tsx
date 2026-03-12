@@ -286,65 +286,67 @@ export const ConsumerFeed: React.FC = () => {
         {!location ? (
           // ... (JSX de localização omitido, permanece igual)
           <div /> 
-        ) : loading ? (
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {activeTab === 'all' ? (
-              <>
-                <PostCardSkeleton />
-                <ItemCardSkeleton />
-                <ItemCardSkeleton />
-                <PostCardSkeleton />
-                <ItemCardSkeleton />
-                <ItemCardSkeleton />
-              </>
-            ) : (
-              Array.from({ length: 6 }).map((_, i) => (
-                <ItemCardSkeleton key={i} />
-              ))
-            )}
-          </div>
         ) : (
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {activeTab === 'all' && renderMixedFeed()}
-            
-            {activeTab === 'products' &&
-              products.map((product) => (
-                <ItemCard
-                  key={product.id}
-                  type="product"
-                  item={{
-                    id: product.id,
-                    name: product.name,
-                    price: product.price,
-                    image: product.image_url || 'https://picsum.photos/seed/' + product.id + '/800/1000',
-                    category: product.category_id ?? 'Produto',
-                    seller: product.sellers?.store_name ?? 'Vendedor',
-                    username: product.sellers?.username ?? '',
-                    city: product.city,
-                    neighborhood: product.neighborhood
-                  }}
-                />
-              ))
-            }
-            {activeTab === 'services' &&
-              services.map((service) => (
-                <ItemCard
-                  key={service.id}
-                  type="service"
-                  item={{
-                    id: service.id,
-                    name: service.name,
-                    pricePerHour: service.price,
-                    image: service.image_url || 'https://picsum.photos/seed/' + service.id + '/800/1000',
-                    category: service.category_id ?? 'Serviço',
-                    provider: service.service_providers?.name ?? 'Prestador',
-                    rating: service.service_providers?.rating ?? 5.0,
-                    city: service.city,
-                    neighborhood: service.neighborhood
-                  }}
-                />
-              ))
-            }
+            {loading ? (
+              activeTab === 'all' ? (
+                <>
+                  <PostCardSkeleton />
+                  <ItemCardSkeleton />
+                  <ItemCardSkeleton />
+                  <PostCardSkeleton />
+                  <ItemCardSkeleton />
+                  <ItemCardSkeleton />
+                </>
+              ) : (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <ItemCardSkeleton key={i} />
+                ))
+              )
+            ) : (
+              <>
+                {activeTab === 'all' && renderMixedFeed()}
+                
+                {activeTab === 'products' &&
+                  products.map((product) => (
+                    <ItemCard
+                      key={product.id}
+                      type="product"
+                      item={{
+                        id: product.id,
+                        name: product.name,
+                        price: product.price,
+                        image: product.image_url || 'https://picsum.photos/seed/' + product.id + '/800/1000',
+                        category: product.category_id ?? 'Produto',
+                        seller: product.sellers?.store_name ?? 'Vendedor',
+                        username: product.sellers?.username ?? '',
+                        city: product.city,
+                        neighborhood: product.neighborhood
+                      }}
+                    />
+                  ))
+                }
+                {activeTab === 'services' &&
+                  services.map((service) => (
+                    <ItemCard
+                      key={service.id}
+                      type="service"
+                      item={{
+                        id: service.id,
+                        name: service.name,
+                        pricePerHour: service.price,
+                        image: service.image_url || 'https://picsum.photos/seed/' + service.id + '/800/1000',
+                        category: service.category_id ?? 'Serviço',
+                        provider: service.service_providers?.name ?? 'Prestador',
+                        rating: service.service_providers?.rating ?? 5.0,
+                        city: service.city,
+                        neighborhood: service.neighborhood
+                      }}
+                    />
+                  ))
+                }
+              </>
+            )}
             {!loading && products.length === 0 && services.length === 0 && posts.length === 0 && (
               <div className="col-span-full flex flex-col items-center justify-center gap-4 py-24 text-neutral-400">
                 <PackageSearch size={48} strokeWidth={1} />

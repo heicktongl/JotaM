@@ -259,6 +259,18 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
     return then.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
   };
 
+  const canNavigate = isVitrine && post.metadata?.author_username;
+
+  const handleHeaderClick = () => {
+    if (!canNavigate) return;
+    
+    const targetPath = post.author_type === 'seller' 
+      ? `/seller/${post.metadata.author_username}`
+      : `/provider/${post.metadata.author_username}`;
+    
+    navigate(targetPath);
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 15 }}
@@ -267,7 +279,10 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
       className="bg-white rounded-3xl border border-neutral-100 overflow-hidden shadow-sm mb-6"
     >
       {/* Post Header */}
-      <div className="p-4 flex items-center justify-between">
+      <div 
+        onClick={handleHeaderClick}
+        className={`p-4 flex items-center justify-between ${canNavigate ? 'cursor-pointer hover:bg-neutral-50 transition-colors' : ''}`}
+      >
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full overflow-hidden bg-neutral-100 border border-neutral-100">
             <img 
@@ -276,21 +291,21 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
               className="h-full w-full object-cover" 
             />
           </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <h4 className="text-sm font-bold text-neutral-900">{authorName || 'Usuário Sovix'}</h4>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 overflow-hidden">
+              <h4 className="text-sm font-bold text-neutral-900 truncate">{authorName || 'Usuário Sovix'}</h4>
               {isVitrine && (
-                <div className="h-4 w-4 rounded-full bg-orange-100 flex items-center justify-center">
+                <div className="h-4 w-4 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
                   <Tag size={10} className="text-orange-600 fill-orange-600/10" />
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-1 text-[10px] text-neutral-400 font-bold uppercase tracking-wider">
-              <MapPin size={10} />
-              <span>{post.neighborhood}</span>
-              <span className="mx-1">•</span>
-              <Clock size={10} />
-              <span>{getRelativeTime(post.created_at)}</span>
+            <div className="flex items-center gap-1 text-[10px] text-neutral-400 font-bold uppercase tracking-wider overflow-hidden">
+              <MapPin size={10} className="shrink-0" />
+              <span className="truncate">{post.neighborhood}</span>
+              <span className="shrink-0 mx-1">•</span>
+              <Clock size={10} className="shrink-0" />
+              <span className="truncate">{getRelativeTime(post.created_at)}</span>
             </div>
           </div>
         </div>
