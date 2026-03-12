@@ -231,8 +231,7 @@ export const ConsumerFeed: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen pb-24 flex flex-col">
-      <div className="flex-1 flex flex-col overflow-x-hidden">
+    <div className="min-h-screen pb-24 flex flex-col overflow-x-hidden">
       {/* Header Section */}
       <header 
         className="sticky top-0 z-40 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-xl pt-6 pb-4 px-6 shadow-sm border-b border-neutral-200/50 dark:border-neutral-800/50"
