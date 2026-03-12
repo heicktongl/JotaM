@@ -286,20 +286,23 @@ export const ConsumerFeed: React.FC = () => {
         }}
       >
       {/* Header Section */}
-      <header 
+      <motion.header 
         className="sticky top-0 z-30 bg-white/90 backdrop-blur-xl pt-6 pb-4 px-6 shadow-sm border-b border-neutral-100"
+        animate={{ y: pullOffset }}
+        transition={isRefreshing ? { duration: 0.2 } : { type: 'spring', damping: 25, stiffness: 400 }}
       >
         <div className="mx-auto max-w-7xl flex items-center justify-between">
           <Logo />
           <LocationSelector />
         </div>
-      </header>
+      </motion.header>
       
       <motion.div 
         className="mx-auto w-full max-w-7xl px-6 overflow-hidden flex flex-col items-center justify-center pointer-events-none"
         animate={{ 
           height: isRefreshing ? 48 : (pullOffset > 0 ? Math.min(pullOffset, PULL_THRESHOLD) : 0),
-          marginBottom: (isRefreshing || pullOffset > 0) ? 16 : 0
+          marginBottom: (isRefreshing || pullOffset > 0) ? 16 : 0,
+          y: pullOffset // Sincroniza o movimento vertical do indicador com o header
         }}
         transition={isRefreshing ? { duration: 0.2 } : { type: 'spring', damping: 25, stiffness: 400 }}
       >
