@@ -377,8 +377,7 @@ export const ConsumerFeed: React.FC = () => {
           </div>
         )}
       </main>
-      </div>
-
+      
       <BottomNav />
     </div>
   );
