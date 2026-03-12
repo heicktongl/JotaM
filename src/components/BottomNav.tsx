@@ -85,10 +85,19 @@ export const BottomNav: React.FC = () => {
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []) as File[];
+    const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+
     if (images.length + files.length > 6) {
       alert('Máximo de 6 fotos.');
       return;
     }
+
+    const oversizedFiles = files.filter(f => f.size > MAX_SIZE);
+    if (oversizedFiles.length > 0) {
+      alert('Algumas fotos excedem o limite de 5MB e foram removidas.');
+      return;
+    }
+
     setImages([...images, ...files]);
     const newPreviews = files.map(file => URL.createObjectURL(file));
     setPreviews([...previews, ...newPreviews]);
@@ -211,8 +220,8 @@ export const BottomNav: React.FC = () => {
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className={`fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-[40px] px-8 pb-10 pt-6 shadow-2xl overflow-hidden transition-all duration-300 ${currentStep === 'compose' ? 'h-[85vh]' : 'h-auto'}`}
+              transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 0.8 }}
+              className={`fixed bottom-0 left-0 right-0 z-[70] bg-white rounded-t-[40px] px-8 pb-10 pt-6 shadow-2xl overflow-hidden ${currentStep === 'compose' ? 'h-[85vh]' : 'h-auto'}`}
             >
               <div className="mx-auto w-12 h-1.5 bg-neutral-100 rounded-full mb-8" />
               
@@ -303,17 +312,18 @@ export const BottomNav: React.FC = () => {
                         className="w-full min-h-[160px] p-6 rounded-[32px] bg-neutral-50 border-none focus:ring-2 focus:ring-orange-500 text-neutral-900 placeholder:text-neutral-400 text-lg resize-none outline-none"
                       />
 
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-2 gap-3">
                         {previews.map((url, i) => (
-                          <div key={i} className="relative aspect-square rounded-2xl overflow-hidden shadow-sm group">
-                            <img src={url} className="h-full w-full object-cover" />
+                          <div key={i} className="relative rounded-2xl overflow-hidden shadow-sm group bg-neutral-100 flex items-center justify-center min-h-[150px]">
+                            <img src={url} className="w-full h-full object-contain" />
                             <button onClick={() => removeImage(i)} className="absolute top-2 right-2 p-1.5 bg-black/60 text-white rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
                           </div>
                         ))}
                         {images.length < 6 && (
-                          <label className="aspect-square rounded-2xl border-2 border-dashed border-neutral-200 flex flex-col items-center justify-center gap-2 text-neutral-400 hover:border-orange-500 hover:text-orange-500 cursor-pointer bg-neutral-50 transition-all hover:bg-orange-50/30">
+                          <label className="aspect-video rounded-2xl border-2 border-dashed border-neutral-200 flex flex-col items-center justify-center gap-2 text-neutral-400 hover:border-orange-500 hover:text-orange-500 cursor-pointer bg-neutral-50 transition-all hover:bg-orange-50/30">
                             <Camera size={24} />
                             <span className="text-[10px] font-black uppercase tracking-tighter">Fotos ({images.length}/6)</span>
+                            <span className="text-[8px] font-bold text-neutral-400">Máx 5MB</span>
                             <input type="file" className="hidden" accept="image/*" multiple onChange={handleImageChange} />
                           </label>
                         )}

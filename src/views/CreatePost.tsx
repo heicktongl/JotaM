@@ -73,9 +73,17 @@ export const CreatePost: React.FC = () => {
   }, [user, navigate]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+    const files = Array.from(e.target.files || []) as File[];
+    const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+
     if (images.length + files.length > 6) {
       alert('Máximo de 6 fotos permitido.');
+      return;
+    }
+
+    const oversizedFiles = files.filter(f => f.size > MAX_SIZE);
+    if (oversizedFiles.length > 0) {
+      alert('Algumas fotos excedem o limite de 5MB e foram removidas.');
       return;
     }
 
@@ -127,8 +135,26 @@ export const CreatePost: React.FC = () => {
         uploadedUrls.push(publicUrl);
       }
 
-      // Metadata for special types
+      // Metadata for author and special types
       const metadata: any = {};
+      
+      // Capture Author Identity (SIS-ENGAGE-IDENTITY)
+      if (authorType === 'seller' && roles.sellerData) {
+        metadata.author_name = roles.sellerData.store_name;
+        metadata.author_avatar = roles.sellerData.avatar_url;
+      } else if (authorType === 'provider' && roles.providerData) {
+        metadata.author_name = roles.providerData.name;
+        metadata.author_avatar = roles.providerData.avatar_url;
+      } else {
+        // Fallback for Personal profile
+        const { data: profile } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', user.id).maybeSingle();
+        metadata.author_name = profile?.full_name || 'Morador Sovix';
+        metadata.author_avatar = profile?.avatar_url;
+      }
+
+      // Final fallback to ensure author_name is never null for UI Initials
+      if (!metadata.author_name) metadata.author_name = 'Usuário Sovix';
+
       if (postType === 'product') {
         metadata.product = { name: itemName, price: Number(itemPrice), description: itemDescription };
       } else if (postType === 'service') {
@@ -289,10 +315,10 @@ export const CreatePost: React.FC = () => {
                 />
 
                 {/* Photo Grid */}
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   {imagePreviews.map((url, idx) => (
-                    <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden shadow-sm group">
-                      <img src={url} alt="Post preview" className="h-full w-full object-cover" />
+                    <div key={idx} className="relative rounded-2xl overflow-hidden shadow-sm group bg-neutral-100 flex items-center justify-center min-h-[150px]">
+                      <img src={url} alt="Post preview" className="w-full h-full object-contain" />
                       <button 
                         onClick={() => removeImage(idx)}
                         className="absolute top-2 right-2 p-1.5 bg-black/50 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -302,9 +328,10 @@ export const CreatePost: React.FC = () => {
                     </div>
                   ))}
                   {images.length < 6 && (
-                    <label className="aspect-square rounded-2xl border-2 border-dashed border-neutral-200 flex flex-col items-center justify-center gap-2 text-neutral-400 hover:border-orange-500 hover:text-orange-500 cursor-pointer transition-all bg-neutral-50/50">
+                    <label className="aspect-video rounded-2xl border-2 border-dashed border-neutral-200 flex flex-col items-center justify-center gap-2 text-neutral-400 hover:border-orange-500 hover:text-orange-500 cursor-pointer transition-all bg-neutral-50/50">
                       <Camera size={24} />
                       <span className="text-[10px] font-bold uppercase">Adicionar</span>
+                      <span className="text-[8px] font-bold text-neutral-400">Máx 5MB</span>
                       <input type="file" className="hidden" accept="image/*" multiple onChange={handleImageChange} />
                     </label>
                   )}

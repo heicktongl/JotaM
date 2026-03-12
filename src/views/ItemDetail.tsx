@@ -360,7 +360,13 @@ export const ItemDetail: React.FC = () => {
     <LocationGuard itemCity={itemCity} itemNeighborhood={itemNeighborhood} itemDisplayName={item.name}>
       <div className="min-h-screen bg-neutral-50 pb-32">
         <div className="relative h-80 w-full bg-neutral-200">
-          <img src={item.image} alt={item.name} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+          <img 
+            src={item.image} 
+            alt={item.name} 
+            loading="lazy"
+            className="h-full w-full object-cover" 
+            referrerPolicy="no-referrer" 
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30" />
           <button onClick={() => navigate(-1)} className="absolute top-6 left-6 flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md hover:bg-white/40 shadow-lg transition-all active:scale-90"><ChevronLeft size={24} /></button>
           

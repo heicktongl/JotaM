@@ -274,7 +274,7 @@ export const ProductAdmin: React.FC = () => {
                       />
                       <div>
                         <span className="font-bold text-neutral-900 block">{product.name}</span>
-                        <span className="text-sm text-neutral-500 block md:hidden">R$ {product.price.toFixed(2)} • {product.stock} un.</span>
+                        <span className="text-sm text-neutral-500 block md:hidden">R$ {product.price.toFixed(2)} • {product.stock !== null ? `${product.stock} un.` : 'Ilimitado'}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 md:hidden">
@@ -292,7 +292,7 @@ export const ProductAdmin: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                  <div className="hidden md:block col-span-2 font-medium text-neutral-600">{product.stock} unidades</div>
+                  <div className="hidden md:block col-span-2 font-medium text-neutral-600">{product.stock !== null ? `${product.stock} unidades` : 'Ilimitado'}</div>
                   <div className="hidden md:block col-span-2 font-bold text-neutral-900">R$ {product.price.toFixed(2)}</div>
                   <div className="hidden md:block col-span-2">
                     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold ${product.is_active ? 'bg-orange-50 text-orange-600' : 'bg-neutral-100 text-neutral-400'}`}>

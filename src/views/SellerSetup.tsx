@@ -23,6 +23,7 @@ import { AvatarUploader } from '../components/AvatarUploader';
 import { PortfolioUploader } from '../components/PortfolioUploader';
 import { getDetailedLocation } from '../utils/geolocation';
 import { SISBairro, extractBairroName, fetchNeighborhoodsByCity } from '../utils/sis-loca';
+import { withRetry } from '../utils/network';
 
 interface StoreLocation {
     label: string;
@@ -440,6 +441,8 @@ export const SellerSetup: React.FC = () => {
                         store_name: storeName.trim(),
                         username: cleanUsername,
                         theme_id: themeId,
+                        avatar_url: avatarUrl,
+                        cover_url: coverUrl,
                         bairros_atendidos: bairrosAtendidos,
                         updated_at: new Date().toISOString()
                     })
@@ -448,7 +451,7 @@ export const SellerSetup: React.FC = () => {
                 if (updateError) throw updateError;
 
                 // Deleta locs antigas
-                await supabase.from('store_locations').delete().eq('seller_id', existingSellerId);
+                await withRetry(async () => await supabase.from('store_locations').delete().eq('seller_id', existingSellerId));
 
                 // Insere as novas
                 const locationInserts = locations.map(loc => ({
@@ -465,7 +468,7 @@ export const SellerSetup: React.FC = () => {
                     longitude: loc.longitude ?? null,
                     is_primary: loc.is_primary,
                 }));
-                await supabase.from('store_locations').insert(locationInserts);
+                await withRetry(async () => await supabase.from('store_locations').insert(locationInserts));
 
                 // (A navegação foi movida para o final para garantir salvamento de horários)
             } else {
@@ -477,6 +480,8 @@ export const SellerSetup: React.FC = () => {
                         store_name: storeName.trim(),
                         username: cleanUsername,
                         theme_id: themeId,
+                        avatar_url: avatarUrl,
+                        cover_url: coverUrl,
                         bairros_atendidos: bairrosAtendidos
                     })
                     .select('id')
@@ -509,7 +514,7 @@ export const SellerSetup: React.FC = () => {
                     is_primary: loc.is_primary,
                 }));
 
-                const { error: locError } = await supabase.from('store_locations').insert(locationInserts);
+                const { error: locError } = await withRetry(async () => await supabase.from('store_locations').insert(locationInserts));
 
                 if (locError) {
                     if (locError.code === '23505') {
@@ -517,7 +522,7 @@ export const SellerSetup: React.FC = () => {
                     } else {
                         setError('Erro ao salvar localizações: ' + locError.message);
                     }
-                    await supabase.from('sellers').delete().eq('id', sellerData.id);
+                    await withRetry(async () => await supabase.from('sellers').delete().eq('id', sellerData.id));
                     setIsLoading(false);
                     return;
                 }
@@ -611,37 +616,39 @@ export const SellerSetup: React.FC = () => {
 
                 <form onSubmit={handleCreateStore} className="space-y-6">
                     {/* Visualização de Fotos (Capa + Perfil) usando AvatarUploader */}
-                    {existingSellerId && (
-                        <div className="relative mb-24">
-                            <div className="h-40 w-full rounded-2xl overflow-hidden bg-neutral-200">
-                                <AvatarUploader
-                                    currentUrl={coverUrl}
-                                    fallbackUrl={`https://picsum.photos/seed/${username}cover/800/400`}
-                                    onUploadSuccess={(url) => {
-                                        setCoverUrl(url);
+                    <div className="relative mb-24">
+                        <div className="h-40 w-full rounded-2xl overflow-hidden bg-neutral-200">
+                            <AvatarUploader
+                                currentUrl={coverUrl}
+                                fallbackUrl={`https://picsum.photos/seed/${username || 'default'}cover/800/400`}
+                                onUploadSuccess={(url) => {
+                                    setCoverUrl(url);
+                                    if (existingSellerId) {
                                         supabase.from('sellers').update({ cover_url: url }).eq('id', existingSellerId).then();
-                                    }}
-                                    uid={user?.id || ''}
-                                    folder="covers"
-                                    size="cover"
-                                />
-                            </div>
-                            {/* Avatar circular posicionado com espaço para chips abaixo */}
-                            <div className="absolute -bottom-20 left-6">
-                                <AvatarUploader
-                                    currentUrl={avatarUrl}
-                                    fallbackUrl={`https://picsum.photos/seed/${username}profile/200/200`}
-                                    onUploadSuccess={(url) => {
-                                        setAvatarUrl(url);
-                                        supabase.from('sellers').update({ avatar_url: url }).eq('id', existingSellerId).then();
-                                    }}
-                                    uid={user?.id || ''}
-                                    folder="stores"
-                                    size="lg"
-                                />
-                            </div>
+                                    }
+                                }}
+                                uid={user?.id || ''}
+                                folder="covers"
+                                size="cover"
+                            />
                         </div>
-                    )}
+                        {/* Avatar circular posicionado com espaço para chips abaixo */}
+                        <div className="absolute -bottom-20 left-6">
+                            <AvatarUploader
+                                currentUrl={avatarUrl}
+                                fallbackUrl={`https://ui-avatars.com/api/?name=${storeName || 'Loja'}&background=FFF7ED&color=EA580C&size=200`}
+                                onUploadSuccess={(url) => {
+                                    setAvatarUrl(url);
+                                    if (existingSellerId) {
+                                        supabase.from('sellers').update({ avatar_url: url }).eq('id', existingSellerId).then();
+                                    }
+                                }}
+                                uid={user?.id || ''}
+                                folder="stores"
+                                size="lg"
+                            />
+                        </div>
+                    </div>
 
 
                     {/* Nome da Loja */}

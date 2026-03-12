@@ -34,6 +34,7 @@ import { DynamicThemeProvider, useDynamicTheme } from '../contexts/DynamicThemeC
 import { ThemeCustomization } from '../lib/themeEngine';
 import { registerView } from '../lib/metrics';
 import { AvailabilityBadge } from '../components/AvailabilityBadge';
+import { LoadingScreen } from '../components/LoadingScreen';
 
 
 type Product = Database['public']['Tables']['products']['Row'];
@@ -329,14 +330,7 @@ export const SellerProfile: React.FC = () => {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 size={40} className="text-orange-500 animate-spin" />
-          <p className="text-neutral-500 font-bold">Resgatando Vitrine Pública...</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (error || !profileId) {

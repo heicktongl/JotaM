@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { withRetry } from '../utils/network';
 import type { User, Session } from '@supabase/supabase-js';
 
 interface AuthState {
@@ -30,17 +31,23 @@ export function useAuth() {
     }, []);
 
     const signIn = async (email: string, password: string) => {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        return { data, error };
+        try {
+            return await withRetry(() => supabase.auth.signInWithPassword({ email, password }));
+        } catch (error: any) {
+            return { data: { user: null, session: null }, error };
+        }
     };
 
     const signUp = async (email: string, password: string, name: string) => {
-        const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: { data: { name } },
-        });
-        return { data, error };
+        try {
+            return await withRetry(() => supabase.auth.signUp({
+                email,
+                password,
+                options: { data: { name } },
+            }));
+        } catch (error: any) {
+            return { data: { user: null, session: null }, error };
+        }
     };
 
     const signOut = async () => {

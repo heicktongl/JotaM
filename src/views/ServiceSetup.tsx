@@ -9,6 +9,7 @@ import { AvatarUploader } from '../components/AvatarUploader';
 import { PortfolioUploader } from '../components/PortfolioUploader';
 import { useLocationScope } from '../context/LocationContext';
 import { SISBairro, extractBairroName, fetchNeighborhoodsByCity } from '../utils/sis-loca';
+import { withRetry } from '../utils/network';
 
 export const ServiceSetup: React.FC = () => {
     const navigate = useNavigate();
@@ -149,18 +150,18 @@ export const ServiceSetup: React.FC = () => {
 
             let result;
             if (existingProviderId) {
-                result = await supabase
+                result = await withRetry(async () => await supabase
                     .from('service_providers')
                     .update(profileData)
                     .eq('id', existingProviderId)
                     .select('id')
-                    .single();
+                    .single());
             } else {
-                result = await supabase
+                result = await withRetry(async () => await supabase
                     .from('service_providers')
                     .insert(profileData)
                     .select('id')
-                    .single();
+                    .single());
             }
 
             if (result.error) {

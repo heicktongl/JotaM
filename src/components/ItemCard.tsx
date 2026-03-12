@@ -32,6 +32,9 @@ export const ItemCard: React.FC<CardProps> = ({ item, type }) => {
           <img
             src={item.image}
             alt={item.name}
+            loading="lazy"
+            width="400"
+            height="300"
             className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
             referrerPolicy="no-referrer"
           />

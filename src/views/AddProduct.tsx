@@ -288,7 +288,7 @@ export const AddProduct: React.FC = () => {
         name: formData.name,
         description: formData.description,
         price: finalPrice,
-        stock: priceType === 'single' ? (parseInt(formData.stock, 10) || 0) : 0, // Se variações, estoque é somado/gerido nos itens
+        stock: priceType === 'single' ? (formData.stock ? parseInt(formData.stock, 10) : null) : null, // Se variações, estoque é somado/gerido nos itens
         image_url: mainImageUrl,
         is_active: true,
         neighborhood: storeLocation?.neighborhood || null,
@@ -571,10 +571,9 @@ export const AddProduct: React.FC = () => {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-neutral-700 mb-2">Quantidade em Estoque</label>
+                      <label className="block text-sm font-bold text-neutral-700 mb-2">Quantidade em Estoque <span className="text-neutral-400 font-normal">(Opcional)</span></label>
                       <input
                         type="number"
-                        required={priceType === 'single'}
                         placeholder="Ex: 50"
                         className="w-full rounded-2xl border border-neutral-200 bg-white px-5 py-4 text-neutral-900 focus:border-orange-500 focus:ring-0 transition-all shadow-sm"
                         value={formData.stock}

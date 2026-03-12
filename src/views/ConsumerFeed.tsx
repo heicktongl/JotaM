@@ -10,6 +10,7 @@ import { Logo } from '../components/Logo';
 import { BottomNav } from '../components/BottomNav';
 import { LocationSelector } from '../components/LocationSelector';
 import { useLocationScope } from '../context/LocationContext';
+import { ItemCardSkeleton, PostCardSkeleton } from '../components/Skeleton';
 
 interface FeedProduct {
   id: string;
@@ -287,9 +288,20 @@ export const ConsumerFeed: React.FC = () => {
           <div /> 
         ) : loading ? (
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="rounded-3xl bg-neutral-100 animate-pulse h-64" />
-            ))}
+            {activeTab === 'all' ? (
+              <>
+                <PostCardSkeleton />
+                <ItemCardSkeleton />
+                <ItemCardSkeleton />
+                <PostCardSkeleton />
+                <ItemCardSkeleton />
+                <ItemCardSkeleton />
+              </>
+            ) : (
+              Array.from({ length: 6 }).map((_, i) => (
+                <ItemCardSkeleton key={i} />
+              ))
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
