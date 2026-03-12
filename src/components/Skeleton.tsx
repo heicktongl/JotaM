@@ -15,29 +15,29 @@ const Shimmer = () => (
 );
 
 export const Skeleton: React.FC<{ className?: string }> = ({ className }) => (
-  <div className={`relative overflow-hidden bg-neutral-100 dark:bg-neutral-800/50 ${className}`}>
+  <div className={`relative overflow-hidden bg-neutral-50 dark:bg-neutral-800/30 ${className}`}>
     <Shimmer />
   </div>
 );
 
 export const ItemCardSkeleton = () => (
   <div className="block h-full">
-    <div className="group relative flex flex-col h-full overflow-hidden rounded-3xl border border-neutral-100 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm">
+    <div className="group relative flex flex-col h-full overflow-hidden rounded-3xl border border-neutral-100/50 dark:border-neutral-800/50 bg-white dark:bg-neutral-900 shadow-sm">
       <Skeleton className="aspect-[4/3] w-full" />
       <div className="flex flex-1 flex-col p-5">
         <div className="mb-2 space-y-2">
-          <Skeleton className="h-6 w-full rounded-lg" />
-        </div>
-        <div className="mb-4 space-y-2">
           <Skeleton className="h-4 w-full rounded-lg" />
-          <Skeleton className="h-4 w-4/5 rounded-lg" />
+        </div>
+        <div className="mb-4 space-y-1.5">
+          <Skeleton className="h-2.5 w-full rounded-lg" />
+          <Skeleton className="h-2.5 w-4/5 rounded-lg" />
         </div>
         <div className="mt-auto pt-4 border-t border-neutral-100 dark:border-neutral-800 flex items-end justify-between">
-          <div className="space-y-2">
-            <Skeleton className="h-3 w-16 rounded-sm" />
-            <Skeleton className="h-8 w-28 rounded-lg" />
+          <div className="space-y-1.5">
+            <Skeleton className="h-2 w-16 rounded-sm" />
+            <Skeleton className="h-6 w-28 rounded-lg" />
           </div>
-          <Skeleton className="h-10 w-10 rounded-full" />
+          <Skeleton className="h-9 w-9 rounded-full" />
         </div>
       </div>
     </div>
@@ -45,25 +45,25 @@ export const ItemCardSkeleton = () => (
 );
 
 export const PostCardSkeleton = () => (
-  <div className="bg-white dark:bg-neutral-900 rounded-3xl border border-neutral-100 dark:border-neutral-800 overflow-hidden shadow-sm mb-6">
+  <div className="bg-white dark:bg-neutral-900 rounded-3xl border border-neutral-100/50 dark:border-neutral-800/50 overflow-hidden shadow-sm mb-6">
     <div className="p-4 flex items-center gap-3">
-      <Skeleton className="h-10 w-10 rounded-full flex-shrink-0" />
-      <div className="space-y-2 flex-1 min-w-0">
-        <Skeleton className="h-4 w-48 rounded-lg" />
-        <Skeleton className="h-3 w-24 rounded-lg" />
+      <Skeleton className="h-9 w-9 rounded-full flex-shrink-0" />
+      <div className="space-y-1.5 flex-1 min-w-0">
+        <Skeleton className="h-3.5 w-48 rounded-lg" />
+        <Skeleton className="h-2.5 w-24 rounded-lg" />
       </div>
     </div>
-    <div className="px-4 pb-3 space-y-2">
-      <Skeleton className="h-4 w-full rounded-lg" />
-      <Skeleton className="h-4 w-11/12 rounded-lg" />
+    <div className="px-4 pb-3 space-y-1.5">
+      <Skeleton className="h-3 w-full rounded-lg" />
+      <Skeleton className="h-3 w-11/12 rounded-lg" />
     </div>
     <div className="px-4 mb-4">
       <Skeleton className="aspect-square max-h-[400px] w-full rounded-2xl" />
     </div>
     <div className="px-4 py-3 border-t border-neutral-50 dark:border-neutral-800 flex items-center gap-6">
-      <Skeleton className="h-4 w-20 rounded-md" />
-      <Skeleton className="h-4 w-20 rounded-md" />
-      <Skeleton className="h-4 w-12 rounded-md ml-auto" />
+      <Skeleton className="h-3 w-20 rounded-md" />
+      <Skeleton className="h-3 w-20 rounded-md" />
+      <Skeleton className="h-3 w-12 rounded-md ml-auto" />
     </div>
   </div>
 );
