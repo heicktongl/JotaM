@@ -171,44 +171,39 @@ export const ConsumerFeed: React.FC = () => {
     await fetchData(true);
   }, [fetchData]);
 
-  // SIS-REFRESH: Lógica robusta de Pull-to-Refresh que não bloqueia o scroll
+  // SIS-REFRESH: Lógica de Interceptação Dinâmica (Zero-Latency Scroll)
   React.useEffect(() => {
     let startY = 0;
+    let startX = 0;
     let isDragging = false;
-    let initialScroll = 0;
-
-    const handleTouchStart = (e: TouchEvent) => {
-      startY = e.touches[0].clientY;
-      initialScroll = window.scrollY;
-      isDragging = false;
-    };
+    let isCheckingGesture = false;
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (initialScroll > 10 || isRefreshing) return;
-      
       const currentY = e.touches[0].clientY;
-      const diff = currentY - startY;
+      const currentX = e.touches[0].clientX;
+      const diffY = currentY - startY;
+      const diffX = currentX - startX;
 
-      // Se começar a puxar para baixo e estiver no topo
-      if (diff > 0 && initialScroll <= 10) {
-        if (!isDragging && diff > 15) {
-          isDragging = true;
+      // Fase de checagem: determina se é um pull-down ou scroll normal
+      if (isCheckingGesture) {
+        // Se mover para cima ou horizontalmente, aborta e deixa o scroll nativo agir
+        if (diffY < 0 || Math.abs(diffX) > Math.abs(diffY)) {
+          cleanup();
+          return;
         }
         
-        if (isDragging) {
-          // Bloqueia o scroll nativo (apenas para cima) enquanto arrasta
-          if (e.cancelable) e.preventDefault();
-          const newVal = Math.min(diff * 0.4, PULL_THRESHOLD + 20);
-          setPullOffset(newVal);
-          pullOffsetRef.current = newVal;
+        // Se mover para baixo significativamente, assume o controle
+        if (diffY > 10) {
+          isCheckingGesture = false;
+          isDragging = true;
         }
-      } else if (diff < 0) {
-        // Se mover para cima, cancela qualquer tentativa de pull
-        if (isDragging) {
-          isDragging = false;
-          setPullOffset(0);
-          pullOffsetRef.current = 0;
-        }
+      }
+
+      if (isDragging) {
+        if (e.cancelable) e.preventDefault();
+        const newVal = Math.min(diffY * 0.4, PULL_THRESHOLD + 20);
+        setPullOffset(newVal);
+        pullOffsetRef.current = newVal;
       }
     };
 
@@ -221,17 +216,36 @@ export const ConsumerFeed: React.FC = () => {
           pullOffsetRef.current = 0;
         }
       }
+      cleanup();
+    };
+
+    const cleanup = () => {
       isDragging = false;
+      isCheckingGesture = false;
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('touchcancel', cleanup);
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      // Só ativa a checagem se estiver no topo absoluto
+      if (window.scrollY > 5 || isRefreshing) return;
+
+      startY = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
+      isCheckingGesture = true;
+      isDragging = false;
+
+      window.addEventListener('touchmove', handleTouchMove, { passive: false });
+      window.addEventListener('touchend', handleTouchEnd);
+      window.addEventListener('touchcancel', cleanup);
     };
 
     window.addEventListener('touchstart', handleTouchStart, { passive: true });
-    window.addEventListener('touchmove', handleTouchMove, { passive: false });
-    window.addEventListener('touchend', handleTouchEnd);
 
     return () => {
       window.removeEventListener('touchstart', handleTouchStart);
-      window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchend', handleTouchEnd);
+      cleanup();
     };
   }, [isRefreshing, handleRefresh]);
 
