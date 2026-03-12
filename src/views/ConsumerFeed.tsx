@@ -60,6 +60,7 @@ export const ConsumerFeed: React.FC = () => {
 
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [pullOffset, setPullOffset] = React.useState(0);
+  const pullOffsetRef = React.useRef(0);
   const PULL_THRESHOLD = 80;
 
   const fetchData = React.useCallback(async (isSilent = false) => {
@@ -183,35 +184,41 @@ export const ConsumerFeed: React.FC = () => {
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (initialScroll > 5 || isRefreshing) return;
+      if (initialScroll > 10 || isRefreshing) return;
       
       const currentY = e.touches[0].clientY;
       const diff = currentY - startY;
 
       // Se começar a puxar para baixo e estiver no topo
-      if (diff > 0 && initialScroll <= 5) {
-        if (!isDragging && diff > 10) {
+      if (diff > 0 && initialScroll <= 10) {
+        if (!isDragging && diff > 15) {
           isDragging = true;
         }
         
         if (isDragging) {
           // Bloqueia o scroll nativo (apenas para cima) enquanto arrasta
           if (e.cancelable) e.preventDefault();
-          setPullOffset(Math.min(diff * 0.4, PULL_THRESHOLD + 20));
+          const newVal = Math.min(diff * 0.4, PULL_THRESHOLD + 20);
+          setPullOffset(newVal);
+          pullOffsetRef.current = newVal;
         }
       } else if (diff < 0) {
         // Se mover para cima, cancela qualquer tentativa de pull
-        isDragging = false;
-        setPullOffset(0);
+        if (isDragging) {
+          isDragging = false;
+          setPullOffset(0);
+          pullOffsetRef.current = 0;
+        }
       }
     };
 
     const handleTouchEnd = () => {
       if (isDragging) {
-        if (pullOffset > PULL_THRESHOLD) {
+        if (pullOffsetRef.current > PULL_THRESHOLD) {
           handleRefresh();
         } else {
           setPullOffset(0);
+          pullOffsetRef.current = 0;
         }
       }
       isDragging = false;
@@ -226,7 +233,7 @@ export const ConsumerFeed: React.FC = () => {
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [pullOffset, isRefreshing, handleRefresh]);
+  }, [isRefreshing, handleRefresh]);
 
   React.useEffect(() => {
     fetchData();
