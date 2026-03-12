@@ -98,46 +98,15 @@ export async function postComment(
 export async function fetchComments(postId: string) {
   try {
     const { data, error } = await supabase
-      .from('post_comments')
-      .select(`
-        *,
-        profiles:user_id (
-          name,
-          avatar_url
-        ),
-        seller:author_id (
-          store_name,
-          avatar_url
-        ),
-        provider:author_id (
-          name,
-          avatar_url
-        )
-      `)
+      .from('post_comments_view')
+      .select('*')
       .eq('post_id', postId)
       .order('created_at', { ascending: true });
 
     if (error) throw error;
     
-    // Normalizar dados do autor para facilitar no front
-    return data?.map(comment => {
-      let authorName = comment.profiles?.name || 'Usuário Sovix';
-      let authorAvatar = comment.profiles?.avatar_url;
-
-      if (comment.author_type === 'seller') {
-        authorName = comment.seller?.store_name || authorName;
-        authorAvatar = comment.seller?.avatar_url || authorAvatar;
-      } else if (comment.author_type === 'provider') {
-        authorName = comment.provider?.name || authorName;
-        authorAvatar = comment.provider?.avatar_url || authorAvatar;
-      }
-
-      return {
-        ...comment,
-        authorName,
-        authorAvatar
-      };
-    });
+    // Agora os dados já vêm normalizados da View post_comments_view
+    return data;
   } catch (err) {
     console.error('[SIS-ENGAGE] Erro ao fetchComments:', err);
     throw err;
