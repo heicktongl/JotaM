@@ -59,9 +59,7 @@ export const ConsumerFeed: React.FC = () => {
   };
 
   const [isRefreshing, setIsRefreshing] = React.useState(false);
-  const [pullOffset, setPullOffset] = React.useState(0);
-  const pullOffsetRef = React.useRef(0);
-  const PULL_THRESHOLD = 80;
+  // SIS-REFRESH removido para priorizar scroll nativo fluido
 
   const fetchData = React.useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true);
@@ -171,84 +169,6 @@ export const ConsumerFeed: React.FC = () => {
     await fetchData(true);
   }, [fetchData]);
 
-  // SIS-REFRESH: Lógica de Interceptação Dinâmica (Zero-Latency Scroll)
-  React.useEffect(() => {
-    let startY = 0;
-    let startX = 0;
-    let isDragging = false;
-    let isCheckingGesture = false;
-
-    const handleTouchMove = (e: TouchEvent) => {
-      const currentY = e.touches[0].clientY;
-      const currentX = e.touches[0].clientX;
-      const diffY = currentY - startY;
-      const diffX = currentX - startX;
-
-      // Fase de checagem: determina se é um pull-down ou scroll normal
-      if (isCheckingGesture) {
-        // Se mover para cima ou horizontalmente, aborta e deixa o scroll nativo agir
-        if (diffY < 0 || Math.abs(diffX) > Math.abs(diffY)) {
-          cleanup();
-          return;
-        }
-        
-        // Se mover para baixo significativamente, assume o controle
-        if (diffY > 10) {
-          isCheckingGesture = false;
-          isDragging = true;
-        }
-      }
-
-      if (isDragging) {
-        if (e.cancelable) e.preventDefault();
-        const newVal = Math.min(diffY * 0.4, PULL_THRESHOLD + 20);
-        setPullOffset(newVal);
-        pullOffsetRef.current = newVal;
-      }
-    };
-
-    const handleTouchEnd = () => {
-      if (isDragging) {
-        if (pullOffsetRef.current > PULL_THRESHOLD) {
-          handleRefresh();
-        } else {
-          setPullOffset(0);
-          pullOffsetRef.current = 0;
-        }
-      }
-      cleanup();
-    };
-
-    const cleanup = () => {
-      isDragging = false;
-      isCheckingGesture = false;
-      window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchend', handleTouchEnd);
-      window.removeEventListener('touchcancel', cleanup);
-    };
-
-    const handleTouchStart = (e: TouchEvent) => {
-      // Só ativa a checagem se estiver no topo absoluto
-      if (window.scrollY > 5 || isRefreshing) return;
-
-      startY = e.touches[0].clientY;
-      startX = e.touches[0].clientX;
-      isCheckingGesture = true;
-      isDragging = false;
-
-      window.addEventListener('touchmove', handleTouchMove, { passive: false });
-      window.addEventListener('touchend', handleTouchEnd);
-      window.addEventListener('touchcancel', cleanup);
-    };
-
-    window.addEventListener('touchstart', handleTouchStart, { passive: true });
-
-    return () => {
-      window.removeEventListener('touchstart', handleTouchStart);
-      cleanup();
-    };
-  }, [isRefreshing, handleRefresh]);
-
   React.useEffect(() => {
     fetchData();
   }, [fetchData]);
@@ -315,42 +235,19 @@ export const ConsumerFeed: React.FC = () => {
     <div className="min-h-screen pb-24 flex flex-col">
       <div className="flex-1 flex flex-col overflow-x-hidden">
       {/* Header Section */}
-      <motion.header 
+      <header 
         className="sticky top-0 z-40 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-xl pt-6 pb-4 px-6 shadow-sm border-b border-neutral-200/50 dark:border-neutral-800/50"
-        animate={{ y: pullOffset }}
-        transition={isRefreshing ? { duration: 0.2 } : { type: 'spring', damping: 28, stiffness: 350 }}
       >
         <div className="mx-auto max-w-7xl flex items-center justify-between">
           <Logo />
           <LocationSelector />
         </div>
-      </motion.header>
-      
-      <motion.div 
-        className="mx-auto w-full max-w-7xl px-6 overflow-hidden flex flex-col items-center justify-center pointer-events-none"
-        animate={{ 
-          height: isRefreshing ? 48 : (pullOffset > 0 ? Math.min(pullOffset, PULL_THRESHOLD) : 0),
-          marginBottom: (isRefreshing || pullOffset > 0) ? 16 : 0,
-          y: pullOffset // Sincroniza o movimento vertical do indicador com o header
-        }}
-        transition={isRefreshing ? { duration: 0.2 } : { type: 'spring', damping: 25, stiffness: 400 }}
-      >
-        <motion.div
-          animate={isRefreshing ? { 
-            rotate: 360, 
-            scale: 1,
-            opacity: 1
-          } : { 
-            rotate: pullOffset * 3, 
-            scale: Math.max(0, Math.min(pullOffset / PULL_THRESHOLD, 1)),
-            opacity: Math.min(pullOffset / 20, 1)
-          }}
-          transition={isRefreshing ? { repeat: Infinity, duration: 0.8, ease: "linear" } : { type: 'spring' }}
-          className="text-orange-600 bg-white dark:bg-neutral-800 p-2 rounded-full shadow-sm border border-neutral-100 dark:border-neutral-700"
-        >
-          <Loader2 size={18} className={isRefreshing ? "animate-spin" : ""} />
-        </motion.div>
-      </motion.div>
+      </header>
+        {isRefreshing && (
+        <div className="flex justify-center py-4 bg-neutral-50 dark:bg-neutral-950">
+          <Loader2 size={24} className="text-orange-600 animate-spin" />
+        </div>
+      )}
 
       {/* Filters - Sticky with Glassmorphism */}
       {location && (
