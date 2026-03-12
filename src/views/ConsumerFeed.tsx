@@ -45,54 +45,13 @@ export const ConsumerFeed: React.FC = () => {
   const [services, setServices] = React.useState<FeedService[]>([]);
   const [posts, setPosts] = React.useState<FeedPost[]>([]);
   const [loading, setLoading] = React.useState(true);
-
-  // SIS-REFRESH 2.0 - Ultra-Fluid Mechanics
-  const [pullY, setPullY] = React.useState(0);
-  const [isPulling, setIsPulling] = React.useState(false);
-  const startY = React.useRef(0);
-  const threshold = 80;
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (window.scrollY === 0) {
-      startY.current = e.touches[0].clientY;
-      setIsPulling(true);
-    }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isPulling) return;
-    const currentY = e.touches[0].clientY;
-    const diff = currentY - startY.current;
-    
-    if (diff > 0 && window.scrollY === 0) {
-      // Resistência elástica mais refinada
-      const resistance = Math.min(diff * 0.4, threshold + 20);
-      setPullY(resistance);
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (pullY >= threshold) {
-      handleRefresh();
-    }
-    setPullY(0);
-    setIsPulling(false);
-  };
-
-  React.useEffect(() => {
-    if (!location && !isLocLoading && !locError) {
-      requestLocation();
-    }
-  }, [location, isLocLoading, locError, requestLocation]);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   // Função robusta de match para evitar erros de acento ("São João" vs "Sao Joao")
-  const normalizeBairro = (b: string | null | undefined) => {
+  const normalizeBairro = React.useCallback((b: string | null | undefined) => {
     if (!b) return '';
     return b.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-  };
-
-  const [isRefreshing, setIsRefreshing] = React.useState(false);
-  // SIS-REFRESH removido para priorizar scroll nativo fluido
+  }, []);
 
   const fetchData = React.useCallback(async (isSilent = false) => {
     if (!isSilent) setLoading(true);
@@ -194,12 +153,65 @@ export const ConsumerFeed: React.FC = () => {
       setLoading(false);
       setIsRefreshing(false);
     }
-  }, [location, scope]);
+  }, [location, scope, normalizeBairro]);
 
   const handleRefresh = React.useCallback(async () => {
     setIsRefreshing(true);
     await fetchData(true);
   }, [fetchData]);
+
+  // SIS-REFRESH 2.0 - Ultra-Fluid Mechanics
+  const [pullY, setPullY] = React.useState(0);
+  const [isPulling, setIsPulling] = React.useState(false);
+  const startY = React.useRef(0);
+  const threshold = 80;
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (window.scrollY === 0) {
+      startY.current = e.touches[0].clientY;
+      setIsPulling(true);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isPulling) return;
+    const currentY = e.touches[0].clientY;
+    const diff = currentY - startY.current;
+    
+    if (diff > 0 && window.scrollY === 0) {
+      // Resistência elástica mais refinada
+      const resistance = Math.min(diff * 0.4, threshold + 20);
+      setPullY(resistance);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (pullY >= threshold) {
+      handleRefresh();
+    }
+    setPullY(0);
+    setIsPulling(false);
+  };
+
+  // SIS-SMART-NAV listener
+  React.useEffect(() => {
+    const handleSmartNav = () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Pequeno delay para o scroll começar antes do loading visual
+      setTimeout(() => {
+        handleRefresh();
+      }, 100);
+    };
+
+    window.addEventListener('sis-refresh-feed', handleSmartNav);
+    return () => window.removeEventListener('sis-refresh-feed', handleSmartNav);
+  }, [handleRefresh]);
+
+  React.useEffect(() => {
+    if (!location && !isLocLoading && !locError) {
+      requestLocation();
+    }
+  }, [location, isLocLoading, locError, requestLocation]);
 
   React.useEffect(() => {
     fetchData();

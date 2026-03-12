@@ -168,10 +168,10 @@ export const BottomNav: React.FC = () => {
   };
 
   const navItems = [
-    { to: '/', icon: Package, label: 'Feed' },
-    { to: '#create', icon: Plus, label: 'Criar', isCenter: true },
-    { to: '/search', icon: Search, label: 'Busca' },
-    { to: '/profile', icon: User, label: 'Perfil' },
+    { to: '/', icon: Package, label: 'Feed', id: 'feed' },
+    { to: '#create', icon: Plus, label: 'Criar', isCenter: true, id: 'create' },
+    { to: '/search', icon: Search, label: 'Busca', id: 'search' },
+    { to: '/profile', icon: User, label: 'Perfil', id: 'profile' },
   ];
 
   const handleCreateClick = () => {
@@ -212,8 +212,20 @@ export const BottomNav: React.FC = () => {
               );
             }
 
+            const handleNavClick = (e: React.MouseEvent) => {
+              if (item.id === 'feed' && location.pathname === '/') {
+                e.preventDefault();
+                window.dispatchEvent(new CustomEvent('sis-refresh-feed'));
+              }
+            };
+
             return (
-              <Link key={item.to} to={item.to} className="relative">
+              <Link 
+                key={item.id} 
+                to={item.to} 
+                className="relative"
+                onClick={handleNavClick}
+              >
                 <motion.div
                   whileTap={{ scale: 0.85 }}
                   className={`flex flex-col items-center gap-1 transition-all ${
