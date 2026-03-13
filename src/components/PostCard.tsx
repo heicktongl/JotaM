@@ -208,8 +208,8 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
       author_type: selectedIdentity.type,
       author_id: selectedIdentity.type !== 'personal' ? selectedIdentity.id : null,
       created_at: new Date().toISOString(),
-      authorName: selectedIdentity.name,
-      authorAvatar: selectedIdentity.avatar
+      author_name: selectedIdentity.name,
+      author_avatar: selectedIdentity.avatar
     };
 
     setNewComment('');
@@ -229,8 +229,8 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
         console.log('[SIS-ENGAGE] Comentário persistido com sucesso no banco:', data.id);
         const realComment = {
           ...data,
-          authorName: selectedIdentity.name,
-          authorAvatar: selectedIdentity.avatar
+          author_name: selectedIdentity.name,
+          author_avatar: selectedIdentity.avatar
         };
         setComments(prev => prev.map(c => c.id === optimisticComment.id ? realComment : c));
       } else {
@@ -436,15 +436,15 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
                         className={`relative h-14 w-14 rounded-full p-0.5 border-2 shadow-xl active:scale-95 transition-all cursor-pointer z-30 bg-white ${isSelectorOpen ? 'border-orange-500 ring-4 ring-orange-500/10' : 'border-neutral-100'}`}
                       >
                         <div className="h-full w-full rounded-full overflow-hidden bg-neutral-100">
-                          <img 
-                            src={selectedIdentity?.avatar || (selectedIdentity?.type === 'personal' ? user?.user_metadata?.avatar_url : null) || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedIdentity?.name || 'U')}&background=EA580C&color=FFF`} 
-                            alt="Avatar" 
-                            className="h-full w-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedIdentity?.name || 'U')}&background=EA580C&color=FFF`;
-                            }}
-                          />
-                        </div>
+                           <img 
+                             src={selectedIdentity?.avatar || (selectedIdentity?.type === 'personal' ? user?.user_metadata?.avatar_url : null) || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedIdentity?.name || 'U')}&background=EA580C&color=FFF`} 
+                             alt="Avatar" 
+                             className="h-full w-full object-cover"
+                             onError={(e) => {
+                               (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedIdentity?.name || 'U')}&background=EA580C&color=FFF`;
+                             }}
+                           />
+                         </div>
                         
                         {/* Interactive Hint: Small icon indicating switchable */}
                         {identities.length > 0 && (
@@ -544,7 +544,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
                       <div key={comment.id || idx} className="group flex gap-4 px-2">
                         <div className="h-11 w-11 rounded-2xl overflow-hidden flex-shrink-0 bg-neutral-100 border border-neutral-50 transition-transform group-hover:scale-105">
                           <img 
-                            src={comment.authorAvatar || `https://ui-avatars.com/api/?name=${comment.authorName || 'U'}&background=F4F4F5&color=71717A`} 
+                            src={comment.author_avatar || `https://ui-avatars.com/api/?name=${comment.author_name || 'U'}&background=F4F4F5&color=71717A`} 
                             alt="Avatar" 
                             className="h-full w-full object-cover" 
                           />
@@ -552,7 +552,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
                         <div className="flex-1 space-y-1.5">
                           <div className="flex items-baseline justify-between gap-2">
                             <span className="text-[10px] font-black text-neutral-900 uppercase tracking-wider">
-                              {comment.authorName || 'Usuário Sovix'}
+                              {comment.author_name || 'Usuário Sovix'}
                             </span>
                             <span className="text-[8px] font-bold text-neutral-300 uppercase">
                               {getRelativeTime(comment.created_at)}

@@ -478,7 +478,7 @@ export const SearchPage: React.FC = () => {
               {isLoadingTop ? (
                 <div className="flex gap-3 overflow-x-auto pb-4 hide-scrollbar -mx-6 px-6">
                   {[0, 1, 2].map((i) => (
-                    <div key={i} className="min-w-[280px] shrink-0">
+                    <div key={i} className="min-w-[220px] shrink-0">
                       <StorefrontSkeleton />
                     </div>
                   ))}

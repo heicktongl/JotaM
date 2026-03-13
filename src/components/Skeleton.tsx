@@ -3,39 +3,20 @@ import { motion } from 'motion/react';
 
 const Shimmer = () => (
   <motion.div
-    initial={{ x: '-150%', skewX: -20 }}
-    animate={{ x: '150%', skewX: -20 }}
+    initial={{ x: '-100%' }}
+    animate={{ x: '100%' }}
     transition={{
       repeat: Infinity,
-      duration: 2.5,
-      ease: "easeInOut",
-      repeatDelay: 0.5
+      duration: 2,
+      ease: [0.4, 0, 0.6, 1],
     }}
-    className="absolute inset-0 z-10"
-    style={{
-      background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.03) 35%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 65%, transparent 100%)',
-    }}
+    className="absolute inset-0 bg-gradient-to-r from-transparent via-neutral-100/10 dark:via-white/5 to-transparent z-10"
   />
 );
 
-export const Skeleton: React.FC<{ className?: string; variant?: 'default' | 'depth' }> = ({ 
-  className, 
-  variant = 'default' 
-}) => (
-  <div className={`
-    relative overflow-hidden 
-    bg-neutral-100/60 dark:bg-neutral-800/30 
-    backdrop-blur-[4px]
-    ${variant === 'depth' ? 'shadow-[inset_0_2px_4px_rgba(0,0,0,0.03)] border border-white/10' : ''}
-    ${className}
-  `}>
+export const Skeleton: React.FC<{ className?: string }> = ({ className }) => (
+  <div className={`relative overflow-hidden bg-neutral-100/50 dark:bg-neutral-800/20 backdrop-blur-[2px] ${className}`}>
     <Shimmer />
-    {/* Subtle Internal Pulse for depth perception */}
-    <motion.div 
-      animate={{ opacity: [0.3, 0.5, 0.3] }}
-      transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-      className="absolute inset-0 bg-orange-500/5 pointer-events-none"
-    />
   </div>
 );
 
@@ -43,7 +24,7 @@ export const ItemCardSkeleton = () => (
   <div className="block h-full animate-pulse-slow">
     <div className="group relative flex flex-col h-full overflow-hidden rounded-[2rem] border border-neutral-100/50 dark:border-neutral-800/50 bg-white dark:bg-neutral-900 shadow-sm">
       {/* Image Section Skeleton */}
-      <Skeleton className="aspect-[4/3] w-full" variant="depth" />
+      <Skeleton className="aspect-[4/3] w-full" />
       
       {/* Content Section Skeleton */}
       <div className="flex flex-1 flex-col p-6">
@@ -87,7 +68,7 @@ export const PostCardSkeleton = () => (
 
     {/* Hero Image Skeleton */}
     <div className="px-5 mb-5 uppercase">
-      <Skeleton className="aspect-square sm:aspect-video max-h-[500px] w-full rounded-[1.5rem]" variant="depth" />
+      <Skeleton className="aspect-square sm:aspect-video max-h-[500px] w-full rounded-[1.5rem]" />
     </div>
 
     {/* Actions Skeleton */}
@@ -120,8 +101,8 @@ export const ProfileSkeleton = () => (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 relative">
       {/* Avatar Skeleton */}
       <div className="relative -mt-16 mb-8 flex flex-col items-center">
-        <div className="p-1 rounded-full bg-white shadow-2xl relative z-20">
-          <Skeleton className="h-32 w-32 rounded-full border-4 border-white shadow-inner" variant="depth" />
+        <div className="p-1 rounded-full bg-white shadow-xl relative z-20">
+          <Skeleton className="h-32 w-32 rounded-full border-4 border-white" />
         </div>
         
         {/* Info Skeleton */}
@@ -168,8 +149,8 @@ export const ProfileSkeleton = () => (
 );
 
 export const StorefrontSkeleton = () => (
-  <div className="w-full flex items-center gap-4 bg-white dark:bg-neutral-900 rounded-2xl p-4 shadow-sm border border-neutral-100 dark:border-neutral-800 animate-pulse-slow">
-    <Skeleton className="shrink-0 h-12 w-12 rounded-full shadow-inner" variant="depth" />
+  <div className="w-full flex items-center gap-4 bg-transparent rounded-2xl p-4 animate-pulse-slow">
+    <Skeleton className="shrink-0 h-12 w-12 rounded-full" />
     <div className="flex-1 space-y-2">
       <div className="flex items-center gap-2">
         <Skeleton className="h-4 w-32 rounded-lg" />
@@ -214,10 +195,10 @@ export const UserHomeProfileSkeleton = () => (
     
     <div className="space-y-4">
       <Skeleton className="h-3 w-24 rounded-full" />
-      <div className="bg-white dark:bg-neutral-900 rounded-3xl border border-neutral-100 dark:border-neutral-800 overflow-hidden shadow-sm p-4 space-y-4">
-        <Skeleton className="h-12 w-full rounded-2xl" variant="depth" />
-        <Skeleton className="h-12 w-full rounded-2xl" variant="depth" />
-        <Skeleton className="h-12 w-full rounded-2xl" variant="depth" />
+      <div className="bg-white rounded-3xl border border-neutral-100 overflow-hidden shadow-sm p-4 space-y-4">
+        <Skeleton className="h-12 w-full rounded-2xl" />
+        <Skeleton className="h-12 w-full rounded-2xl" />
+        <Skeleton className="h-12 w-full rounded-2xl" />
       </div>
     </div>
   </div>
