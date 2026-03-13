@@ -78,9 +78,10 @@ export const ConsumerFeed: React.FC = () => {
         postQuery = postQuery.eq('neighborhood', userBairro);
       }
 
-      prodQuery = prodQuery.order('created_at', { ascending: false }).limit(200);
-      svcQuery = svcQuery.order('created_at', { ascending: false }).limit(200);
-      postQuery = postQuery.order('created_at', { ascending: false }).limit(200);
+      // Reduzido para 50 para performance "instantânea"
+      prodQuery = prodQuery.order('created_at', { ascending: false }).limit(50);
+      svcQuery = svcQuery.order('created_at', { ascending: false }).limit(50);
+      postQuery = postQuery.order('created_at', { ascending: false }).limit(50);
 
       const [prodResult, svcResult, postResult] = await Promise.all([prodQuery, svcQuery, postQuery]);
 
@@ -89,12 +90,9 @@ export const ConsumerFeed: React.FC = () => {
       let finalPosts = (postResult.data ?? []) as unknown as FeedPost[];
 
       if (location) {
-        const normalizedUserCity = normalizeBairro(location.city);
         const normalizedUserBairro = userBairro ? normalizeBairro(userBairro) : '';
         
         finalProducts = finalProducts.filter(p => {
-           const baseCity = normalizeBairro(p.city);
-           if (normalizedUserCity && baseCity !== normalizedUserCity) return false;
            if (scope !== 'city' && normalizedUserBairro) {
              const baseBairro = normalizeBairro(p.neighborhood);
              if (baseBairro === normalizedUserBairro) return true;
@@ -105,8 +103,6 @@ export const ConsumerFeed: React.FC = () => {
         });
 
         finalServices = finalServices.filter(s => {
-           const baseCity = normalizeBairro(s.city);
-           if (normalizedUserCity && baseCity !== normalizedUserCity) return false;
            if (scope !== 'city' && normalizedUserBairro) {
              const baseBairro = normalizeBairro(s.neighborhood);
              if (baseBairro === normalizedUserBairro) return true;
@@ -114,17 +110,6 @@ export const ConsumerFeed: React.FC = () => {
              return false;
            }
            return true;
-        });
-
-        finalPosts = finalPosts.filter(p => {
-          const baseCity = normalizeBairro(p.city);
-          if (normalizedUserCity && baseCity !== normalizedUserCity) return false;
-          
-          if (scope !== 'city' && normalizedUserBairro) {
-            const baseBairro = normalizeBairro(p.neighborhood);
-            return baseBairro === normalizedUserBairro;
-          }
-          return true;
         });
       }
 
@@ -145,9 +130,9 @@ export const ConsumerFeed: React.FC = () => {
          return [...recentes, ...antigos];
       };
 
-      setProducts(separarRecentesEAntigos(finalProducts).slice(0, 30));
-      setServices(separarRecentesEAntigos(finalServices).slice(0, 30));
-      setPosts(separarRecentesEAntigos(finalPosts).slice(0, 30));
+      setProducts(separarRecentesEAntigos(finalProducts));
+      setServices(separarRecentesEAntigos(finalServices));
+      setPosts(separarRecentesEAntigos(finalPosts));
     } catch (err) {
       console.error('Erro ao carregar feed:', err);
     } finally {
@@ -226,14 +211,17 @@ export const ConsumerFeed: React.FC = () => {
   }, [fetchData]);
 
 
-  const renderMixedFeed = () => {
-    const items = [
+  // SIS-PERF: Memorização do Feed Misto para evitar recalculação em renders triviais
+  const mixedFeed = React.useMemo(() => {
+    return [
       ...products.map(p => ({ ...p, feedType: 'product' })),
       ...services.map(s => ({ ...s, feedType: 'service' })),
       ...posts.map(p => ({ ...p, feedType: 'post' }))
     ].sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+  }, [products, services, posts]);
 
-    return items.map((item: any) => {
+  const renderMixedFeed = () => {
+    return mixedFeed.map((item: any) => {
       if (item.feedType === 'post') {
         return (
           <PostCard 
