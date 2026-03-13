@@ -31,14 +31,15 @@ export const BottomNav: React.FC = () => {
   const [images, setImages] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showContactBtn, setShowContactBtn] = useState(true);
 
   // SIS-IDENTITY-SCAN: Busca nomes reais das identidades
   useEffect(() => {
     if (user) {
       const fetchIdentities = async () => {
         const [seller, provider] = await Promise.all([
-          supabase.from('sellers').select('store_name').eq('user_id', user.id).maybeSingle(),
-          supabase.from('service_providers').select('name').eq('user_id', user.id).maybeSingle()
+          supabase.from('sellers').select('id, store_name, username, whatsapp').eq('user_id', user.id).maybeSingle(),
+          supabase.from('service_providers').select('id, name, username, whatsapp, phone').eq('user_id', user.id).maybeSingle()
         ]);
         
         setNames({
@@ -140,11 +141,14 @@ export const BottomNav: React.FC = () => {
       if (selectedRole === 'seller' && roles.sellerData) {
         metadata.author_id = roles.sellerData.id;
         metadata.author_username = roles.sellerData.username;
+        metadata.whatsapp = roles.sellerData.whatsapp || user.user_metadata?.whatsapp || user.user_metadata?.phone;
       } else if (selectedRole === 'provider' && roles.providerData) {
         metadata.author_id = roles.providerData.id;
         metadata.author_username = roles.providerData.username;
+        metadata.whatsapp = roles.providerData.whatsapp || roles.providerData.phone || user.user_metadata?.whatsapp || user.user_metadata?.phone;
       } else {
         metadata.author_id = user.id;
+        metadata.whatsapp = user.user_metadata?.whatsapp || user.user_metadata?.phone;
       }
 
       await supabase.from('posts').insert({
@@ -154,7 +158,8 @@ export const BottomNav: React.FC = () => {
         image_urls: imageUrls,
         city: userLoc.city,
         neighborhood: userLoc.neighborhood,
-        metadata
+        metadata,
+        show_contact_btn: selectedRole !== 'personal' ? showContactBtn : false
       });
 
       setIsSheetOpen(false);
@@ -340,6 +345,27 @@ export const BottomNav: React.FC = () => {
                         onChange={e => setContent(e.target.value)}
                         className="w-full min-h-[160px] p-6 rounded-[32px] bg-neutral-50 border-none focus:ring-2 focus:ring-orange-500 text-neutral-900 placeholder:text-neutral-400 text-lg resize-none outline-none"
                       />
+
+                      {/* SIS-PERF: Toggle dinâmico para botão Chamar */}
+                      {selectedRole !== 'personal' && (
+                        <div className="flex items-center justify-between p-5 bg-neutral-50 rounded-3xl border border-neutral-100">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
+                              <Plus size={20} />
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-neutral-900">Exibir botão "Chamar"</p>
+                              <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-wider">Permitir contato direto via WhatsApp</p>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => setShowContactBtn(!showContactBtn)}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none ${showContactBtn ? 'bg-orange-600' : 'bg-neutral-200'}`}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 ${showContactBtn ? 'translate-x-6' : 'translate-x-1'}`} />
+                          </button>
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-2 gap-3">
                         {previews.map((url, i) => (

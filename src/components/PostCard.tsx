@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   MapPin, Clock, Tag, ShoppingBag, 
   ExternalLink, MessageSquare, Heart, Share2,
-  User, Store, Briefcase, Send, Trash2, Loader2, X
+  User, Store, Briefcase, Send, Trash2, Loader2, X, Plus
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -26,6 +26,7 @@ export interface FeedPost {
   comments_count: number;
   resolved_author_id?: string;
   resolved_author_username?: string;
+  show_contact_btn?: boolean;
 }
 
 interface PostCardProps {
@@ -165,6 +166,19 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
 
   const toggleComments = () => {
     setIsCommentsOpen(!isCommentsOpen);
+  };
+
+  const handleCall = () => {
+    // Busca o telefone do autor (se disponível nos metadados ou via tabela)
+    const phone = post.metadata?.whatsapp || post.metadata?.phone;
+    if (!phone) {
+      alert('Esta vitrine ainda não cadastrou um WhatsApp para contato direto.');
+      return;
+    }
+    
+    const cleanPhone = phone.replace(/\D/g, '');
+    const message = encodeURIComponent(`Olá, vi seu post no Sovix Connect: "${post.content?.slice(0, 30)}..." e gostaria de saber mais!`);
+    window.open(`https://wa.me/55${cleanPhone}?text=${message}`, '_blank');
   };
 
   const handleRetrySync = async () => {
@@ -395,6 +409,19 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
           <MessageSquare size={18} fill={isCommentsOpen ? 'currentColor' : 'none'} />
           <span className="text-[11px] font-bold">{commentsCount > 0 ? commentsCount : 'Comentar'}</span>
         </button>
+
+        {/* SIS-ACTION: Botão Chamar (WhatsApp) */}
+        {isVitrine && post.show_contact_btn !== false && (
+          <button 
+            onClick={handleCall}
+            className="flex items-center gap-1.5 text-green-600 hover:text-green-700 transition-all active:scale-95"
+          >
+            <div className="h-4 w-4 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+              <Plus size={10} className="text-green-600 fill-green-600/10" strokeWidth={3} />
+            </div>
+            <span className="text-[11px] font-bold uppercase tracking-wider">Chamar</span>
+          </button>
+        )}
         <button 
           onClick={handleShare}
           className="ml-auto flex items-center gap-1.5 text-neutral-400 hover:text-blue-600 transition-colors active:scale-90"
