@@ -10,6 +10,7 @@ import { Logo } from '../components/Logo';
 import { BottomNav } from '../components/BottomNav';
 import { LocationSelector } from '../components/LocationSelector';
 import { useLocationScope } from '../context/LocationContext';
+
 import { ItemCardSkeleton, PostCardSkeleton } from '../components/Skeleton';
 
 interface FeedProduct {
@@ -57,7 +58,7 @@ export const ConsumerFeed: React.FC = () => {
     if (!isSilent) setLoading(true);
     try {
       const prodSelect = 'id, name, price, image_url, category_id, created_at, city, neighborhood, bairros_disponiveis, sellers!products_seller_id_fkey(store_name, username, bairros_atendidos)';
-      const svcSelect = 'id, name, price, image_url, category_id, created_at, city, neighborhood, bairros_disponiveis, service_providers(name, rating, bairros_atendidos)';
+      const svcSelect = 'id, name, price, image_url, category_id, created_at, city, neighborhood, bairros_disponiveis, service_providers(name, username, rating, bairros_atendidos)';
       const postSelect = '*';
 
       const userCity = location?.city || '';
@@ -273,6 +274,7 @@ export const ConsumerFeed: React.FC = () => {
             image: item.image_url || 'https://picsum.photos/seed/' + item.id + '/800/1000',
             category: item.category_id ?? 'Serviço',
             provider: item.service_providers?.name ?? 'Prestador',
+            username: item.service_providers?.username ?? '',
             rating: item.service_providers?.rating ?? 5.0,
             city: item.city,
             neighborhood: item.neighborhood
@@ -284,8 +286,7 @@ export const ConsumerFeed: React.FC = () => {
 
   return (
     <div 
-      className="min-h-screen pb-24 flex flex-col overflow-x-hidden touch-pan-y"
-      style={{ overscrollBehaviorY: 'contain', WebkitOverflowScrolling: 'touch' } as any}
+      className="min-h-screen pb-24 flex flex-col overflow-x-hidden"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -444,6 +445,7 @@ export const ConsumerFeed: React.FC = () => {
                         image: service.image_url || 'https://picsum.photos/seed/' + service.id + '/800/1000',
                         category: service.category_id ?? 'Serviço',
                         provider: service.service_providers?.name ?? 'Prestador',
+                        username: service.service_providers?.username ?? '',
                         rating: service.service_providers?.rating ?? 5.0,
                         city: service.city,
                         neighborhood: service.neighborhood

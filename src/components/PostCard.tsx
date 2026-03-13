@@ -9,6 +9,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { toggleLike, checkUserLiked, sharePost, fetchComments, postComment, getUserIdentities } from '../lib/engage';
+
 import { CommentSkeleton } from './Skeleton';
 
 export interface FeedPost {
@@ -267,10 +268,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
   const handleHeaderClick = () => {
     if (!canNavigate) return;
     
-    const targetPath = post.author_type === 'seller' 
-      ? `/seller/${authorUser}`
-      : `/provider/${authorUser}`;
-    
+    const targetPath = `/@${authorUser}`;
     navigate(targetPath);
   };
 

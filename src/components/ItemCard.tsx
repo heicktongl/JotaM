@@ -62,7 +62,29 @@ export const ItemCard: React.FC<CardProps> = ({ item, type }) => {
           </div>
 
           <p className="mb-4 text-sm font-medium text-neutral-500 line-clamp-2">
-            {isProduct ? product.description : `Oferecido por ${service.provider}`}
+            {isProduct ? (
+              <>
+                {product.description}
+                <br />
+                <span className="text-[10px] font-black uppercase tracking-tighter text-neutral-400 mt-2 block hover:text-orange-600 transition-colors cursor-pointer" 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        window.location.href = `/@${product.username}`;
+                      }}>
+                  Vendido por <span className="underline">{product.seller}</span>
+                </span>
+              </>
+            ) : (
+              <span className="hover:text-orange-600 transition-colors cursor-pointer"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      window.location.href = `/@${(service as any).username}`;
+                    }}>
+                Oferecido por <span className="underline">{service.provider}</span>
+              </span>
+            )}
           </p>
 
           {/* Footer Section */}

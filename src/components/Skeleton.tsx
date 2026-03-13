@@ -3,41 +3,65 @@ import { motion } from 'motion/react';
 
 const Shimmer = () => (
   <motion.div
-    initial={{ x: '-100%' }}
-    animate={{ x: '100%' }}
+    initial={{ x: '-150%', skewX: -20 }}
+    animate={{ x: '150%', skewX: -20 }}
     transition={{
       repeat: Infinity,
-      duration: 1.5,
-      ease: 'linear',
+      duration: 2.5,
+      ease: "easeInOut",
+      repeatDelay: 0.5
     }}
-    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent"
+    className="absolute inset-0 z-10"
+    style={{
+      background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.03) 35%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 65%, transparent 100%)',
+    }}
   />
 );
 
-export const Skeleton: React.FC<{ className?: string }> = ({ className }) => (
-  <div className={`relative overflow-hidden bg-neutral-50 dark:bg-neutral-800/30 ${className}`}>
+export const Skeleton: React.FC<{ className?: string; variant?: 'default' | 'depth' }> = ({ 
+  className, 
+  variant = 'default' 
+}) => (
+  <div className={`
+    relative overflow-hidden 
+    bg-neutral-100/60 dark:bg-neutral-800/30 
+    backdrop-blur-[4px]
+    ${variant === 'depth' ? 'shadow-[inset_0_2px_4px_rgba(0,0,0,0.03)] border border-white/10' : ''}
+    ${className}
+  `}>
     <Shimmer />
+    {/* Subtle Internal Pulse for depth perception */}
+    <motion.div 
+      animate={{ opacity: [0.3, 0.5, 0.3] }}
+      transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+      className="absolute inset-0 bg-orange-500/5 pointer-events-none"
+    />
   </div>
 );
 
 export const ItemCardSkeleton = () => (
-  <div className="block h-full">
-    <div className="group relative flex flex-col h-full overflow-hidden rounded-3xl border border-neutral-100/50 dark:border-neutral-800/50 bg-white dark:bg-neutral-900 shadow-sm">
-      <Skeleton className="aspect-[4/3] w-full" />
-      <div className="flex flex-1 flex-col p-5">
-        <div className="mb-2 space-y-2">
-          <Skeleton className="h-4 w-full rounded-lg" />
-        </div>
-        <div className="mb-4 space-y-1.5">
-          <Skeleton className="h-2.5 w-full rounded-lg" />
-          <Skeleton className="h-2.5 w-4/5 rounded-lg" />
-        </div>
-        <div className="mt-auto pt-4 border-t border-neutral-100 dark:border-neutral-800 flex items-end justify-between">
-          <div className="space-y-1.5">
-            <Skeleton className="h-2 w-16 rounded-sm" />
-            <Skeleton className="h-6 w-28 rounded-lg" />
+  <div className="block h-full animate-pulse-slow">
+    <div className="group relative flex flex-col h-full overflow-hidden rounded-[2rem] border border-neutral-100/50 dark:border-neutral-800/50 bg-white dark:bg-neutral-900 shadow-sm">
+      {/* Image Section Skeleton */}
+      <Skeleton className="aspect-[4/3] w-full" variant="depth" />
+      
+      {/* Content Section Skeleton */}
+      <div className="flex flex-1 flex-col p-6">
+        <div className="mb-4 space-y-3">
+          <Skeleton className="h-5 w-3/4 rounded-xl" />
+          <div className="space-y-2">
+            <Skeleton className="h-3 w-full rounded-lg" />
+            <Skeleton className="h-3 w-5/6 rounded-lg" />
           </div>
-          <Skeleton className="h-9 w-9 rounded-full" />
+        </div>
+
+        {/* Footer Section Skeleton */}
+        <div className="mt-auto pt-5 border-t border-neutral-100/80 dark:border-neutral-800/80 flex items-end justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-2 w-12 rounded-full" />
+            <Skeleton className="h-7 w-32 rounded-xl" />
+          </div>
+          <Skeleton className="h-11 w-11 rounded-full" />
         </div>
       </div>
     </div>
@@ -45,37 +69,156 @@ export const ItemCardSkeleton = () => (
 );
 
 export const PostCardSkeleton = () => (
-  <div className="bg-white dark:bg-neutral-900 rounded-3xl border border-neutral-100/50 dark:border-neutral-800/50 overflow-hidden shadow-sm mb-6">
-    <div className="p-4 flex items-center gap-3">
-      <Skeleton className="h-9 w-9 rounded-full flex-shrink-0" />
-      <div className="space-y-1.5 flex-1 min-w-0">
-        <Skeleton className="h-3.5 w-48 rounded-lg" />
-        <Skeleton className="h-2.5 w-24 rounded-lg" />
+  <div className="bg-white dark:bg-neutral-900 rounded-[2rem] border border-neutral-100/50 dark:border-neutral-800/50 overflow-hidden shadow-sm mb-6 animate-pulse-slow">
+    {/* Header Skeleton */}
+    <div className="p-5 flex items-center gap-4">
+      <Skeleton className="h-11 w-11 rounded-full flex-shrink-0" />
+      <div className="space-y-2 flex-1 min-w-0">
+        <Skeleton className="h-4 w-40 rounded-xl" />
+        <Skeleton className="h-2.5 w-24 rounded-full" />
       </div>
     </div>
-    <div className="px-4 pb-3 space-y-1.5">
-      <Skeleton className="h-3 w-full rounded-lg" />
-      <Skeleton className="h-3 w-11/12 rounded-lg" />
+
+    {/* Content Skeleton */}
+    <div className="px-5 pb-4 space-y-2.5">
+      <Skeleton className="h-3.5 w-full rounded-lg" />
+      <Skeleton className="h-3.5 w-11/12 rounded-lg" />
     </div>
-    <div className="px-4 mb-4">
-      <Skeleton className="aspect-square max-h-[400px] w-full rounded-2xl" />
+
+    {/* Hero Image Skeleton */}
+    <div className="px-5 mb-5 uppercase">
+      <Skeleton className="aspect-square sm:aspect-video max-h-[500px] w-full rounded-[1.5rem]" variant="depth" />
     </div>
-    <div className="px-4 py-3 border-t border-neutral-50 dark:border-neutral-800 flex items-center gap-6">
-      <Skeleton className="h-3 w-20 rounded-md" />
-      <Skeleton className="h-3 w-20 rounded-md" />
-      <Skeleton className="h-3 w-12 rounded-md ml-auto" />
+
+    {/* Actions Skeleton */}
+    <div className="px-5 py-4 border-t border-neutral-50 dark:border-neutral-800 flex items-center gap-8">
+      <Skeleton className="h-4 w-16 rounded-full" />
+      <Skeleton className="h-4 w-16 rounded-full" />
+      <Skeleton className="h-4 w-10 rounded-full ml-auto" />
     </div>
   </div>
 );
+
 export const CommentSkeleton = () => (
-  <div className="flex gap-4 px-2">
-    <Skeleton className="h-11 w-11 rounded-2xl flex-shrink-0" />
-    <div className="flex-1 space-y-2">
-      <div className="flex justify-between items-center">
-        <Skeleton className="h-3 w-20 rounded-md" />
-        <Skeleton className="h-2 w-12 rounded-md" />
+  <div className="flex gap-4 px-3 py-1">
+    <Skeleton className="h-12 w-12 rounded-2xl flex-shrink-0" />
+    <div className="flex-1 space-y-3">
+      <div className="flex justify-between items-center pr-2">
+        <Skeleton className="h-3 w-28 rounded-full" />
+        <Skeleton className="h-2 w-10 rounded-full" />
       </div>
-      <Skeleton className="h-12 w-full rounded-2xl" />
+      <Skeleton className="h-14 w-full rounded-[1.25rem] rounded-tl-none" />
+    </div>
+  </div>
+);
+
+export const ProfileSkeleton = () => (
+  <div className="min-h-screen bg-neutral-50 pb-24 animate-pulse-slow">
+    {/* Cover Skeleton */}
+    <Skeleton className="h-48 md:h-64 w-full" />
+    
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 relative">
+      {/* Avatar Skeleton */}
+      <div className="relative -mt-16 mb-8 flex flex-col items-center">
+        <div className="p-1 rounded-full bg-white shadow-2xl relative z-20">
+          <Skeleton className="h-32 w-32 rounded-full border-4 border-white shadow-inner" variant="depth" />
+        </div>
+        
+        {/* Info Skeleton */}
+        <div className="mt-6 flex flex-col items-center gap-3 w-full">
+          <Skeleton className="h-8 w-64 rounded-xl" />
+          <Skeleton className="h-4 w-32 rounded-full" />
+          <div className="mt-4 space-y-2 w-full max-w-md">
+            <Skeleton className="h-3 w-full rounded-lg" />
+            <Skeleton className="h-3 w-4/5 rounded-lg mx-auto" />
+          </div>
+        </div>
+
+        {/* Metrics Skeleton */}
+        <div className="mt-10 flex gap-8 justify-center w-full">
+          <div className="space-y-2 flex flex-col items-center">
+            <Skeleton className="h-6 w-12 rounded-lg" />
+            <Skeleton className="h-2 w-16 rounded-full" />
+          </div>
+          <div className="space-y-2 flex flex-col items-center">
+            <Skeleton className="h-6 w-12 rounded-lg" />
+            <Skeleton className="h-2 w-16 rounded-full" />
+          </div>
+          <div className="space-y-2 flex flex-col items-center">
+            <Skeleton className="h-6 w-12 rounded-lg" />
+            <Skeleton className="h-2 w-16 rounded-full" />
+          </div>
+        </div>
+
+        {/* Buttons Skeleton */}
+        <div className="mt-10 flex flex-col sm:flex-row gap-3 w-full max-w-md px-4">
+          <Skeleton className="h-12 flex-1 rounded-full" />
+          <Skeleton className="h-12 flex-1 rounded-full" />
+        </div>
+      </div>
+
+      {/* Grid Skeleton */}
+      <div className="mt-8 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+        <ItemCardSkeleton />
+        <ItemCardSkeleton />
+        <ItemCardSkeleton />
+      </div>
+    </div>
+  </div>
+);
+
+export const StorefrontSkeleton = () => (
+  <div className="w-full flex items-center gap-4 bg-white dark:bg-neutral-900 rounded-2xl p-4 shadow-sm border border-neutral-100 dark:border-neutral-800 animate-pulse-slow">
+    <Skeleton className="shrink-0 h-12 w-12 rounded-full shadow-inner" variant="depth" />
+    <div className="flex-1 space-y-2">
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-4 w-32 rounded-lg" />
+        <Skeleton className="h-3 w-12 rounded-full" />
+      </div>
+      <Skeleton className="h-3 w-full rounded-lg" />
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-2 w-20 rounded-full" />
+        <Skeleton className="h-2 w-16 rounded-full" />
+      </div>
+    </div>
+    <Skeleton className="h-5 w-5 rounded-full" />
+  </div>
+);
+
+export const UserHomeProfileSkeleton = () => (
+  <div className="animate-pulse-slow space-y-8">
+    <div className="space-y-4">
+      <Skeleton className="h-3 w-24 rounded-full" />
+      <div className="bg-white rounded-3xl border border-neutral-100 overflow-hidden shadow-sm">
+        <div className="grid grid-cols-3 divide-x divide-neutral-100 bg-neutral-50/30">
+          <div className="p-4 space-y-2 flex flex-col items-center">
+            <Skeleton className="h-6 w-10 rounded-lg" />
+            <Skeleton className="h-2 w-12 rounded-full" />
+          </div>
+          <div className="p-4 space-y-2 flex flex-col items-center">
+            <Skeleton className="h-6 w-10 rounded-lg" />
+            <Skeleton className="h-2 w-12 rounded-full" />
+          </div>
+          <div className="p-4 space-y-2 flex flex-col items-center">
+            <Skeleton className="h-6 w-10 rounded-lg" />
+            <Skeleton className="h-2 w-12 rounded-full" />
+          </div>
+        </div>
+        <div className="p-4 space-y-4">
+          <Skeleton className="h-12 w-full rounded-2xl" />
+          <Skeleton className="h-12 w-full rounded-2xl" />
+          <Skeleton className="h-12 w-full rounded-2xl" />
+        </div>
+      </div>
+    </div>
+    
+    <div className="space-y-4">
+      <Skeleton className="h-3 w-24 rounded-full" />
+      <div className="bg-white dark:bg-neutral-900 rounded-3xl border border-neutral-100 dark:border-neutral-800 overflow-hidden shadow-sm p-4 space-y-4">
+        <Skeleton className="h-12 w-full rounded-2xl" variant="depth" />
+        <Skeleton className="h-12 w-full rounded-2xl" variant="depth" />
+        <Skeleton className="h-12 w-full rounded-2xl" variant="depth" />
+      </div>
     </div>
   </div>
 );

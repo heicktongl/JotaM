@@ -35,6 +35,7 @@ import { ThemeCustomization } from '../lib/themeEngine';
 import { registerView } from '../lib/metrics';
 import { AvailabilityBadge } from '../components/AvailabilityBadge';
 import { LoadingScreen } from '../components/LoadingScreen';
+import { ProfileSkeleton } from '../components/Skeleton';
 
 
 type Product = Database['public']['Tables']['products']['Row'];
@@ -330,7 +331,7 @@ export const SellerProfile: React.FC = () => {
   };
 
   if (isLoading) {
-    return <LoadingScreen />;
+    return <ProfileSkeleton />;
   }
 
   if (error || !profileId) {
