@@ -11,7 +11,7 @@ import { LocationSelector } from '../components/LocationSelector';
 import { useAuth } from '../hooks/useAuth';
 import { Logo } from '../components/Logo';
 import { supabase } from '../lib/supabase';
-import { UserHomeProfileSkeleton } from '../components/Skeleton';
+import { PremiumLoader } from '../components/PremiumLoader';
 
 
 interface UserRoles {
@@ -233,7 +233,9 @@ export const ProfilePage: React.FC = () => {
         <div className="space-y-6">
 
           {loadingRoles ? (
-            <UserHomeProfileSkeleton />
+            <div className="py-12">
+              <PremiumLoader />
+            </div>
           ) : (
             <>
               {/* ============================================ */}

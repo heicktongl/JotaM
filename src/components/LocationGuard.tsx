@@ -110,20 +110,6 @@ export const LocationGuard: React.FC<LocationGuardProps> = ({
 
     return (
         <>
-            {isNeighborhoodMismatch && (
-                <div className="w-full bg-amber-50 border-b border-amber-200 px-6 py-3 flex items-center gap-3">
-                    <TriangleAlert size={18} className="text-amber-500 shrink-0" />
-                    <p className="text-sm font-medium text-amber-800">
-                        Este vendedor está localizado no bairro{' '}
-                        <strong>{itemNeighborhood}</strong>. Confirme a disponibilidade de atendimento
-                        na sua área antes de realizar um pedido.
-                    </p>
-                    <a href="#" className="text-amber-600 text-sm font-bold whitespace-nowrap underline ml-auto hidden sm:block">
-                        <MapPin size={14} className="inline mr-1" />
-                        Ver no Mapa
-                    </a>
-                </div>
-            )}
             {children}
         </>
     );

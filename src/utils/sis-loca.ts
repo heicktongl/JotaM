@@ -8,6 +8,15 @@ export interface LocationIdentifier {
   neighborhood?: string | null;
 }
 
+export interface MapDispoResult {
+    nome_bairro: string;
+    cidade: string;
+    estado: string;
+    latitude: number;
+    longitude: number;
+    fonte: 'local' | 'osm';
+}
+
 /**
  * Normaliza strings para comparação (remove acentos, espaços extras e lowercases)
  */
@@ -119,4 +128,78 @@ export const fetchNeighborhoodsByCity = async (supabase: any, city: string): Pro
     console.error('Erro na Busca Sis-Loca de Bairros:', err);
     return [];
   }
+};
+
+/**
+ * Motor de Busca Territorial Dispositivo (MapDispo)
+ * Integra busca local (banco) com busca externa (OpenStreetMap/Nominatim)
+ */
+export const mapdispoSearch = async (supabase: any, query: string, cityContext?: string): Promise<MapDispoResult[]> => {
+    if (!query || query.length < 2) return [];
+
+    const results: MapDispoResult[] = [];
+
+    try {
+        // 1. Busca Local (Base Sovix)
+        const { data: localData } = await supabase
+            .from('store_locations')
+            .select('neighborhood, city, state, latitude, longitude')
+            .ilike('neighborhood', `%${query}%`)
+            .limit(5);
+
+        if (localData) {
+            localData.forEach((d: any) => {
+                results.push({
+                    nome_bairro: d.neighborhood,
+                    cidade: d.city,
+                    estado: d.state || 'UF',
+                    latitude: d.latitude,
+                    longitude: d.longitude,
+                    fonte: 'local'
+                });
+            });
+        }
+
+        // 2. Busca Externa (OSM)
+        const fullQuery = cityContext ? `${query}, ${cityContext}` : query;
+        const osmRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fullQuery)}&format=json&limit=10&addressdetails=1&countrycodes=br&accept-language=pt-BR`);
+        const osmData = await osmRes.json();
+
+        if (osmData) {
+            osmData.forEach((item: any) => {
+                const addr = item.address;
+                const bairro = addr.neighbourhood || addr.suburb || addr.city_district || addr.quarter;
+                if (bairro) {
+                    results.push({
+                        nome_bairro: bairro,
+                        cidade: addr.city || addr.town || addr.municipality,
+                        estado: addr.state,
+                        latitude: parseFloat(item.lat),
+                        longitude: parseFloat(item.lon),
+                        fonte: 'osm'
+                    });
+                }
+            });
+        }
+
+        // Remover duplicatas por nome de bairro e cidade
+        const seen = new Set();
+        return results.filter(r => {
+            const key = `${normalizeLoc(r.nome_bairro)}|${normalizeLoc(r.cidade)}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        }).slice(0, 10);
+
+    } catch (e) {
+        console.error('SIS-LOCA MapDispo Error:', e);
+        return results;
+    }
+};
+/**
+ * Verifica se um bairro já existe em uma lista, ignorando case e acentos.
+ */
+export const isBairroDuplicate = (list: string[], name: string): boolean => {
+  const normalized = normalizeLoc(name);
+  return list.some(item => normalizeLoc(extractBairroName(item)) === normalized);
 };

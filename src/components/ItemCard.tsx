@@ -25,7 +25,7 @@ export const ItemCard: React.FC<CardProps> = ({ item, type }) => {
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
-        className="group relative flex flex-col h-full overflow-hidden rounded-3xl bg-white border border-neutral-100 shadow-sm hover:shadow-xl hover:shadow-neutral-200/50 transition-all duration-300 hover:-translate-y-1"
+        className="group relative flex flex-col h-full overflow-hidden rounded-3xl bg-white border border-neutral-100/50 shadow-xl hover:shadow-2xl hover:shadow-neutral-200/50 transition-all duration-300 hover:-translate-y-1"
       >
         {/* Image Section */}
         <div className="relative aspect-[4/3] w-full overflow-hidden bg-neutral-100">

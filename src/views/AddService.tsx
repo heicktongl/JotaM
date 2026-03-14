@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, Plus, X, Loader2, Zap, Calendar, Repeat, Home, Clock, ChevronDown, Phone, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { withRetry } from '../utils/network';
 import { useLocationScope } from '../context/LocationContext';
 import { Logo } from '../components/Logo';
 import { extractBairroName } from '../utils/sis-loca';
@@ -214,6 +215,7 @@ export const AddService: React.FC = () => {
                 is_active: true,
                 neighborhood: userLocation?.neighborhood || null,
                 city: userLocation?.city || null,
+                condo: userLocation?.condo || null,
                 bairros_disponiveis: isAllBairros ? [] : selectedBairros,
                 service_type: formData.service_type,
                 is_home_service: homeService,
@@ -225,10 +227,10 @@ export const AddService: React.FC = () => {
                     ? { response_time_mins: null, duration_mins: parseInt(formData.duration_minutes, 10), billing_cycle: null }
                     : { response_time_mins: null, duration_mins: null, billing_cycle: formData.billing_cycle };
 
-            const { data, error } = await supabase.from('services').insert({
+            const { data, error } = await withRetry(async () => await supabase.from('services').insert({
                 ...basePayload,
                 ...typePayload,
-            }).select().single();
+            }).select().single());
 
             if (error) throw error;
 
@@ -247,9 +249,9 @@ export const AddService: React.FC = () => {
                 }).filter(Boolean);
 
                 if (availabilityRows.length > 0) {
-                    const { error: avErr } = await supabase
+                    const { error: avErr } = await withRetry(async () => await supabase
                         .from('service_availability')
-                        .insert(availabilityRows);
+                        .insert(availabilityRows));
 
                     if (avErr) {
                         console.error('Erro ao salvar horários de disponibilidade:', avErr);

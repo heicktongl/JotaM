@@ -8,8 +8,9 @@ import { Logo } from '../components/Logo';
 import { AvatarUploader } from '../components/AvatarUploader';
 import { PortfolioUploader } from '../components/PortfolioUploader';
 import { useLocationScope } from '../context/LocationContext';
-import { SISBairro, extractBairroName, fetchNeighborhoodsByCity } from '../utils/sis-loca';
+import { SISBairro, extractBairroName, fetchNeighborhoodsByCity, isBairroDuplicate } from '../utils/sis-loca';
 import { withRetry } from '../utils/network';
+import { MapDispoAutocomplete } from '../components/MapDispoAutocomplete';
 
 export const ServiceSetup: React.FC = () => {
     const navigate = useNavigate();
@@ -34,16 +35,8 @@ export const ServiceSetup: React.FC = () => {
 
     const [bairrosAtendidos, setBairrosAtendidos] = useState<string[]>([]);
     const [newBairroForm, setNewBairroForm] = useState<SISBairro>({ bairro: '', rua: '', numero: '', complemento: '' });
-    const [bairroSuggestions, setBairroSuggestions] = useState<string[]>([]);
-    const [showSuggestions, setShowSuggestions] = useState(false);
     const MAX_BAIRROS = 3;
 
-    // Buscar Sugestões de Bairro (Sis-Loca)
-    useEffect(() => {
-        if (location?.city) {
-            fetchNeighborhoodsByCity(supabase, location.city).then(sugs => setBairroSuggestions(sugs));
-        }
-    }, [location]);
 
     // Horários de atendimento (grade semanal)
     const DAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
@@ -63,11 +56,11 @@ export const ServiceSetup: React.FC = () => {
         const loadExistingProfile = async () => {
             if (!user) return;
             try {
-                const { data, error } = await supabase
+                const { data, error } = await withRetry(async () => await supabase
                     .from('service_providers')
                     .select('*')
                     .eq('user_id', user.id)
-                    .maybeSingle();
+                    .maybeSingle());
 
                 if (data) {
                     setName(data.name || '');
@@ -81,11 +74,11 @@ export const ServiceSetup: React.FC = () => {
                     if (data.bairros_atendidos) setBairrosAtendidos(data.bairros_atendidos);
 
                     // Carregar horários salvos
-                    const { data: avData } = await supabase
+                    const { data: avData } = await withRetry(async () => await supabase
                         .from('provider_availability')
                         .select('*')
                         .eq('provider_id', data.id)
-                        .order('day_of_week');
+                        .order('day_of_week'));
 
                     if (avData && avData.length > 0) {
                         setAvailability(prev => prev.map((slot, i) => {
@@ -186,9 +179,9 @@ export const ServiceSetup: React.FC = () => {
             }));
 
             // Upsert: insere ou atualiza baseado na constraint unique(provider_id, day_of_week)
-            await supabase
+            await withRetry(async () => await supabase
                 .from('provider_availability')
-                .upsert(availabilityRows, { onConflict: 'provider_id,day_of_week' });
+                .upsert(availabilityRows, { onConflict: 'provider_id,day_of_week' }));
 
             // 4) Salvar fotos de portfólio pendentes (caso new profile: uploadadas ao Storage sem providerId)
             if (portfolioUrls.length > 0) {
@@ -208,7 +201,7 @@ export const ServiceSetup: React.FC = () => {
                     }));
 
                 if (toInsert.length > 0) {
-                    await supabase.from('provider_portfolio_photos').insert(toInsert);
+                    await withRetry(async () => await supabase.from('provider_portfolio_photos').insert(toInsert));
                 }
             }
 
@@ -317,7 +310,7 @@ export const ServiceSetup: React.FC = () => {
                                     onUploadSuccess={(url) => {
                                         setCoverUrl(url);
                                         if (existingProviderId) {
-                                            supabase.from('service_providers').update({ cover_url: url }).eq('id', existingProviderId).then();
+                                            withRetry(async () => await supabase.from('service_providers').update({ cover_url: url }).eq('id', existingProviderId)).then();
                                         }
                                     }}
                                     uid={user?.id || ''}
@@ -333,7 +326,7 @@ export const ServiceSetup: React.FC = () => {
                                     onUploadSuccess={(url) => {
                                         setAvatarUrl(url);
                                         if (existingProviderId) {
-                                            supabase.from('service_providers').update({ avatar_url: url }).eq('id', existingProviderId).then();
+                                            withRetry(async () => await supabase.from('service_providers').update({ avatar_url: url }).eq('id', existingProviderId)).then();
                                         }
                                     }}
                                     uid={user?.id || ''}
@@ -490,45 +483,17 @@ export const ServiceSetup: React.FC = () => {
                                             
                                             <div>
                                                 <label className="block text-xs font-bold text-neutral-500 mb-1.5">Nome do Bairro *</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        value={newBairroForm.bairro}
-                                                        onChange={e => {
-                                                            setNewBairroForm(prev => ({ ...prev, bairro: e.target.value }));
-                                                            setShowSuggestions(true);
-                                                        }}
-                                                        onFocus={() => setShowSuggestions(true)}
-                                                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                                                        placeholder="Ex: Centro"
-                                                        className="w-full rounded-xl border border-neutral-200 p-3 text-sm font-bold text-neutral-900 placeholder:text-neutral-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                                                    />
-                                                    {/* Dropdown de Sugestões Sis-Loca */}
-                                                    <AnimatePresence>
-                                                        {showSuggestions && bairroSuggestions.length > 0 && (
-                                                            <motion.div 
-                                                                initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }}
-                                                                className="absolute z-10 w-full mt-1 bg-white border border-neutral-200 rounded-xl shadow-lg max-h-48 overflow-y-auto"
-                                                            >
-                                                                {bairroSuggestions
-                                                                    .filter(s => s.toLowerCase().includes(newBairroForm.bairro.toLowerCase()))
-                                                                    .map((sug, i) => (
-                                                                        <button
-                                                                            key={i}
-                                                                            type="button"
-                                                                            className="w-full text-left px-4 py-2.5 text-sm font-bold text-neutral-700 hover:bg-purple-50 hover:text-purple-700 transition-colors"
-                                                                            onClick={() => {
-                                                                                setNewBairroForm(prev => ({ ...prev, bairro: sug }));
-                                                                                setShowSuggestions(false);
-                                                                            }}
-                                                                        >
-                                                                            {sug}
-                                                                        </button>
-                                                                ))}
-                                                            </motion.div>
-                                                        )}
-                                                    </AnimatePresence>
-                                                </div>
+                                                <MapDispoAutocomplete 
+                                                    cityContext={location?.city || ''}
+                                                    initialValue={newBairroForm.bairro}
+                                                    onSelect={(res) => {
+                                                        setNewBairroForm(prev => ({ 
+                                                            ...prev, 
+                                                            bairro: res.nome_bairro 
+                                                        }));
+                                                    }}
+                                                    placeholder="Ex: Centro"
+                                                />
                                             </div>
 
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -561,14 +526,13 @@ export const ServiceSetup: React.FC = () => {
                                                             onChange={e => setNewBairroForm(prev => ({ ...prev, complemento: e.target.value }))}
                                                             placeholder="Sala 2"
                                                             className="w-full rounded-xl bg-white border border-neutral-200 p-3 text-sm font-medium text-neutral-700 focus:outline-none focus:border-purple-500"
-                                                        />
-                                                    </div>
+                                                    />
                                                 </div>
                                             </div>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => {
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
                                                     if (newBairroForm.bairro.trim()) {
                                                         const bairroData: SISBairro = {
                                                             bairro: newBairroForm.bairro.trim(),
@@ -577,26 +541,24 @@ export const ServiceSetup: React.FC = () => {
                                                             complemento: newBairroForm.complemento?.trim() || undefined,
                                                         };
                                                         
-                                                        // Checagem para evitar que o usuario adicione o mesmo bairro 2x
-                                                        const alreadyExists = bairrosAtendidos.some(bRaw => {
-                                                            try {
-                                                                return (JSON.parse(bRaw) as SISBairro).bairro.toLowerCase() === bairroData.bairro.toLowerCase();
-                                                            } catch {
-                                                                return bRaw.toLowerCase() === bairroData.bairro.toLowerCase();
-                                                            }
-                                                        });
-
-                                                        if (!alreadyExists) {
+                                                        // Checagem inteligente de duplicidade via SIS-LOCA
+                                                        if (!isBairroDuplicate(bairrosAtendidos, bairroData.bairro)) {
                                                             setBairrosAtendidos(prev => [...prev, JSON.stringify(bairroData)]);
                                                         }
                                                         
                                                         setNewBairroForm({ bairro: '', rua: '', numero: '', complemento: '' });
                                                     }
                                                 }}
-                                                disabled={!newBairroForm.bairro.trim()}
-                                                className="w-full px-4 py-3 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-xl font-bold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                                                disabled={!newBairroForm.bairro.trim() || isBairroDuplicate(bairrosAtendidos, newBairroForm.bairro)}
+                                                className={`w-full px-4 py-3 rounded-xl font-bold text-sm transition-all mt-2 ${
+                                                    isBairroDuplicate(bairrosAtendidos, newBairroForm.bairro)
+                                                    ? 'bg-red-50 text-red-400 cursor-not-allowed'
+                                                    : 'bg-purple-100 text-purple-700 hover:bg-purple-200 shadow-sm active:scale-[0.98]'
+                                                }`}
                                             >
-                                                Adicionar à Lista de Atendimento
+                                                {isBairroDuplicate(bairrosAtendidos, newBairroForm.bairro) 
+                                                    ? 'Este bairro já foi adicionado' 
+                                                    : 'Adicionar à Lista de Atendimento'}
                                             </button>
                                         </div>
                                     )}

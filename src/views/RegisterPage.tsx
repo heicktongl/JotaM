@@ -5,6 +5,7 @@ import { ChevronLeft, Mail, Lock, User, Loader2, AlertCircle, Eye, EyeOff } from
 import { useAuth } from '../hooks/useAuth';
 import { Logo } from '../components/Logo';
 import { supabase } from '../lib/supabase';
+import { withRetry } from '../utils/network';
 
 export const RegisterPage: React.FC = () => {
     const navigate = useNavigate();
@@ -36,13 +37,15 @@ export const RegisterPage: React.FC = () => {
         }
 
         if (data.user) {
-            // Inserir perfil básico na tabela estendida users
-            const { error: insertError } = await supabase.from('users').insert({
+            // Inserir perfil básico na tabela estendida users com retry para evitar 'Load failed'
+            const { error: insertError } = await withRetry(async () => 
+              await supabase.from('users').insert({
                 id: data.user.id,
                 email: email,
                 name: name,
                 role: 'consumer' // role padrao
-            });
+              })
+            );
 
             if (insertError) {
                 console.error('Erro ao criar perfil:', insertError);

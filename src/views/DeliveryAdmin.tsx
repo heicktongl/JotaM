@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { supabase } from '../lib/supabase';
+import { withRetry } from '../utils/network';
 import type { Database } from '../lib/database.types';
 
 type DeliveryProfile = Database['public']['Tables']['delivery_profiles']['Row'];
@@ -178,10 +179,10 @@ export const DeliveryAdmin: React.FC = () => {
       return;
     }
     setIsSavingGoal(true);
-    const { error: updateErr } = await supabase
+    const { error: updateErr } = await withRetry(async () => await supabase
       .from('delivery_profiles')
       .update({ daily_goal: newGoal })
-      .eq('id', profile.id);
+      .eq('id', profile.id));
     if (!updateErr) {
       setProfile(prev => prev ? { ...prev, daily_goal: newGoal } : prev);
     }
@@ -193,10 +194,10 @@ export const DeliveryAdmin: React.FC = () => {
     if (!profile || isTogglingOnline) return;
     setIsTogglingOnline(true);
     const newStatus = !profile.is_online;
-    const { error: updateErr } = await supabase
+    const { error: updateErr } = await withRetry(async () => await supabase
       .from('delivery_profiles')
       .update({ is_online: newStatus })
-      .eq('id', profile.id);
+      .eq('id', profile.id));
     if (!updateErr) {
       setProfile(prev => prev ? { ...prev, is_online: newStatus } : prev);
     }
@@ -208,11 +209,11 @@ export const DeliveryAdmin: React.FC = () => {
     setIsAccepting(orderId);
     try {
       // 1. Vincula o Entregador ao Pedido (Impede que outro pegue)
-      const { error: orderErr } = await supabase
+      const { error: orderErr } = await withRetry(async () => await supabase
         .from('orders')
         .update({ delivery_profile_id: profile.id, status: 'delivering' })
         .eq('id', orderId)
-        .is('delivery_profile_id', null); // Garantir concorrência (ninguém pegou ao mesmo tempo)
+        .is('delivery_profile_id', null)); // Garantir concorrência (ninguém pegou ao mesmo tempo)
 
       if (orderErr) throw orderErr;
 

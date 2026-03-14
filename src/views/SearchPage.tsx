@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useLocationScope } from '../context/LocationContext';
 import { sisSearch, getSuggestions, getPopularTerms } from '../lib/sis';
 import type { ScoredItem, ScoredStorefront, SISResults } from '../lib/sis';
-import { StorefrontSkeleton } from '../components/Skeleton';
+import { PremiumLoader } from '../components/PremiumLoader';
 
 // ──────────────────────────────────────────────
 // Tipos (internos)
@@ -476,12 +476,8 @@ export const SearchPage: React.FC = () => {
               </div>
 
               {isLoadingTop ? (
-                <div className="flex gap-3 overflow-x-auto pb-4 hide-scrollbar -mx-6 px-6">
-                  {[0, 1, 2].map((i) => (
-                    <div key={i} className="min-w-[220px] shrink-0">
-                      <StorefrontSkeleton />
-                    </div>
-                  ))}
+                <div className="py-6">
+                  <PremiumLoader />
                 </div>
               ) : topStorefronts.length > 0 ? (
                 <div className="flex gap-3 overflow-x-auto pb-4 hide-scrollbar snap-x snap-mandatory -mx-6 px-6">

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, Plus, X, Loader2, Zap, Calendar, Repeat, Home, Clock, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { withRetry } from '../utils/network';
 import { useLocationScope } from '../context/LocationContext';
 import { Logo } from '../components/Logo';
 
@@ -193,21 +194,21 @@ export const EditService: React.FC = () => {
 
             if (id) {
                 // EDITAR: atualiza o registro existente pelo id
-                const { data: updatedService, error } = await supabase
+                const { data: updatedService, error } = await withRetry(async () => await supabase
                     .from('services')
                     .update({ ...basePayload, ...typePayload })
                     .eq('id', id)
                     .select()
-                    .single();
+                    .single());
                 dbError = error;
                 if (updatedService) finalServiceId = updatedService.id;
             } else {
                 // CRIAR: insere novo registro
-                const { data: newService, error } = await supabase
+                const { data: newService, error } = await withRetry(async () => await supabase
                     .from('services')
                     .insert({ ...basePayload, ...typePayload })
                     .select()
-                    .single();
+                    .single());
                 dbError = error;
                 if (newService) finalServiceId = newService.id;
             }
@@ -228,12 +229,12 @@ export const EditService: React.FC = () => {
                     }).filter(Boolean);
 
                     // Limpa tudo antes de salvar de novo (upsert)
-                    await supabase.from('service_availability').delete().eq('service_id', finalServiceId);
+                    await withRetry(async () => await supabase.from('service_availability').delete().eq('service_id', finalServiceId));
 
                     if (availabilityRows.length > 0) {
-                        const { error: avErr } = await supabase
+                        const { error: avErr } = await withRetry(async () => await supabase
                             .from('service_availability')
-                            .insert(availabilityRows);
+                            .insert(availabilityRows));
 
                         if (avErr) {
                             console.error('Erro ao salvar horários de disponibilidade:', avErr);
@@ -241,7 +242,7 @@ export const EditService: React.FC = () => {
                     }
                 } else {
                     // Se desligou o switch "usar custom", apaga os rastros do banco
-                    await supabase.from('service_availability').delete().eq('service_id', finalServiceId);
+                    await withRetry(async () => await supabase.from('service_availability').delete().eq('service_id', finalServiceId));
                 }
             }
 

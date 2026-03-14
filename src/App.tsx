@@ -32,6 +32,7 @@ const ThemeGallery = lazy(() => import('./views/ThemeGallery').then(m => ({ defa
 const CreatePost = lazy(() => import('./views/CreatePost').then(m => ({ default: m.CreatePost })));
 const FavoritesPage = lazy(() => import('./views/FavoritesPage').then(m => ({ default: m.FavoritesPage })));
 const OrderHistoryPage = lazy(() => import('./views/OrderHistoryPage').then(m => ({ default: m.OrderHistoryPage })));
+import { VitrineSkeleton } from './components/VitrineSkeleton';
 
 export default function App() {
   useEffect(() => {
@@ -106,13 +107,15 @@ export default function App() {
                   </motion.div>
                 } />
                 <Route path="/:username" element={
-                  <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                  >
-                    <SellerProfile />
-                  </motion.div>
+                  <Suspense fallback={<VitrineSkeleton />}>
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                    >
+                      <SellerProfile />
+                    </motion.div>
+                  </Suspense>
                 } />
                 <Route path="/cart" element={
                   <motion.div

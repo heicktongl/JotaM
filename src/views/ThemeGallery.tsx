@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { withRetry } from '../utils/network';
 import { THEME_REGISTRY } from '../lib/themeRegistry';
 import { ThemeCustomization, generateThemeCSSVariables } from '../lib/themeEngine';
 
@@ -68,7 +69,7 @@ export const ThemeGallery: React.FC = () => {
 
         try {
             const table = userType === 'seller' ? 'sellers' : 'service_providers';
-            const { error } = await supabase.from(table).update({ theme_id: activePreview.id, theme_customization: customization }).eq('user_id', user.id);
+            const { error } = await withRetry(async () => await supabase.from(table).update({ theme_id: activePreview.id, theme_customization: customization }).eq('user_id', user.id));
             if (error) throw error;
 
             setCurrentThemeId(activePreview.id);

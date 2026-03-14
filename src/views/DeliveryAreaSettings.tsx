@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { withRetry } from '../utils/network';
 import { Logo } from '../components/Logo';
 
 interface Neighborhood {
@@ -162,10 +163,10 @@ export const DeliveryAreaSettings: React.FC = () => {
       
       const tableName = profileType === 'seller' ? 'sellers' : 'service_providers';
 
-      const { error } = await supabase
+      const { error } = await withRetry(async () => await supabase
         .from(tableName as any)
         .update({ bairros_atendidos: neighborhoodNames })
-        .eq('id', profileId);
+        .eq('id', profileId));
 
       if (error) throw error;
       

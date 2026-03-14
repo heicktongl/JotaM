@@ -24,6 +24,7 @@ import {
 import { Logo } from '../components/Logo';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { withRetry } from '../utils/network';
 
 // Tipagem Expandida para Join com o usuário Consumidor
 interface AppointmentRow {
@@ -119,10 +120,10 @@ export const ServiceAdmin: React.FC = () => {
 
   const updateStatus = async (appointmentId: string, newStatus: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await withRetry(async () => await supabase
         .from('appointments')
         .update({ status: newStatus })
-        .eq('id', appointmentId);
+        .eq('id', appointmentId));
 
       if (error) throw error;
 
@@ -140,10 +141,10 @@ export const ServiceAdmin: React.FC = () => {
 
   const handleToggleServiceActive = async (id: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase
+      const { error } = await withRetry(async () => await supabase
         .from('services')
         .update({ is_active: !currentStatus })
-        .eq('id', id);
+        .eq('id', id));
 
       if (error) throw error;
 
@@ -162,10 +163,10 @@ export const ServiceAdmin: React.FC = () => {
     }
 
     try {
-      const { error } = await supabase
+      const { error } = await withRetry(async () => await supabase
         .from('services')
         .delete()
-        .eq('id', id);
+        .eq('id', id));
 
       if (error) throw error;
 

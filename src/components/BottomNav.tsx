@@ -158,6 +158,7 @@ export const BottomNav: React.FC = () => {
         image_urls: imageUrls,
         city: userLoc.city,
         neighborhood: userLoc.neighborhood,
+        condo: userLoc.condo,
         metadata,
         show_contact_btn: selectedRole !== 'personal' ? showContactBtn : false
       });

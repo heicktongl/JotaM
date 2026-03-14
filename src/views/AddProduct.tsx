@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, Plus, X, Loader2, Phone, ArrowRight, ChevronDown, ChevronUp, Puzzle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { withRetry } from '../utils/network';
 import { Logo } from '../components/Logo';
 import { extractBairroName } from '../utils/sis-loca';
 export const AddProduct: React.FC = () => {
@@ -210,7 +211,7 @@ export const AddProduct: React.FC = () => {
           finalCategoryId = existingCat.id;
         } else {
           // Cria nova categoria global para a comunidade
-          const { data: newCat, error: catErr } = await supabase
+          const { data: newCat, error: catErr } = await withRetry(async () => await supabase
             .from('categories')
             .insert({
               name: customCategory.trim(),
@@ -218,7 +219,7 @@ export const AddProduct: React.FC = () => {
               icon: 'Puzzle' // Ícone padrão para novas categorias
             })
             .select('id')
-            .single();
+            .single());
 
           if (catErr) throw catErr;
           finalCategoryId = newCat.id;
@@ -256,7 +257,7 @@ export const AddProduct: React.FC = () => {
       // 3. Buscar a localização OFICIAL da loja
       const { data: storeLocation } = await supabase
         .from('store_locations')
-        .select('neighborhood, city')
+        .select('neighborhood, city, condo')
         .eq('seller_id', sellerData.id)
         .eq('is_primary', true)
         .maybeSingle();
@@ -282,7 +283,7 @@ export const AddProduct: React.FC = () => {
       const finalBairrosDisponiveis = isAllBairros ? [] : selectedBairros;
 
       // 6. Inserir o produto
-      const { data: productRef, error: productErr } = await supabase.from('products').insert({
+      const { data: productRef, error: productErr } = await withRetry(async () => await supabase.from('products').insert({
         seller_id: sellerData.id,
         category_id: finalCategoryId || null,
         name: formData.name,
@@ -293,8 +294,9 @@ export const AddProduct: React.FC = () => {
         is_active: true,
         neighborhood: storeLocation?.neighborhood || null,
         city: storeLocation?.city || null,
+        condo: storeLocation?.condo || null,
         bairros_disponiveis: finalBairrosDisponiveis,
-      }).select('id').single();
+      }).select('id').single());
 
       if (productErr || !productRef) throw productErr;
 
@@ -306,7 +308,7 @@ export const AddProduct: React.FC = () => {
           // Se o tipo de preço for 'single', ignora grupos que marcados como variação (limpeza)
           if (priceType === 'single' && group.is_variation) continue;
 
-          const { data: savedGroup } = await supabase
+          const { data: savedGroup } = await withRetry(async () => await supabase
             .from('product_complement_groups')
             .insert({
               product_id: productRef.id,
@@ -317,10 +319,10 @@ export const AddProduct: React.FC = () => {
               position: gIdx,
             })
             .select('id')
-            .single();
+            .single());
 
           if (savedGroup && group.items.length > 0) {
-            await supabase.from('product_complement_items').insert(
+            await withRetry(async () => await supabase.from('product_complement_items').insert(
               group.items.map((item, iIdx) => ({
                 group_id: savedGroup.id,
                 name: item.name,
@@ -329,7 +331,7 @@ export const AddProduct: React.FC = () => {
                 position: iIdx,
                 image_url: item.image_url || null,
               }))
-            );
+            ));
           }
         }
       }

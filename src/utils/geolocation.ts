@@ -1,120 +1,235 @@
 import { LocationData } from '../context/LocationContext';
 
 /**
- * Utilitário global para Geocodificação Reversa.
- * Unifica a inteligência de extração de bairro (Google Maps -> OSM fallback)
- * para que Lojistas, Prestadores e Consumidores operem sob as mesmas métricas.
+ * SIS-LOCA-ENGINE: Arquitetura de Pipeline para Precisão Hiperlocal
  */
-export const getDetailedLocation = async (latitude: number, longitude: number): Promise<LocationData> => {
-    const apiKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY;
 
-    if (!apiKey) {
-        // Fallback Gratuito: Nominatim (OpenStreetMap) com extração robusta para o Brasil
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=pt-BR`);
-        const data = await res.json();
+export const SIS_LOCA_RESIDENTIAL_INDICATORS = [
+    'residencial', 'condominio', 'edificio', 'village', 'apartamento', 
+    'bloco', 'torre', 'condomínio', 'resid.', 'res.', 'cond.', 
+    'edif.', 'ed.', 'building', 'premise', 'jardim', 'clube', 'viver', 
+    'parque residencial', 'piscina', 'villagio', 'parque', 'alameda'
+];
 
-        if (data && data.address) {
-            const addr = data.address;
+interface RawSourceData {
+    source: 'google' | 'viacep' | 'osm';
+    condo?: string;
+    neighborhood?: string;
+    city?: string;
+    cep?: string;
+    type?: string;
+    score: number;
+}
 
-            // 1. Extração do Condomínio / Rua
-            const condo = addr.amenity || addr.building || addr.residential ||
-                (addr.road ? `${addr.road}${addr.house_number ? `, ${addr.house_number}` : ''}` : '');
+class TerritoryEngine {
+    private sources: RawSourceData[] = [];
+    private lat: number;
+    private lng: number;
 
-            // 2. Extração Robusta do Bairro (Priorizando as tags mais precisas do OSM no Brasil)
-            const neighborhood = addr.neighbourhood || addr.suburb || addr.city_district || addr.quarter || addr.village;
+    constructor(lat: number, lng: number) {
+        this.lat = lat;
+        this.lng = lng;
+    }
 
-            const city = addr.city || addr.town || addr.municipality || addr.county;
+    private detectResidencial(name: string | null | undefined): boolean {
+        if (!name) return false;
+        const lower = name.toLowerCase();
+        return SIS_LOCA_RESIDENTIAL_INDICATORS.some(term => lower.includes(term));
+    }
 
-            return {
-                lat: latitude,
-                lng: longitude,
-                condo: condo || 'Meu Endereço',
-                neighborhood: neighborhood || 'Bairro Desconhecido',
-                city: city || 'Cidade Desconhecida'
-            };
-        } else {
-            throw new Error('Não foi possível obter o endereço exato pelo serviço gratuito.');
+    private cleanNeighborhood(name: string, condoName?: string): string {
+        if (!name) return 'Bairro Desconhecido';
+        const lower = name.toLowerCase();
+        
+        // Se o bairro for um residencial, ele não é um bairro geográfico puro
+        if (this.detectResidencial(name)) return '';
+
+        // Se for igual ao condomínio, é duplicata
+        if (condoName && lower === condoName.toLowerCase()) return '';
+
+        return name;
+    }
+
+    async collectGoogle(apiKey: string): Promise<void> {
+        try {
+            const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${this.lat},${this.lng}&key=${apiKey}&language=pt-BR`);
+            const data = await res.json();
+
+            if (data.status === 'OK' && data.results.length > 0) {
+                data.results.forEach((result: any, idx: number) => {
+                    const locationType = result.geometry.location_type;
+                    let neighborhood = '';
+                    let condo = '';
+                    let cep = '';
+                    let city = '';
+
+                    result.address_components.forEach((comp: any) => {
+                        const types = comp.types;
+                        if (types.includes('postal_code')) cep = comp.long_name.replace(/\D/g, '');
+                        if (types.includes('premise') || types.includes('building') || types.includes('point_of_interest')) {
+                            condo = comp.long_name;
+                        }
+                        if (types.includes('sublocality_level_1') || types.includes('neighborhood') || types.includes('sublocality')) {
+                            neighborhood = comp.long_name;
+                        }
+                        if (types.includes('administrative_area_level_2') || types.includes('locality')) {
+                            city = comp.long_name;
+                        }
+                    });
+
+                    // Score baseado na precisão do ponto
+                    const baseScore = locationType === 'ROOFTOP' ? 0.9 : 0.6;
+                    this.sources.push({
+                        source: 'google',
+                        condo,
+                        neighborhood,
+                        city,
+                        cep,
+                        type: locationType,
+                        score: baseScore - (idx * 0.1) // Resultados secundários têm menos peso
+                    });
+                });
+            }
+        } catch (e) {
+            console.error('SIS-LOCA: Google Collect Error', e);
         }
     }
 
-    // Fluxo Premium: Google Maps API (Alta precisão)
-    const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}&language=pt-BR`);
-    const data = await res.json();
-
-    if (data.status === 'OK' && data.results.length > 0) {
-        let rawCondo = '';
-        let neighborhood = '';
-        let city = '';
-        let route = '';
-        let streetNumber = '';
-        let locationType = data.results[0].geometry.location_type;
-
-        const forbiddenBairroTerms = ['residencial', 'condominio', 'edificio', 'village', 'apartamento', 'bloco', 'torre'];
-
-        /**
-         * SIS-LOCA-SCRUBBING: Limpa nomes que não são bairros geográficos reais.
-         */
-        const isActuallyABairro = (name: string) => {
-            if (!name) return false;
-            const lower = name.toLowerCase();
-            return !forbiddenBairroTerms.some(term => lower.includes(term));
-        };
-
-        // 1. Extrair Rua/Condomínio e Cidade do resultado mais específico
-        data.results[0].address_components.forEach((component: any) => {
-            const types = component.types;
-            if (types.includes('premise') || types.includes('building') || types.includes('point_of_interest')) rawCondo = component.long_name;
-            if (types.includes('route')) route = component.long_name;
-            if (types.includes('street_number')) streetNumber = component.long_name;
-            if (types.includes('administrative_area_level_2') || types.includes('locality')) city = component.long_name;
-        });
-
-        // 2. Extração Robusta de Bairro (Soberania do Bairro Geográfico)
-        for (const result of data.results) {
-            for (const comp of result.address_components) {
-                // Prioriza sublocality_level_1 (Bairro oficial no BR)
-                if (comp.types.includes('sublocality_level_1') && isActuallyABairro(comp.long_name)) {
-                    neighborhood = comp.long_name;
-                    break;
-                }
+    async collectViaCep(cep: string): Promise<void> {
+        if (!cep || cep.length !== 8) return;
+        try {
+            const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+            const data = await res.json();
+            if (data && !data.erro) {
+                this.sources.push({
+                    source: 'viacep',
+                    neighborhood: data.bairro,
+                    city: data.localidade,
+                    condo: data.logradouro,
+                    cep: data.cep.replace(/\D/g, ''),
+                    score: 1.0 // Verdade Absoluta Geográfica
+                });
             }
-            if (neighborhood) break;
+        } catch (e) {
+            console.warn('SIS-LOCA: ViaCEP Collect Error', e);
+        }
+    }
+
+    snap(): LocationData {
+        let finalCondo = 'Meu Endereço';
+        let finalNeighborhood = 'Bairro Desconhecido';
+        let finalCity = 'Cidade Desconhecida';
+        let finalCep = '';
+        let isResidencial = false;
+
+        // 1. Extração de CEP (Maior score ganha)
+        const bestCep = [...this.sources].sort((a, b) => b.score - a.score).find(s => s.cep);
+        finalCep = bestCep?.cep || '';
+
+        // 2. Extração de Bairro (Soberania Geográfica)
+        // Filtramos qualquer "bairro" que na verdade seja um residencial
+        const neighborSources = this.sources
+            .filter(s => s.neighborhood && !this.detectResidencial(s.neighborhood))
+            .sort((a, b) => b.score - a.score);
+        
+        if (neighborSources.length > 0) {
+            finalNeighborhood = neighborSources[0].neighborhood!;
         }
 
-        // Fallback de bairro caso sublocality_level_1 falhe ou seja um residencial
-        if (!neighborhood) {
-            for (const result of data.results) {
-                for (const comp of result.address_components) {
-                    if ((comp.types.includes('sublocality') || comp.types.includes('neighborhood')) && isActuallyABairro(comp.long_name)) {
-                        neighborhood = comp.long_name;
-                        break;
-                    }
-                }
-                if (neighborhood) break;
-            }
-        }
+        // 3. Extração de Residencial (Condo)
+        // Se o ViaCEP ou Google sugeriu um bairro que é residencial, ele vira Condo
+        const condoCandidates = this.sources
+            .filter(s => s.condo || (s.neighborhood && this.detectResidencial(s.neighborhood)))
+            .map(s => {
+                const name = this.detectResidencial(s.neighborhood) ? s.neighborhood! : s.condo!;
+                return { name, score: s.score };
+            })
+            .filter(c => c.name && c.name !== 'Meu Endereço')
+            .sort((a, b) => b.score - a.score);
 
-        /**
-         * SIS-LOCA-ROOFTOP-LOCK: 
-         * Só habilita o nome do Residencial se estivermos "em cima do teto".
-         * Caso contrário, o nome do condomínio vizinho não deve vazar para a UI.
-         */
-        let finalCondo = '';
-        if (locationType === 'ROOFTOP' && rawCondo) {
-            finalCondo = rawCondo;
+        if (condoCandidates.length > 0) {
+            finalCondo = condoCandidates[0].name;
+            isResidencial = this.detectResidencial(finalCondo);
         } else {
-            // Se não está dentro, mostra apenas a Rua e Número
-            finalCondo = route ? `${route}${streetNumber ? `, ${streetNumber}` : ''}` : 'Meu Endereço';
+            // Fallback para Rua se não houver nome de prédio
+            const routeSource = this.sources.find(s => s.source === 'google' && s.condo);
+            if (routeSource) finalCondo = routeSource.condo!;
         }
+
+        // 4. Extração de Cidade
+        const citySource = this.sources.find(s => s.city);
+        if (citySource) finalCity = citySource.city!;
 
         return {
-            lat: latitude,
-            lng: longitude,
+            lat: this.lat,
+            lng: this.lng,
             condo: finalCondo,
-            neighborhood: neighborhood || 'Bairro Desconhecido',
-            city: city || 'Cidade Desconhecida'
+            neighborhood: finalNeighborhood,
+            city: finalCity,
+            cep: finalCep,
+            isResidencial
         };
-    } else {
-        throw new Error(data.error_message || 'Não foi possível obter o endereço exato pelo Google Maps.');
     }
+}
+
+/**
+ * Interface Pública Unificada
+ */
+export const getDetailedLocation = async (latitude: number, longitude: number): Promise<LocationData> => {
+    const engine = new TerritoryEngine(latitude, longitude);
+    const apiKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY;
+
+    if (apiKey) {
+        await engine.collectGoogle(apiKey);
+        
+        // Triangulação com ViaCEP se o Google achou um CEP
+        const tempSnap = engine.snap();
+        if (tempSnap.cep) {
+            await engine.collectViaCep(tempSnap.cep);
+        }
+        
+        const finalResult = engine.snap();
+        console.log('SIS-LOCA Engine: Pipeline Complete', finalResult);
+        return finalResult;
+    }
+
+    // Fallback Legado se não houver API Key
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=pt-BR`);
+    const data = await res.json();
+    const addr = data.address;
+    const condo = addr.amenity || addr.building || addr.residential || addr.house_name || addr.road || 'Meu Endereço';
+    
+    return {
+        lat: latitude,
+        lng: longitude,
+        condo: condo,
+        neighborhood: addr.neighbourhood || addr.suburb || 'Bairro Desconhecido',
+        city: addr.city || addr.town || 'Cidade Desconhecida',
+        isResidencial: SIS_LOCA_RESIDENTIAL_INDICATORS.some(t => condo.toLowerCase().includes(t))
+    };
+};
+
+export const sisLocaDetectResidencial = (name: string | null | undefined): boolean => {
+    if (!name) return false;
+    const lower = name.toLowerCase();
+    return SIS_LOCA_RESIDENTIAL_INDICATORS.some(term => lower.includes(term));
+};
+
+export const sisLocaScrubNeighborhood = (name: string | null | undefined): string => {
+    if (!name) return 'Bairro Desconhecido';
+    return name;
+};
+
+// SIS-LOCA-SMART-CACHE: Utilitário de distância
+export const getDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3; 
+    const φ1 = lat1 * Math.PI/180;
+    const φ2 = lat2 * Math.PI/180;
+    const Δφ = (lat2-lat1) * Math.PI/180;
+    const Δλ = (lon2-lon1) * Math.PI/180;
+    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
 };

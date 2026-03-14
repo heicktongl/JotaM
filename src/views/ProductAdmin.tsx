@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
+import { withRetry } from '../utils/network';
 import { Logo } from '../components/Logo';
 
 interface SellerProduct {
@@ -123,10 +124,10 @@ export const ProductAdmin: React.FC = () => {
 
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase
+      const { error } = await withRetry(async () => await supabase
         .from('products')
         .update({ is_active: !currentStatus })
-        .eq('id', id);
+        .eq('id', id));
       if (error) throw error;
       setProducts(prev => prev.map(p => p.id === id ? { ...p, is_active: !currentStatus } : p));
     } catch (err) {
@@ -138,7 +139,7 @@ export const ProductAdmin: React.FC = () => {
   const handleDelete = async (id: string) => {
     if (!window.confirm('Tem certeza que deseja apagar este produto definitivamente?')) return;
     try {
-      const { error } = await supabase.from('products').delete().eq('id', id);
+      const { error } = await withRetry(async () => await supabase.from('products').delete().eq('id', id));
       if (error) throw error;
       setProducts(prev => prev.filter(p => p.id !== id));
     } catch (err) {
