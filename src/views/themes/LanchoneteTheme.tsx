@@ -1,11 +1,9 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Share2, Clock, MapPin, Star, ChevronRight, ChevronLeft, Check, Heart, Loader2, TriangleAlert } from 'lucide-react';
-import { useLocationScope } from '../../context/LocationContext';
+import { Share2, Clock, MapPin, Star, ChevronRight, ChevronLeft, Check, Heart, Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { VitrineTheme } from '../../lib/themeRegistry';
 import { AvailabilityBadge } from '../../components/AvailabilityBadge';
-import { extractBairroName } from '../../utils/sis-loca';
 
 interface ProfileData {
     displayName: string;
@@ -32,8 +30,6 @@ interface ProfileData {
     isFollowing: boolean;
     isFollowLoading?: boolean;
     theme: VitrineTheme;
-    bairrosAtendidos?: string[];
-    onBack: () => void;
 }
 
 export const LanchoneteTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
@@ -49,19 +45,6 @@ export const LanchoneteTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
     const avatarSrc = data.avatarUrl ?? `https://picsum.photos/seed/${avatarSeed}profile/200/200`;
 
     const primaryLoc = data.storeLocations?.[0];
-    const { location } = useLocationScope();
-
-    const normalizeStr = (s: string) =>
-        s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-
-    const currentNeighborhood = normalizeStr(primaryLoc?.neighborhood || data.profileNeighborhood || '');
-    const userNeighborhood = location?.neighborhood ? normalizeStr(location.neighborhood) : '';
-    const coveredBairros = (data.bairrosAtendidos || []).map(b => normalizeStr(b));
-
-    const isOutOfArea = userNeighborhood && 
-                        currentNeighborhood !== userNeighborhood && 
-                        !coveredBairros.includes(userNeighborhood);
-
 
     return (
         <div className="min-h-screen bg-[#f9f9fa] font-sans pb-24" style={{ '--theme-primary': theme.colors.primary } as any}>
@@ -82,7 +65,7 @@ export const LanchoneteTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
                 </button>
                 {/* Back Button top left */}
                 <button
-                    onClick={data.onBack}
+                    onClick={() => navigate(-1)}
                     className="absolute top-6 left-6 lg:left-8 w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white"
                 >
                     <ChevronLeft size={22} />
@@ -204,19 +187,14 @@ export const LanchoneteTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
                         </div>
                         <div className="flex-1">
                             <h4 className="font-bold text-neutral-900 text-sm">
-                                {extractBairroName(primaryLoc?.neighborhood || data.profileNeighborhood) || 'Bairro'}
+                                {primaryLoc?.street ? `${primaryLoc.street}, ${primaryLoc.number || 'S/N'}` : 'Endereço Local'}
                             </h4>
-                            <p className={`text-xs font-semibold ${isOutOfArea ? 'text-red-500 animate-pulse' : 'text-neutral-500'}`}>
-                                {primaryLoc?.city || data.profileCity || 'Cidade'}
-                                {isOutOfArea && (
-                                    <span className="block text-[9px] font-black uppercase tracking-tighter mt-0.5">
-                                        Fora da sua área de cobertura
-                                    </span>
-                                )}
+                            <p className="text-xs font-semibold text-neutral-500">
+                                {primaryLoc?.neighborhood || data.profileNeighborhood || 'Bairro'} • {primaryLoc?.city || data.profileCity || 'Cidade'}
                             </p>
                         </div>
-                        <button className={`text-[10px] font-black tracking-wider uppercase pl-2 ${isOutOfArea ? 'text-red-600' : 'text-neutral-400'}`}>
-                            {isOutOfArea ? 'Atenção' : 'Ver no mapa'}
+                        <button className="text-[10px] font-black text-red-600 tracking-wider uppercase pl-2">
+                            Ver no mapa
                         </button>
                     </div>
                 </div>

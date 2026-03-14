@@ -1,10 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Share2, MapPin, Star, Heart, Loader2, ShoppingBag, Clock, Leaf, Plus, MoreHorizontal, ArrowLeft, TriangleAlert } from 'lucide-react';
-import { useLocationScope } from '../../context/LocationContext';
+import { Share2, MapPin, Star, Heart, Loader2, ShoppingBag, Clock, Leaf, Plus, MoreHorizontal, ArrowLeft } from 'lucide-react';
 import { VitrineTheme } from '../../lib/themeRegistry';
 import { AvailabilityBadge } from '../../components/AvailabilityBadge';
-import { extractBairroName } from '../../utils/sis-loca';
 
 interface ProfileData {
     displayName: string;
@@ -31,8 +29,6 @@ interface ProfileData {
     isFollowing: boolean;
     isFollowLoading?: boolean;
     theme: VitrineTheme;
-    bairrosAtendidos?: string[];
-    onBack: () => void;
 }
 
 export const BioBurgerTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
@@ -55,18 +51,6 @@ export const BioBurgerTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
     const avatarSrc = data.avatarUrl ?? `https://picsum.photos/seed/${avatarSeed}profile/200/200`;
 
     const primaryLoc = data.storeLocations?.[0];
-    const { location } = useLocationScope();
-
-    const normalizeStr = (s: string) =>
-        s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-
-    const currentNeighborhood = normalizeStr(primaryLoc?.neighborhood || data.profileNeighborhood || '');
-    const userNeighborhood = location?.neighborhood ? normalizeStr(location.neighborhood) : '';
-    const coveredBairros = (data.bairrosAtendidos || []).map(b => normalizeStr(b));
-
-    const isOutOfArea = userNeighborhood && 
-                        currentNeighborhood !== userNeighborhood && 
-                        !coveredBairros.includes(userNeighborhood);
 
     return (
         <div className="min-h-screen bg-[#f4f3ed] font-sans pb-32" style={{ '--theme-primary': theme.colors.primary } as any}>
@@ -82,7 +66,7 @@ export const BioBurgerTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
                 
                 {/* Top Action Buttons */}
                 <div className="absolute top-6 left-6 flex items-center gap-2">
-                    <button onClick={data.onBack} className="w-10 h-10 rounded-full bg-white/50 backdrop-blur-md flex items-center justify-center text-neutral-900 border border-white/40">
+                    <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-full bg-white/50 backdrop-blur-md flex items-center justify-center text-neutral-900 border border-white/40">
                         <ArrowLeft size={20} />
                     </button>
                 </div>
@@ -189,19 +173,14 @@ export const BioBurgerTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
                         </div>
                         <div className="flex-1">
                             <h4 className="font-bold text-neutral-900 text-sm">
-                                {extractBairroName(primaryLoc?.neighborhood || data.profileNeighborhood) || 'Local'}
+                                {primaryLoc?.street ? `${primaryLoc.street}, ${primaryLoc.number || 'S/N'}` : 'Rua das Flores, 123'}
                             </h4>
-                            <p className={`text-xs font-medium ${isOutOfArea ? 'text-orange-600 font-bold' : 'text-neutral-500'}`}>
-                                {primaryLoc?.city || data.profileCity || 'Cidade'}
+                            <p className="text-xs font-medium text-neutral-500">
+                                {primaryLoc?.neighborhood || data.profileNeighborhood || 'Centro'} • {primaryLoc?.city || data.profileCity || 'São Paulo'}
                             </p>
-                            {isOutOfArea && (
-                                <p className="text-[10px] font-black text-orange-500 uppercase tracking-tighter mt-0.5 flex items-center gap-1">
-                                    <TriangleAlert size={10} /> Fora da área de entrega
-                                </p>
-                            )}
                         </div>
-                        <button className={`text-[10px] font-bold px-3 py-1.5 rounded-full shrink-0 ${isOutOfArea ? 'bg-orange-600 text-white' : 'text-neutral-500 bg-neutral-50 border border-neutral-200'}`}>
-                            {isOutOfArea ? 'Alerta' : 'Mapa'}
+                        <button className="text-[10px] font-bold text-neutral-500 bg-neutral-50 border border-neutral-200 px-3 py-1.5 rounded-full shrink-0 hover:bg-neutral-100">
+                            Mapa
                         </button>
                     </div>
                 </div>

@@ -9,9 +9,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { toggleLike, checkUserLiked, sharePost, fetchComments, postComment, getUserIdentities } from '../lib/engage';
-import { extractBairroName } from '../utils/sis-loca';
 
-import { PremiumLoader } from './PremiumLoader';
+import { CommentSkeleton } from './Skeleton';
 
 export interface FeedPost {
   id: string;
@@ -292,14 +291,14 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
       initial={{ opacity: 0, y: 15 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      className="bg-white dark:bg-neutral-900 rounded-3xl border border-neutral-100/50 overflow-hidden shadow-xl mb-6"
+      className="bg-white rounded-3xl border border-neutral-100 overflow-hidden shadow-sm mb-6"
     >
       {/* Post Header */}
-      <div className="p-4 flex items-center justify-between">
-        <div 
-          onClick={handleHeaderClick}
-          className={`flex items-center gap-3 ${canNavigate ? 'cursor-pointer' : ''}`}
-        >
+      <div 
+        onClick={handleHeaderClick}
+        className={`p-4 flex items-center justify-between ${canNavigate ? 'cursor-pointer hover:bg-neutral-50 transition-colors' : ''}`}
+      >
+        <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full overflow-hidden bg-neutral-100 border border-neutral-100">
             <img 
               src={authorAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(authorName || 'User')}&background=${isVitrine ? 'FFF7ED&color=EA580C' : 'F3F4F6&color=4B5563'}&size=128&bold=true`}
@@ -318,7 +317,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
             </div>
             <div className="flex items-center gap-1 text-[10px] text-neutral-400 font-bold uppercase tracking-wider overflow-hidden">
               <MapPin size={10} className="shrink-0" />
-              <span className="truncate">{extractBairroName(post.neighborhood)}</span>
+              <span className="truncate">{post.neighborhood}</span>
               <span className="shrink-0 mx-1">•</span>
               <Clock size={10} className="shrink-0" />
               <span className="truncate">{getRelativeTime(post.created_at)}</span>
@@ -386,7 +385,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
       )}
 
       {/* Action Buttons */}
-      <div className="px-4 py-3 border-t border-neutral-50 dark:border-neutral-800 flex items-center gap-6">
+      <div className="px-4 py-3 border-t border-neutral-50 flex items-center gap-6">
         <button 
           onClick={handleLike}
           className={`flex items-center gap-1.5 transition-all active:scale-95 ${isLiked ? 'text-red-500' : 'text-neutral-400 hover:text-red-500'}`}
@@ -560,8 +559,12 @@ export const PostCard: React.FC<PostCardProps> = ({ post, authorName, authorAvat
                 {/* Comment List */}
                 <div className="flex-1 overflow-y-auto space-y-7 pb-28 pr-1 custom-scrollbar min-h-[400px]">
                   {isLoadingComments ? (
-                    <div className="py-12">
-                      <PremiumLoader />
+                    <div className="space-y-6">
+                      {[1, 2, 3].map(i => <CommentSkeleton key={i} />)}
+                      <div className="flex flex-col items-center justify-center py-10 opacity-30">
+                        <Loader2 size={24} className="animate-spin text-orange-600 mb-2" />
+                        <p className="text-[8px] font-black text-neutral-400 uppercase tracking-[0.3em]">Sincronizando...</p>
+                      </div>
                     </div>
                   ) : comments.length > 0 ? (
                     comments.map((comment, idx) => (
