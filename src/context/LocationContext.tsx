@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
-import { getDetailedLocation } from '../utils/geolocation';
+import { getDetailedLocation, sisLocaScrubNeighborhood, sisLocaDetectResidencial, getDistanceMeters } from '../utils/geolocation';
 
 export type Scope = 'condo' | 'neighborhood' | 'city';
 
@@ -10,6 +10,8 @@ export interface LocationData {
   city: string;
   lat: number;
   lng: number;
+  cep?: string; // SIS-LOCA CROSS-DATA
+  isResidencial?: boolean;
   timestamp?: number;
 }
 
@@ -34,12 +36,7 @@ const readCachedLocation = (): LocationData | null => {
   try {
     const raw = localStorage.getItem(LOCATION_STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as LocationData;
-    // Basic validation to prevent injected garbage
-    if (typeof parsed.lat === 'number' && typeof parsed.lng === 'number' && typeof parsed.city === 'string') {
-      return parsed;
-    }
-    return null;
+    return JSON.parse(raw) as LocationData;
   } catch {
     return null;
   }
@@ -63,16 +60,19 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
   const handleLocationUpdate = async (loc: LocationData) => {
     const locWithTime = { ...loc, timestamp: Date.now() };
     setLocation(locWithTime);
+    console.log('SIS-LOCA Context: Estado atualizado com:', locWithTime);
 
-    // Persistência imediata no localStorage para eliminar glitch de carregamento futuro
     try {
       localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(locWithTime));
-    } catch { /* storage cheio, ignora */ }
+      console.log('SIS-LOCA Context: Cache localStorage atualizado.');
+    } catch { /* ignore */ }
 
-    // Se a localização veio com "Bairro Desconhecido", rebaixamos o escopo graciosamente para a cidade.
-    const newScope: Scope = loc.neighborhood === 'Bairro Desconhecido' ? 'city' : 'neighborhood';
-    setScope(newScope);
-    try { localStorage.setItem(SCOPE_STORAGE_KEY, newScope); } catch { /* ignore */ }
+    // SIS-LOCA-SMART-SCOPE: Mantém o escopo se já estiver definido, exceto no load inicial
+    if (scope === 'city' || loc.neighborhood === 'Bairro Desconhecido') {
+      const newScope: Scope = loc.neighborhood === 'Bairro Desconhecido' ? 'city' : 'neighborhood';
+      setScope(newScope);
+      try { localStorage.setItem(SCOPE_STORAGE_KEY, newScope); } catch { /* ignore */ }
+    }
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -85,111 +85,56 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
           neighborhood: loc.neighborhood
         });
       }
-    } catch (err) {
-      console.error('Erro ao salvar histórico de localização:', err);
-    }
+    } catch (e) { console.error('SIS-LOCA Historical Sync Error', e); }
   };
 
   const editNeighborhood = async (newName: string) => {
     if (!location || !newName.trim()) return;
 
-    const updatedLocation = { ...location, neighborhood: newName.trim() };
+    const normalizedName = newName.trim();
+    const isRes = sisLocaDetectResidencial(normalizedName);
+    
+    const updatedLocation = { 
+        ...location, 
+        neighborhood: isRes ? 'Bairro Desconhecido' : sisLocaScrubNeighborhood(normalizedName),
+        isResidencial: isRes || location.isResidencial
+    };
+    
     setLocation(updatedLocation);
     setScope('neighborhood');
-
-    // Persistir override manual de bairro
-    try {
-      localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(updatedLocation));
-      localStorage.setItem(SCOPE_STORAGE_KEY, 'neighborhood');
-    } catch { /* ignore */ }
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await supabase.from('location_history').insert({
-          user_id: session.user.id,
-          lat: updatedLocation.lat,
-          lng: updatedLocation.lng,
-          city: updatedLocation.city,
-          neighborhood: updatedLocation.neighborhood
-        });
-      }
-    } catch (err) {
-      console.error('Erro ao salvar override de bairro:', err);
-    }
+    try { localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(updatedLocation)); } catch { /* ignore */ }
   };
-
-  React.useEffect(() => {
-    const checkBackgroundLocation = () => {
-      // Background location refresh logic
-      if (!location || !navigator.geolocation) return;
-      
-      const MAX_AGE_MS = 5 * 60 * 1000; // 5 minutos
-      const lastUpdate = location.timestamp || 0;
-      
-      if (Date.now() - lastUpdate > MAX_AGE_MS) {
-        // Soft refresh sem UI loader forçado (se falhar, mantém o antigo)
-        navigator.geolocation.getCurrentPosition(async (pos) => {
-          const { latitude, longitude } = pos.coords;
-          
-          // Cálculo de Haversine para > 500m
-          const R = 6371e3; // metres
-          const φ1 = location.lat * Math.PI/180; // φ, λ in radians
-          const φ2 = latitude * Math.PI/180;
-          const Δφ = (latitude - location.lat) * Math.PI/180;
-          const Δλ = (longitude - location.lng) * Math.PI/180;
-
-          const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                    Math.cos(φ1) * Math.cos(φ2) *
-                    Math.sin(Δλ/2) * Math.sin(Δλ/2);
-          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-          const d = R * c; // in metres
-
-          // Se moveu mais de 500m ou passou tempo considerável
-          if (d > 500 || (Date.now() - lastUpdate > MAX_AGE_MS * 2)) {
-             try {
-                const detailedLoc = await getDetailedLocation(latitude, longitude);
-                handleLocationUpdate(detailedLoc);
-             } catch(e) {
-                console.error("Erro background geoloc", e);
-             }
-          }
-        }, () => {}, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
-      }
-    };
-
-    // Executa ao focar a window para re-avaliação inteligente
-    window.addEventListener('focus', checkBackgroundLocation);
-    // Executa uma vez no load se já tiver location cached antiga
-    checkBackgroundLocation();
-    
-    return () => window.removeEventListener('focus', checkBackgroundLocation);
-  }, [location]);
 
   const requestLocation = () => {
     setIsLoading(true);
     setError(null);
 
-    if (!navigator.geolocation) {
-      setError('Geolocalização não suportada pelo navegador.');
-      setIsLoading(false);
-      return;
-    }
-
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
+        
+        // SIS-LOCA-SMART-CACHE: Verifica se o deslocamento justifica nova chamada
+        if (location) {
+          const distance = getDistanceMeters(location.lat, location.lng, latitude, longitude);
+          console.log(`SIS-LOCA Cache Check: Deslocamento de ${distance.toFixed(1)} metros.`);
+          if (distance < 20) { // Menos de 20 metros, usamos o cache
+            console.log('SIS-LOCA Cache: Mantendo localização atual (deslocamento mínimo).');
+            setIsLoading(false);
+            return;
+          }
+        }
+
         try {
           const detailedLoc = await getDetailedLocation(latitude, longitude);
           handleLocationUpdate(detailedLoc);
         } catch (err: any) {
-          setError(err.message || 'Erro ao buscar endereço.');
+          setError(err.message || 'Erro SIS-LOCA');
         } finally {
           setIsLoading(false);
         }
       },
-      (err) => {
-        setError('Permissão de localização negada.');
+      () => {
+        setError('Acesso à localização negado.');
         setIsLoading(false);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -201,31 +146,42 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
 
     try {
-      // 1. Deteção ultra-rápida de CEP brasileiro (8 dígitos apenas números)
       const cleanCep = query.replace(/\D/g, '');
       if (cleanCep.length === 8) {
         const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
         const data = await res.json();
 
         if (data.erro) {
-          setError('CEP não encontrado em território nacional.');
+          setError('CEP não encontrado.');
           setIsLoading(false);
           return;
         }
 
-        // Fake Coords since ViaCEP doesn't return lat/lng, we use standard Brasilia or request Osm
+        let infoBairro = data.bairro || 'Bairro Desconhecido';
+        let condo = data.logradouro || 'Endereço Indefinido';
+        const isResidencial = sisLocaDetectResidencial(infoBairro) || sisLocaDetectResidencial(data.logradouro);
+        
+        // SIS-LOCA-SMART: Se o bairro do ViaCEP for um residencial, movemos para condo
+        if (sisLocaDetectResidencial(infoBairro)) {
+            console.log('SIS-LOCA Context: Expulsando residencial do bairro manual:', infoBairro);
+            condo = infoBairro;
+            infoBairro = 'Bairro Desconhecido'; // Precisaremos cavar o bairro se possível, ou deixar pro usuário mapear
+        }
+
         handleLocationUpdate({
-          lat: -15.7801, // Arbitrary center, because UI only uses Strings now for filtering
+          lat: -15.7801, // Mock para CEP sem GPS, mas mantém a estrutura
           lng: -47.9292,
-          condo: `${data.logradouro} (${data.cep})` || 'Meu Endereço',
-          neighborhood: data.bairro || 'Bairro Desconhecido',
-          city: data.localidade || 'Cidade Desconhecida'
+          condo,
+          neighborhood: infoBairro === 'Bairro Desconhecido' ? infoBairro : sisLocaScrubNeighborhood(infoBairro),
+          city: data.localidade || 'Cidade Desconhecida',
+          cep: cleanCep,
+          isResidencial
         });
         setIsLoading(false);
         return;
       }
 
-      // 2. Fallback Nominatim Universal Mapping (OSM) para Strings "Texto Livre" que funciona inclusive no iOS/Android
+      // Fallback OSM
       const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1&accept-language=pt-BR`);
       const data = await res.json();
 
@@ -237,27 +193,29 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
         const neighborhood = addr.neighbourhood || addr.suburb || addr.city_district || addr.quarter;
         const city = addr.city || addr.town || addr.municipality || addr.state;
 
+        const isResidencial = sisLocaDetectResidencial(condo) || sisLocaDetectResidencial(neighborhood);
+
         handleLocationUpdate({
           lat: parseFloat(locationJson.lat),
           lng: parseFloat(locationJson.lon),
-          condo: condo || 'Meu Endereço',
-          neighborhood: neighborhood || 'Bairro Desconhecido',
-          city: city || 'Cidade Desconhecida'
+          condo: condo || 'Endereço Indefinido',
+          neighborhood: sisLocaScrubNeighborhood(neighborhood),
+          city: city || 'Cidade Desconhecida',
+          isResidencial
         });
       } else {
-        setError('Nenhuma localidade encontrada. Tente digitar [Bairro, Cidade].');
+        setError('Localidade não encontrada.');
       }
-
     } catch (err) {
-      console.error(err);
-      setError('Erro ao buscar servidor de Endereços. Tente novamente mais tarde.');
+      setError('Erro de conexão SIS-LOCA.');
     } finally {
       setIsLoading(false);
     }
   };
 
   const displayLocation = location
-    ? scope === 'condo' ? `${location.condo} • ${location.neighborhood}`
+    ? scope === 'condo' 
+      ? (location.isResidencial ? location.condo : location.neighborhood)
       : scope === 'neighborhood' ? location.neighborhood
         : location.city
     : 'Definir localização';
@@ -271,6 +229,6 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
 
 export const useLocationScope = () => {
   const context = useContext(LocationContext);
-  if (!context) throw new Error('useLocationScope must be used within LocationProvider');
+  if (!context) throw new Error('SIS-LOCA Context Error');
   return context;
 };
