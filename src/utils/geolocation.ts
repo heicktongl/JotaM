@@ -115,6 +115,28 @@ class TerritoryEngine {
         }
     }
 
+    async collectSecondaryNeighborhood(condoName: string, cityContext?: string): Promise<void> {
+        if (!condoName || condoName === 'Meu Endereço') return;
+        try {
+            const query = cityContext ? `${condoName}, ${cityContext}` : condoName;
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1&accept-language=pt-BR`);
+            const data = await res.json();
+            if (data && data.length > 0) {
+                const addr = data[0].address;
+                const neighborhood = addr.neighbourhood || addr.suburb || addr.city_district || addr.quarter;
+                if (neighborhood && !this.detectResidencial(neighborhood)) {
+                    this.sources.push({
+                        source: 'osm',
+                        neighborhood: neighborhood,
+                        score: 0.7 // Triangulação inteligente tem bom peso
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn('SIS-LOCA: Secondary Neighborhood Collect Error', e);
+        }
+    }
+
     snap(): LocationData {
         let finalCondo = 'Meu Endereço';
         let finalNeighborhood = 'Bairro Desconhecido';
@@ -183,9 +205,16 @@ export const getDetailedLocation = async (latitude: number, longitude: number): 
         await engine.collectGoogle(apiKey);
         
         // Triangulação com ViaCEP se o Google achou um CEP
-        const tempSnap = engine.snap();
+        let tempSnap = engine.snap();
         if (tempSnap.cep) {
             await engine.collectViaCep(tempSnap.cep);
+        }
+
+        // SIS-LOCA-SMART: Se ainda não temos bairro real mas temos Residencial, buscamos o território do residencial
+        tempSnap = engine.snap();
+        if (tempSnap.neighborhood === 'Bairro Desconhecido' && tempSnap.isResidencial) {
+            console.log('SIS-LOCA: Iniciando busca secundária de território para:', tempSnap.condo);
+            await engine.collectSecondaryNeighborhood(tempSnap.condo, tempSnap.city);
         }
         
         const finalResult = engine.snap();

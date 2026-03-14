@@ -77,7 +77,7 @@ export const LocationSelector: React.FC = () => {
                             {location.condo}
                           </p>
                           <p className="text-[11px] opacity-70 truncate font-medium">
-                            Residencial
+                            {location.neighborhood !== 'Bairro Desconhecido' ? location.neighborhood : 'Residencial'}
                           </p>
                         </div>
                       </button>

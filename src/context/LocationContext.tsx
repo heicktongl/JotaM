@@ -215,7 +215,11 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
 
   const displayLocation = location
     ? scope === 'condo' 
-      ? (location.isResidencial ? location.condo : location.neighborhood)
+      ? (location.isResidencial 
+          ? (location.neighborhood !== 'Bairro Desconhecido' 
+              ? `${location.condo} • ${location.neighborhood}` 
+              : location.condo)
+          : location.neighborhood)
       : scope === 'neighborhood' ? location.neighborhood
         : location.city
     : 'Definir localização';
