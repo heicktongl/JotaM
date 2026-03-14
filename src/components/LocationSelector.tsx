@@ -81,8 +81,8 @@ export const LocationSelector: React.FC = () => {
                   </div>
 
                   <div className="space-y-2">
-                    {/* SCOPE: CONDO - Só mostra se for Residencial (não logradouro puro) */}
-                    {location.isResidencial && (
+                    {/* SCOPE: CONDO - Só mostra se for Residencial Real */}
+                    {location.isResidencial && location.condo !== 'Meu Endereço' && (
                       <button
                         onClick={() => { setScope('condo'); setIsOpen(false); }}
                         className={`w-full flex items-center gap-3 p-3.5 rounded-2xl transition-all border ${scope === 'condo' ? 'bg-orange-50 border-orange-100 text-orange-600 shadow-sm' : 'bg-neutral-50 border-transparent text-neutral-600 hover:bg-neutral-100'}`}
@@ -95,7 +95,7 @@ export const LocationSelector: React.FC = () => {
                             {location.condo}
                           </p>
                           <p className="text-[11px] opacity-70 truncate font-medium">
-                            {location.neighborhood !== 'Bairro Desconhecido' ? location.neighborhood : 'Residencial'}
+                            {location.neighborhood !== 'Bairro Desconhecido' ? `${location.neighborhood}, ${location.city}` : 'Lugar Específico'}
                           </p>
                         </div>
                       </button>
@@ -110,8 +110,10 @@ export const LocationSelector: React.FC = () => {
                         <Map size={18} />
                       </div>
                       <div className="text-left overflow-hidden">
-                        <p className="text-sm font-bold truncate">{location.neighborhood}</p>
-                        <p className="text-[11px] opacity-70 truncate font-medium">Bairro</p>
+                        <p className="text-sm font-bold truncate">
+                          {location.neighborhood !== 'Bairro Desconhecido' ? location.neighborhood : 'Explorar Bairro'}
+                        </p>
+                        <p className="text-[11px] opacity-70 truncate font-medium">{location.city}</p>
                       </div>
                     </button>
 
@@ -125,7 +127,7 @@ export const LocationSelector: React.FC = () => {
                       </div>
                       <div className="text-left overflow-hidden">
                         <p className="text-sm font-bold truncate">{location.city}</p>
-                        <p className="text-[11px] opacity-70 truncate font-medium">Cidade</p>
+                        <p className="text-[11px] opacity-70 truncate font-medium">Busca em toda a cidade</p>
                       </div>
                     </button>
                   </div>

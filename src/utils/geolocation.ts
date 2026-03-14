@@ -21,8 +21,8 @@ const fetchNominatim = async (url: string) => {
 export const SIS_LOCA_RESIDENTIAL_INDICATORS = [
     'residencial', 'condominio', 'edificio', 'village', 'apartamento', 
     'bloco', 'torre', 'condomínio', 'resid.', 'res.', 'cond.', 
-    'edif.', 'ed.', 'building', 'premise', 'jardim', 'clube', 'viver', 
-    'parque residencial', 'piscina', 'villagio', 'parque', 'alameda'
+    'edif.', 'ed.', 'building', 'premise', 'clube', 'viver', 
+    'piscina', 'villagio', 'alameda'
 ];
 
 interface RawSourceData {
@@ -46,22 +46,7 @@ class TerritoryEngine {
     }
 
     private detectResidencial(name: string | null | undefined): boolean {
-        if (!name) return false;
-        const lower = name.toLowerCase();
-        return SIS_LOCA_RESIDENTIAL_INDICATORS.some(term => lower.includes(term));
-    }
-
-    private cleanNeighborhood(name: string, condoName?: string): string {
-        if (!name) return 'Bairro Desconhecido';
-        const lower = name.toLowerCase();
-        
-        // Se o bairro for um residencial, ele não é um bairro geográfico puro
-        if (this.detectResidencial(name)) return '';
-
-        // Se for igual ao condomínio, é duplicata
-        if (condoName && lower === condoName.toLowerCase()) return '';
-
-        return name;
+        return sisLocaDetectResidencial(name);
     }
 
     async collectGoogle(apiKey: string): Promise<void> {
@@ -77,10 +62,21 @@ class TerritoryEngine {
 
                     const findComponent = (type: string) => components.find((c: any) => c.types.includes(type))?.long_name;
 
-                    const condo = findComponent('premise') || findComponent('subpremise') || findComponent('establishment') || '';
-                    const neighborhood = findComponent('sublocality_level_1') || findComponent('neighborhood') || findComponent('sublocality') || '';
+                    let condo = findComponent('premise') || findComponent('subpremise') || findComponent('establishment') || '';
+                    let neighborhood = findComponent('sublocality_level_1') || findComponent('neighborhood') || findComponent('sublocality') || '';
                     const city = findComponent('administrative_area_level_2') || findComponent('locality') || '';
                     const cep = findComponent('postal_code')?.replace(/\D/g, '') || '';
+
+                    // SEPARAÇÃO ESTRITA: Se o bairro identificado for um residencial, movemos para condo e limpamos neighborhood
+                    if (this.detectResidencial(neighborhood)) {
+                        if (!condo) condo = neighborhood;
+                        neighborhood = '';
+                    }
+
+                    // Se o bairro for igual ao condo, limpamos o bairro deste source
+                    if (neighborhood && condo && neighborhood.toLowerCase() === condo.toLowerCase()) {
+                        neighborhood = '';
+                    }
 
                     // Score baseado na precisão do ponto
                     const baseScore = locationType === 'ROOFTOP' ? 0.9 : 0.6;
@@ -194,22 +190,29 @@ class TerritoryEngine {
 
         if (condoCandidates.length > 0) {
             finalCondo = condoCandidates[0].name;
-            isResidencial = this.detectResidencial(finalCondo);
         } else {
             const routeSource = this.sources.find(s => s.source === 'google' && s.condo);
             if (routeSource) finalCondo = routeSource.condo!;
         }
 
-        // REGRA CRÍTICA: Bairro nunca pode ser igual ao residencial
+        // Determinação FINAL de isResidencial
+        isResidencial = this.detectResidencial(finalCondo) && finalCondo !== 'Meu Endereço';
+
+        // 2. Extração de Bairro (Soberania Geográfica)
+        // Filtramos qualquer candidato que cheire a residencial para o campo de Bairro
+        const neighborSourcesCandidates = this.sources
+            .filter(s => s.neighborhood && 
+                         !this.detectResidencial(s.neighborhood) && 
+                         s.neighborhood.toLowerCase() !== finalCondo.toLowerCase())
+            .sort((a, b) => b.score - a.score);
+        
+        if (neighborSourcesCandidates.length > 0) {
+            finalNeighborhood = neighborSourcesCandidates[0].neighborhood!;
+        }
+
+        // REGRA DE OURO: Se o bairro ainda for igual ao residencial ou um residencial, limpamos
         if (finalNeighborhood.toLowerCase() === finalCondo.toLowerCase() || this.detectResidencial(finalNeighborhood)) {
             finalNeighborhood = 'Bairro Desconhecido';
-            // Tenta buscar outro candidato de bairro que não seja residencial e não seja o atual
-            const betterNeighborhood = this.sources.find(s => 
-                s.neighborhood && 
-                s.neighborhood.toLowerCase() !== finalCondo.toLowerCase() && 
-                !this.detectResidencial(s.neighborhood)
-            );
-            if (betterNeighborhood) finalNeighborhood = betterNeighborhood.neighborhood!;
         }
 
         // 4. Extração de Cidade
@@ -236,11 +239,12 @@ export const getDetailedLocation = async (latitude: number, longitude: number): 
     const apiKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY;
 
     if (apiKey) {
-        await engine.collectGoogle(apiKey);
+        // SIS-LOCA-PERF: Execução paralela do Google e Polígono para reduzir latência (mleficiencia)
+        await Promise.all([
+            engine.collectGoogle(apiKey),
+            engine.collectPolygonNeighborhood()
+        ]);
         
-        // NOVO: Busca por Polígono (Santo Graal) - Prioridade Máxima
-        await engine.collectPolygonNeighborhood();
-
         // Triangulação com ViaCEP se o Google achou um CEP
         let tempSnap = engine.snap();
         if (tempSnap.cep) {
@@ -255,6 +259,16 @@ export const getDetailedLocation = async (latitude: number, longitude: number): 
         }
         
         const finalResult = engine.snap();
+
+        // LOG DE DEPURAÇÃO SOLICITADO (Passo 1)
+        console.log("LOCATION_DEBUG", {
+            residential: finalResult.condo,
+            neighborhood: finalResult.neighborhood,
+            city: finalResult.city,
+            isResidencial: finalResult.isResidencial,
+            sources: (engine as any).sources
+        });
+
         console.log('SIS-LOCA Engine: Pipeline Complete', finalResult);
         return finalResult;
     }

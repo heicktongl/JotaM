@@ -82,7 +82,8 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
           lat: loc.lat,
           lng: loc.lng,
           city: loc.city,
-          neighborhood: loc.neighborhood
+          neighborhood: loc.neighborhood,
+          condo: loc.isResidencial ? loc.condo : null
         });
       }
     } catch (e) { console.error('SIS-LOCA Historical Sync Error', e); }
@@ -168,43 +169,37 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
             infoBairro = 'Bairro Desconhecido'; // Precisaremos cavar o bairro se possível, ou deixar pro usuário mapear
         }
 
+        // SIS-LOCA-SMART: Mesmo na busca manual por CEP, usamos o motor para precisão total
+        const detailedLoc = await getDetailedLocation(-15.7801, -47.9292); // Mock, mas o ViaCEP deve sobrescrever
         handleLocationUpdate({
-          lat: -15.7801, // Mock para CEP sem GPS, mas mantém a estrutura
-          lng: -47.9292,
-          condo,
-          neighborhood: infoBairro === 'Bairro Desconhecido' ? infoBairro : sisLocaScrubNeighborhood(infoBairro),
-          city: data.localidade || 'Cidade Desconhecida',
+          ...detailedLoc,
+          condo: data.logradouro || detailedLoc.condo,
+          neighborhood: infoBairro === 'Bairro Desconhecido' ? detailedLoc.neighborhood : sisLocaScrubNeighborhood(infoBairro),
+          city: data.localidade || detailedLoc.city,
           cep: cleanCep,
-          isResidencial
+          isResidencial: isResidencial || detailedLoc.isResidencial
         });
         setIsLoading(false);
         return;
       }
 
-      // Fallback OSM
+      // Fallback OSM + SIS-LOCA-ENGINE
       const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1&accept-language=pt-BR`, {
-        headers: { 'User-Agent': 'SovixConnect/1.0' }
+        headers: { 
+          'User-Agent': 'SovixConnect/1.0 (gabriel@example.com) Hyperlocal Engine',
+          'Accept-Language': 'pt-BR' 
+        }
       });
       const data = await res.json();
 
       if (data && data.length > 0) {
         const locationJson = data[0];
-        const addr = locationJson.address;
+        const lat = parseFloat(locationJson.lat);
+        const lng = parseFloat(locationJson.lon);
 
-        const condo = addr.amenity || addr.building || addr.road || addr.residential || query;
-        const neighborhood = addr.neighbourhood || addr.suburb || addr.city_district || addr.quarter;
-        const city = addr.city || addr.town || addr.municipality || addr.state;
-
-        const isResidencial = sisLocaDetectResidencial(condo) || sisLocaDetectResidencial(neighborhood);
-
-        handleLocationUpdate({
-          lat: parseFloat(locationJson.lat),
-          lng: parseFloat(locationJson.lon),
-          condo: condo || 'Endereço Indefinido',
-          neighborhood: sisLocaScrubNeighborhood(neighborhood),
-          city: city || 'Cidade Desconhecida',
-          isResidencial
-        });
+        // EXTRAÇÃO INTELIGENTE: Passamos pela engine para garantir polígonos e anti-duplicação
+        const detailedLoc = await getDetailedLocation(lat, lng);
+        handleLocationUpdate(detailedLoc);
       } else {
         setError('Localidade não encontrada.');
       }

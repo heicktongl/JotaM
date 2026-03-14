@@ -80,6 +80,9 @@ export const ConsumerFeed: React.FC = () => {
           svcQuery = svcQuery.eq('condo', location.condo);
           postQuery = postQuery.eq('condo', location.condo);
         } else {
+          // SIS-LOCA-PERF: Filtra por bairro no DB para performance instantânea (mleficiencia)
+          prodQuery = prodQuery.eq('neighborhood', userBairro);
+          svcQuery = svcQuery.eq('neighborhood', userBairro);
           postQuery = postQuery.eq('neighborhood', userBairro);
         }
       }
