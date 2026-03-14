@@ -1,4 +1,5 @@
 import { LocationData } from '../context/LocationContext';
+import { supabase } from '../lib/supabase';
 
 /**
  * Utilitário para chamadas ao Nominatim seguindo a Usage Policy da OSM.
@@ -119,6 +120,26 @@ class TerritoryEngine {
         }
     }
 
+    async collectPolygonNeighborhood(): Promise<void> {
+        try {
+            const { data, error } = await supabase.rpc('find_neighborhood_by_coords', { 
+                lat: this.lat, 
+                lng: this.lng 
+            });
+
+            if (!error && data && data.length > 0) {
+                this.sources.push({
+                    source: 'osm', // Marcamos como OSM pois os polígonos vêm de lá originalmente
+                    neighborhood: data[0].neighborhood_name,
+                    city: data[0].city_name,
+                    score: 1.1 // Polígono é a Verdade Suprema (Maior que ViaCEP)
+                });
+            }
+        } catch (e) {
+            console.warn('SIS-LOCA: Polygon Collect Error', e);
+        }
+    }
+
     async collectSecondaryNeighborhood(condoName: string, cityContext?: string): Promise<void> {
         if (!condoName || condoName === 'Meu Endereço') return;
         try {
@@ -217,6 +238,9 @@ export const getDetailedLocation = async (latitude: number, longitude: number): 
     if (apiKey) {
         await engine.collectGoogle(apiKey);
         
+        // NOVO: Busca por Polígono (Santo Graal) - Prioridade Máxima
+        await engine.collectPolygonNeighborhood();
+
         // Triangulação com ViaCEP se o Google achou um CEP
         let tempSnap = engine.snap();
         if (tempSnap.cep) {
