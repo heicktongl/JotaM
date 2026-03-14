@@ -70,25 +70,16 @@ class TerritoryEngine {
 
             if (data.status === 'OK' && data.results.length > 0) {
                 data.results.forEach((result: any, idx: number) => {
+                    const components = result.address_components;
                     const locationType = result.geometry.location_type;
-                    let neighborhood = '';
-                    let condo = '';
-                    let cep = '';
-                    let city = '';
+                    console.log('SIS-LOCA: Debug Address Components', components);
 
-                    result.address_components.forEach((comp: any) => {
-                        const types = comp.types;
-                        if (types.includes('postal_code')) cep = comp.long_name.replace(/\D/g, '');
-                        if (types.includes('premise') || types.includes('building') || types.includes('point_of_interest')) {
-                            condo = comp.long_name;
-                        }
-                        if (types.includes('sublocality_level_1') || types.includes('neighborhood') || types.includes('sublocality')) {
-                            neighborhood = comp.long_name;
-                        }
-                        if (types.includes('administrative_area_level_2') || types.includes('locality')) {
-                            city = comp.long_name;
-                        }
-                    });
+                    const findComponent = (type: string) => components.find((c: any) => c.types.includes(type))?.long_name;
+
+                    const condo = findComponent('premise') || findComponent('subpremise') || findComponent('establishment') || '';
+                    const neighborhood = findComponent('sublocality_level_1') || findComponent('neighborhood') || findComponent('sublocality') || '';
+                    const city = findComponent('administrative_area_level_2') || findComponent('locality') || '';
+                    const cep = findComponent('postal_code')?.replace(/\D/g, '') || '';
 
                     // Score baseado na precisão do ponto
                     const baseScore = locationType === 'ROOFTOP' ? 0.9 : 0.6;
@@ -162,7 +153,6 @@ class TerritoryEngine {
         finalCep = bestCep?.cep || '';
 
         // 2. Extração de Bairro (Soberania Geográfica)
-        // Filtramos qualquer "bairro" que na verdade seja um residencial
         const neighborSources = this.sources
             .filter(s => s.neighborhood && !this.detectResidencial(s.neighborhood))
             .sort((a, b) => b.score - a.score);
@@ -172,7 +162,6 @@ class TerritoryEngine {
         }
 
         // 3. Extração de Residencial (Condo)
-        // Se o ViaCEP ou Google sugeriu um bairro que é residencial, ele vira Condo
         const condoCandidates = this.sources
             .filter(s => s.condo || (s.neighborhood && this.detectResidencial(s.neighborhood)))
             .map(s => {
@@ -186,9 +175,20 @@ class TerritoryEngine {
             finalCondo = condoCandidates[0].name;
             isResidencial = this.detectResidencial(finalCondo);
         } else {
-            // Fallback para Rua se não houver nome de prédio
             const routeSource = this.sources.find(s => s.source === 'google' && s.condo);
             if (routeSource) finalCondo = routeSource.condo!;
+        }
+
+        // REGRA CRÍTICA: Bairro nunca pode ser igual ao residencial
+        if (finalNeighborhood.toLowerCase() === finalCondo.toLowerCase() || this.detectResidencial(finalNeighborhood)) {
+            finalNeighborhood = 'Bairro Desconhecido';
+            // Tenta buscar outro candidato de bairro que não seja residencial e não seja o atual
+            const betterNeighborhood = this.sources.find(s => 
+                s.neighborhood && 
+                s.neighborhood.toLowerCase() !== finalCondo.toLowerCase() && 
+                !this.detectResidencial(s.neighborhood)
+            );
+            if (betterNeighborhood) finalNeighborhood = betterNeighborhood.neighborhood!;
         }
 
         // 4. Extração de Cidade

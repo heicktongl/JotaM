@@ -11,11 +11,29 @@ export const LocationSelector: React.FC = () => {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 text-neutral-600 hover:text-neutral-900 transition-colors bg-neutral-100/80 hover:bg-neutral-200/80 px-3 py-2 rounded-full"
+        className="flex items-start gap-3 text-neutral-600 hover:text-neutral-900 transition-all bg-neutral-100/80 hover:bg-neutral-200/80 px-4 py-3 rounded-[2rem] text-left group"
       >
-        <MapPin size={16} className="text-orange-600" />
-        <span className="text-sm font-bold truncate max-w-[150px] sm:max-w-xs">{displayLocation}</span>
-        <ChevronDown size={14} className="text-neutral-400" />
+        <div className="mt-1 p-2 bg-white rounded-xl shadow-sm group-hover:bg-orange-600 group-hover:text-white transition-colors">
+          <MapPin size={18} className="text-orange-600 group-hover:text-white" />
+        </div>
+        
+        <div className="flex flex-col min-w-0 pr-2">
+          {location?.isResidencial && (
+            <span className="text-sm font-black text-neutral-900 truncate leading-tight">
+              {location.condo}
+            </span>
+          )}
+          <span className={`text-xs font-bold truncate leading-tight ${!location?.isResidencial ? 'text-neutral-900 text-sm' : 'text-neutral-500'}`}>
+            {location?.neighborhood}
+          </span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400 leading-tight mt-0.5">
+            {location?.city}
+          </span>
+        </div>
+
+        <div className="mt-2.5 ml-auto pl-1 border-l border-neutral-200">
+          <ChevronDown size={14} className={`text-neutral-400 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+        </div>
       </button>
 
       <AnimatePresence>
