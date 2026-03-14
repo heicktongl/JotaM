@@ -21,6 +21,8 @@ import {
   CheckCircle2,
   ArrowRight
 } from 'lucide-react';
+import { extractBairroName } from '../utils/sis-loca';
+import { useLocationScope } from '../context/LocationContext';
 import { supabase } from '../lib/supabase';
 import type { Database } from '../lib/database.types';
 import { ItemCard, ItemType } from '../components/ItemCard';
@@ -35,7 +37,8 @@ import { ThemeCustomization } from '../lib/themeEngine';
 import { registerView } from '../lib/metrics';
 import { AvailabilityBadge } from '../components/AvailabilityBadge';
 import { LoadingScreen } from '../components/LoadingScreen';
-import { ProfileSkeleton } from '../components/Skeleton';
+import { PremiumLoader } from '../components/PremiumLoader';
+import { VitrineSkeleton } from '../components/VitrineSkeleton';
 
 
 type Product = Database['public']['Tables']['products']['Row'];
@@ -92,6 +95,7 @@ export const SellerProfile: React.FC = () => {
 
   const [themeId, setThemeId] = useState<string>('sovix_default');
   const [customizations, setCustomizations] = useState<ThemeCustomization | null>(null);
+  const [bairrosAtendidos, setBairrosAtendidos] = useState<string[]>([]);
 
   // Normaliza o username da URL (remove @ se existir)
   const rawUsername = username ? decodeURIComponent(username) : '';
@@ -138,6 +142,7 @@ export const SellerProfile: React.FC = () => {
         setPinnedProductId(sellerData.pinned_product_id);
         if (sellerData.theme_id) setThemeId(sellerData.theme_id);
         if (sellerData.theme_customization) setCustomizations(sellerData.theme_customization);
+        if (sellerData.bairros_atendidos) setBairrosAtendidos(sellerData.bairros_atendidos);
 
         // SIS-VIEW-COUNTER: Registro inteligente de visualização
         registerView(sellerData.id, 'shop').then();
@@ -317,6 +322,16 @@ export const SellerProfile: React.FC = () => {
     }
   };
 
+  const handleBack = () => {
+    // Se o histórico for <= 2, significa que entrou direto pelo link (1 é o inicial, 2 pode ser o redirecionamento/load)
+    // Na maioria dos browsers modernos, se abrir uma aba nova, length é 1 ou 2.
+    if (window.history.length <= 2) {
+      navigate('/');
+    } else {
+      navigate(-1);
+    }
+  };
+
   const handleShare = () => {
     if (navigator.share) {
       navigator.share({
@@ -331,7 +346,7 @@ export const SellerProfile: React.FC = () => {
   };
 
   if (isLoading) {
-    return <ProfileSkeleton />;
+    return <VitrineSkeleton />;
   }
 
   if (error || !profileId) {
@@ -340,7 +355,7 @@ export const SellerProfile: React.FC = () => {
         <AlertCircle size={48} className="text-neutral-300 mb-4" />
         <h2 className="text-2xl font-bold text-neutral-900 mb-2">Vitrine Oculta/Offline</h2>
         <p className="text-neutral-500 mb-6 text-center">{error}</p>
-        <button onClick={() => navigate(-1)} className="px-6 py-3 bg-neutral-900 text-white rounded-2xl font-bold">
+        <button onClick={handleBack} className="px-6 py-3 bg-neutral-900 text-white rounded-2xl font-bold">
           Voltar
         </button>
       </div>
@@ -374,7 +389,9 @@ export const SellerProfile: React.FC = () => {
     views,
     isVerified,
     availability,
-    profileType
+    profileType,
+    bairrosAtendidos,
+    onBack: handleBack,
   };
 
   return (
@@ -447,6 +464,14 @@ const SellerProfileContent: React.FC<{ data: any }> = ({ data }) => {
   const coverSeed = `${avatarSeed}cover`;
   const pinnedProduct = data.products.find((p: any) => p.id === data.pinnedProductId) ?? data.products[0];
 
+  const { location } = useLocationScope();
+  const normalizeStr = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  const currentNeighborhood = normalizeStr(data.profileNeighborhood || '');
+  const userNeighborhood = location?.neighborhood ? normalizeStr(location.neighborhood) : '';
+  const coveredBairros = (data.bairrosAtendidos || []).map((b: string) => normalizeStr(b));
+  const isOutOfArea = userNeighborhood && currentNeighborhood !== userNeighborhood && !coveredBairros.includes(userNeighborhood);
+
+
   return (
     <LocationGuard
       itemCity={data.profileCity}
@@ -467,7 +492,7 @@ const SellerProfileContent: React.FC<{ data: any }> = ({ data }) => {
 
           <div className="absolute top-6 left-6 right-6 flex justify-between items-center z-30">
             <button
-              onClick={() => navigate(-1)}
+              onClick={data.onBack}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md transition-colors hover:bg-white/40"
             >
               <ChevronLeft size={24} />
@@ -521,8 +546,23 @@ const SellerProfileContent: React.FC<{ data: any }> = ({ data }) => {
               </p>
 
               {/* Status de Funcionamento Automatizado TTDD-T */}
-              <div className="mt-6 w-full max-w-sm mx-auto">
+              <div className="mt-3 w-full max-w-sm mx-auto">
                 <AvailabilityBadge availability={data.availability} />
+              </div>
+
+              {/* Endereço com Destaque Inteligente */}
+              <div className="mt-4 flex flex-col items-center">
+                 <div className="flex items-center gap-1.5 text-neutral-500">
+                    <MapPin size={14} className={isOutOfArea ? 'text-red-500 animate-pulse' : 'text-neutral-400'} />
+                    <span className={`text-xs font-bold ${isOutOfArea ? 'text-red-600' : 'text-neutral-500'}`}>
+                      {extractBairroName(data.profileNeighborhood) || 'Bairro'} • {data.profileCity || 'Cidade'}
+                    </span>
+                 </div>
+                 {isOutOfArea && (
+                   <span className="mt-1 text-[9px] font-black bg-red-50 text-red-600 px-2 py-0.5 rounded-full uppercase tracking-tighter">
+                     Fora da sua área de atendimento
+                   </span>
+                 )}
               </div>
             </div>
 

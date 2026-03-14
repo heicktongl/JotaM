@@ -1,8 +1,10 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Share2, MapPin, Star, ShoppingBag, Plus, ArrowLeft, Heart, CheckCircle2 } from 'lucide-react';
+import { Share2, MapPin, Star, ShoppingBag, Plus, ArrowLeft, Heart, CheckCircle2, TriangleAlert } from 'lucide-react';
+import { useLocationScope } from '../../context/LocationContext';
 import { VitrineTheme } from '../../lib/themeRegistry';
 import { AvailabilityBadge } from '../../components/AvailabilityBadge';
+import { extractBairroName } from '../../utils/sis-loca';
 
 interface ProfileData {
     displayName: string;
@@ -30,6 +32,8 @@ interface ProfileData {
     isFollowLoading?: boolean;
     theme: VitrineTheme;
     isVerified: boolean;
+    bairrosAtendidos?: string[];
+    onBack: () => void;
 }
 
 export const GourmetProTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
@@ -60,6 +64,18 @@ export const GourmetProTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
     const services = data.services || [];
 
     const primaryLoc = data.storeLocations?.find(l => l.is_primary) ?? data.storeLocations?.[0];
+    const { location } = useLocationScope();
+
+    const normalizeStr = (s: string) =>
+        s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+    const currentNeighborhood = normalizeStr(primaryLoc?.neighborhood || data.profileNeighborhood || '');
+    const userNeighborhood = location?.neighborhood ? normalizeStr(location.neighborhood) : '';
+    const coveredBairros = (data.bairrosAtendidos || []).map(b => normalizeStr(b));
+
+    const isOutOfArea = userNeighborhood && 
+                        currentNeighborhood !== userNeighborhood && 
+                        !coveredBairros.includes(userNeighborhood);
 
     return (
         <div className="min-h-screen bg-[#FFF5F7] dark:bg-[#1A1016] text-[#1F2937] dark:text-[#F3F4F6] font-sans antialiased pb-20 selection:bg-[#7C3AED] selection:text-white overflow-x-hidden">
@@ -81,7 +97,7 @@ export const GourmetProTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
                 
                 {/* Top Actions */}
                 <div className="absolute top-6 left-6 flex items-center gap-3">
-                    <button onClick={() => navigate(-1)} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md p-2 rounded-full transition-all border border-white/30">
+                    <button onClick={data.onBack} className="bg-white/20 hover:bg-white/30 text-white backdrop-blur-md p-2 rounded-full transition-all border border-white/30">
                         <ArrowLeft size={20} />
                     </button>
                 </div>
@@ -139,9 +155,13 @@ export const GourmetProTheme: React.FC<{ data: ProfileData }> = ({ data }) => {
                             <MapPin size={20} />
                         </div>
                         <div>
-                            <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold tracking-widest mb-0.5">Localização</p>
-                            <p className="text-gray-900 dark:text-gray-100 font-semibold text-sm">
-                                {primaryLoc?.neighborhood || data.profileNeighborhood || 'Local'}, {primaryLoc?.city || data.profileCity || '-'}
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold tracking-widest mb-0.5 flex justify-between">
+                                Localização
+                                {isOutOfArea && <TriangleAlert size={10} className="text-red-500" />}
+                            </p>
+                            <p className={`font-semibold text-sm ${isOutOfArea ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}>
+                                {extractBairroName(primaryLoc?.neighborhood || data.profileNeighborhood) || 'Local'}, {primaryLoc?.city || data.profileCity || '-'}
+                                {isOutOfArea && <span className="block text-[8px] font-black uppercase mt-0.5">Sem cobertura direta</span>}
                             </p>
                         </div>
                     </div>
