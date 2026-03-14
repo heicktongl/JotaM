@@ -160,9 +160,10 @@ export const mapdispoSearch = async (supabase: any, query: string, cityContext?:
             });
         }
 
-        // 2. Busca Externa (OSM)
         const fullQuery = cityContext ? `${query}, ${cityContext}` : query;
-        const osmRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fullQuery)}&format=json&limit=10&addressdetails=1&countrycodes=br&accept-language=pt-BR`);
+        const osmRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fullQuery)}&format=json&limit=10&addressdetails=1&countrycodes=br&accept-language=pt-BR`, {
+            headers: { 'User-Agent': 'SovixConnect/1.0' }
+        });
         const osmData = await osmRes.json();
 
         if (osmData) {

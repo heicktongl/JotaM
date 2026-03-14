@@ -293,7 +293,9 @@ export const SellerSetup: React.FC = () => {
                     // Busca CEP reverso apenas para preencher autocompletion de "state" e "zipCode" visual,
                     // MAS sem sobrescrever o nome do bairro extraído com alta precisão pelo Google/Nominatim.
                     try {
-                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=pt-BR`);
+                        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=pt-BR`, {
+                            headers: { 'User-Agent': 'SovixConnect/1.0' }
+                        });
                         const nmData = await res.json();
                         if (nmData && nmData.address) {
                             state = nmData.address.state_code?.toUpperCase() || nmData.address.state?.slice(0, 2)?.toUpperCase() || '';

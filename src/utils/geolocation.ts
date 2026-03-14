@@ -1,6 +1,19 @@
 import { LocationData } from '../context/LocationContext';
 
 /**
+ * Utilitário para chamadas ao Nominatim seguindo a Usage Policy da OSM.
+ * Inclui User-Agent necessário para evitar erros 403.
+ */
+const fetchNominatim = async (url: string) => {
+    return fetch(url, {
+        headers: {
+            'User-Agent': 'SovixConnect/1.0 (gabriel@example.com) Hyperlocal Search Engine',
+            'Accept-Language': 'pt-BR'
+        }
+    });
+};
+
+/**
  * SIS-LOCA-ENGINE: Arquitetura de Pipeline para Precisão Hiperlocal
  */
 
@@ -119,7 +132,7 @@ class TerritoryEngine {
         if (!condoName || condoName === 'Meu Endereço') return;
         try {
             const query = cityContext ? `${condoName}, ${cityContext}` : condoName;
-            const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1&accept-language=pt-BR`);
+            const res = await fetchNominatim(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1`);
             const data = await res.json();
             if (data && data.length > 0) {
                 const addr = data[0].address;
@@ -223,7 +236,7 @@ export const getDetailedLocation = async (latitude: number, longitude: number): 
     }
 
     // Fallback Legado se não houver API Key
-    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=pt-BR`);
+    const res = await fetchNominatim(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
     const data = await res.json();
     const addr = data.address;
     const condo = addr.amenity || addr.building || addr.residential || addr.house_name || addr.road || 'Meu Endereço';

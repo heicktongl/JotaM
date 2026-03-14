@@ -182,7 +182,9 @@ export const LocationProvider = ({ children }: { children: ReactNode }) => {
       }
 
       // Fallback OSM
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1&accept-language=pt-BR`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&addressdetails=1&accept-language=pt-BR`, {
+        headers: { 'User-Agent': 'SovixConnect/1.0' }
+      });
       const data = await res.json();
 
       if (data && data.length > 0) {
