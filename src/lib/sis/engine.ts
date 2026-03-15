@@ -149,6 +149,7 @@ export async function sisSearch(
         .from('sellers')
         .select('id, store_name, username, avatar_url, bio, views, category_id, store_locations(neighborhood, city, is_primary), categories(name)')
         .not('username', 'is', null)
+        .is('deleted_at', null)
         .limit(15);
 
     if (sellerIds.length > 0) {
@@ -168,6 +169,7 @@ export async function sisSearch(
         .from('service_providers')
         .select('id, name, username, avatar_url, bio, neighborhood, city, category_id, categories(name)')
         .not('username', 'is', null)
+        .is('deleted_at', null)
         .limit(20);
 
     providersQuery = buildLocationFilter(providersQuery, { ...location, neighborhood: null });
@@ -189,7 +191,9 @@ export async function sisSearch(
     ]);
 
     // ── Scoring de Produtos ───────────────────────────────────
-    const products: ScoredItem[] = (prodsRes.data || []).map((p: any) => {
+    const products: ScoredItem[] = (prodsRes.data || [])
+        .filter((p: any) => p.sellers) // Se o seller for deletado (via join logic ou se filtrarmos no select futuramente)
+        .map((p: any) => {
         const catName = p.categories?.name || '';
         const storeName = p.sellers?.store_name || '';
 
@@ -220,7 +224,9 @@ export async function sisSearch(
     });
 
     // ── Scoring de Serviços ───────────────────────────────────
-    const services: ScoredItem[] = (servsRes.data || []).map((s: any) => {
+    const services: ScoredItem[] = (servsRes.data || [])
+        .filter((s: any) => s.service_providers)
+        .map((s: any) => {
         const catName = s.categories?.name || '';
         const providerName = s.service_providers?.name || '';
 

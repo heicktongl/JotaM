@@ -36,20 +36,20 @@ export const PremiumLoader: React.FC<PremiumLoaderProps> = ({
           className="absolute inset-0 -m-8 bg-gradient-to-tr from-orange-500/30 via-amber-500/20 to-transparent blur-3xl rounded-full"
         />
         
-        {/* Pulsing Logo */}
+        {/* Pulsing Loading Indicator instead of Logo */}
         <motion.div
           animate={{ 
             scale: [1, 1.05, 1],
-            filter: ["brightness(1)", "brightness(1.2)", "brightness(1)"]
+            opacity: [0.5, 1, 0.5]
           }}
           transition={{
             duration: 2,
             repeat: Infinity,
             ease: "easeInOut"
           }}
-          className="relative z-10"
+          className="relative z-10 flex items-center justify-center"
         >
-          <Logo variant="orange" size="large" />
+          <div className="h-16 w-16 rounded-full border-4 border-orange-500/20 border-t-orange-500 animate-spin" />
         </motion.div>
       </div>
 

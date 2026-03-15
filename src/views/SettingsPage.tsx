@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft, LogOut, Loader2, ShieldCheck, Mail, Phone, Hash, User, Save, MessageCircle, CheckCircle2, Sun, Moon, Monitor } from 'lucide-react';
+import { ChevronLeft, LogOut, Loader2, ShieldCheck, Mail, Phone, Hash, User, Save, MessageCircle, CheckCircle2, Sun, Moon, Monitor, Trash2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { AvatarUploader } from '../components/AvatarUploader';
@@ -26,21 +26,36 @@ export const SettingsPage: React.FC = () => {
   );
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState<{ type: 'seller' | 'provider' | null }>({ type: null });
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [sellerId, setSellerId] = useState<string | null>(null);
+  const [providerId, setProviderId] = useState<string | null>(null);
 
   // Re-sincroniza os campos sempre que o user mudar (ex: após updateUser disparar onAuthStateChange)
   useEffect(() => {
     if (!user) return;
+
     setName(user.user_metadata?.name || '');
     setWhatsapp(
       user.user_metadata?.whatsapp
         ? formatPhoneDisplay(user.user_metadata.whatsapp)
         : ''
     );
-    setCpf(
-      user.user_metadata?.cpf
-        ? formatCpfDisplay(user.user_metadata.cpf)
-        : ''
-    );
+    
+    if (user.user_metadata?.cpf) {
+      setCpf(formatCpfDisplay(user.user_metadata.cpf));
+    }
+
+    // Busca IDs de perfis para exclusão
+    const checkProfiles = async () => {
+      const [sellerRes, providerRes] = await Promise.all([
+        supabase.from('sellers').select('id').eq('user_id', user.id).is('deleted_at', null).maybeSingle(),
+        supabase.from('service_providers').select('id').eq('user_id', user.id).is('deleted_at', null).maybeSingle()
+      ]);
+      if (sellerRes.data) setSellerId(sellerRes.data.id);
+      if (providerRes.data) setProviderId(providerRes.data.id);
+    };
+    checkProfiles();
   }, [user]);
 
   // Formata telefone a partir de dígitos puros (para exibir dados vindos do banco)
@@ -128,6 +143,37 @@ export const SettingsPage: React.FC = () => {
       alert('Erro ao salvar. Tente novamente.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeleteStorefront = async () => {
+    if (!user || !showDeleteModal.type) return;
+    setIsDeleting(true);
+
+    const table = showDeleteModal.type === 'seller' ? 'sellers' : 'service_providers';
+    const id = showDeleteModal.type === 'seller' ? sellerId : providerId;
+
+    try {
+      const { error } = await supabase
+        .from(table)
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      if (showDeleteModal.type === 'seller') {
+        localStorage.removeItem('sovix_last_seller_photos');
+        setSellerId(null);
+      } else {
+        setProviderId(null);
+      }
+
+      setShowDeleteModal({ type: null });
+    } catch (err) {
+      console.error('Erro ao excluir vitrine:', err);
+      alert('Erro ao excluir vitrine. Tente novamente.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -325,6 +371,41 @@ export const SettingsPage: React.FC = () => {
           </div>
         </section>
 
+        {/* Seção Exclusão de Vitrines (Danger Zone) */}
+        {(sellerId || providerId) && (
+          <section className="space-y-4">
+            <h2 className="text-xs font-bold text-red-400 uppercase tracking-widest pl-2">
+              Gerenciar Vitrines
+            </h2>
+            <div className="bg-white rounded-[2rem] p-6 space-y-3 shadow-sm border border-red-50">
+              {sellerId && (
+                <button
+                  onClick={() => setShowDeleteModal({ type: 'seller' })}
+                  className="w-full flex items-center justify-between p-4 rounded-2xl bg-red-50 text-red-600 hover:bg-red-100 transition-all group"
+                >
+                  <div className="flex items-center gap-3">
+                    <Trash2 size={18} className="group-hover:scale-110 transition-transform" />
+                    <span className="font-bold">Excluir Minha Loja</span>
+                  </div>
+                  <ChevronLeft size={18} className="rotate-180 opacity-50" />
+                </button>
+              )}
+              {providerId && (
+                <button
+                  onClick={() => setShowDeleteModal({ type: 'provider' })}
+                  className="w-full flex items-center justify-between p-4 rounded-2xl bg-red-50 text-red-600 hover:bg-red-100 transition-all group"
+                >
+                  <div className="flex items-center gap-3">
+                    <Trash2 size={18} className="group-hover:scale-110 transition-transform" />
+                    <span className="font-bold">Excluir Perfil de Serviços</span>
+                  </div>
+                  <ChevronLeft size={18} className="rotate-180 opacity-50" />
+                </button>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* Sair da conta */}
         <section className="mx-auto max-w-2xl px-6 pb-10">
           <div className="border-t border-neutral-100 pt-6">
@@ -340,6 +421,52 @@ export const SettingsPage: React.FC = () => {
         </section>
 
       </main>
+
+      {/* Modal de Confirmação de Exclusão */}
+      <AnimatePresence>
+        {showDeleteModal.type && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-neutral-900/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="w-full max-w-sm bg-white rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-red-500" />
+              
+              <div className="h-20 w-20 rounded-3xl bg-red-50 text-red-600 flex items-center justify-center mb-6 mx-auto">
+                <AlertTriangle size={40} />
+              </div>
+
+              <h2 className="text-2xl font-black text-neutral-900 text-center mb-2">
+                Tem certeza?
+              </h2>
+              <p className="text-sm text-neutral-500 text-center mb-8 px-2 font-medium">
+                {showDeleteModal.type === 'seller' 
+                  ? "Sua loja e todos os produtos cadastrados serão removidos da plataforma permanentemente."
+                  : "Seu perfil profissional e serviços cadastrados serão ocultados permanentemente."}
+              </p>
+
+              <div className="space-y-3">
+                <button
+                  onClick={handleDeleteStorefront}
+                  disabled={isDeleting}
+                  className="w-full h-14 bg-red-600 text-white font-bold rounded-2xl hover:bg-red-700 transition-all flex items-center justify-center shadow-lg shadow-red-600/20 active:scale-[0.98] disabled:opacity-50"
+                >
+                  {isDeleting ? <Loader2 size={24} className="animate-spin" /> : 'Sim, Excluir Agora'}
+                </button>
+                <button
+                  onClick={() => setShowDeleteModal({ type: null })}
+                  disabled={isDeleting}
+                  className="w-full h-14 bg-neutral-100 text-neutral-600 font-bold rounded-2xl hover:bg-neutral-200 transition-all active:scale-[0.98] disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -11,7 +11,7 @@ import { BottomNav } from '../components/BottomNav';
 import { LocationSelector } from '../components/LocationSelector';
 import { useLocationScope } from '../context/LocationContext';
 
-import { PremiumLoader } from '../components/PremiumLoader';
+import { PremiumFeedLoader } from '../components/PremiumFeedLoader';
 
 interface FeedProduct {
   id: string;
@@ -325,7 +325,7 @@ export const ConsumerFeed: React.FC = () => {
       <header 
         className="w-full bg-white dark:bg-neutral-900 pt-6 pb-4 px-4"
       >
-        <div className="mx-auto max-w-7xl flex items-center justify-between">
+        <div className="mx-auto max-w-2xl flex items-center justify-between">
           <Logo />
           <LocationSelector />
         </div>
@@ -334,7 +334,7 @@ export const ConsumerFeed: React.FC = () => {
       {/* Filters - Minimalist & Elegant */}
       {location && (
         <div className="mx-auto w-full bg-white dark:bg-neutral-900">
-          <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="max-w-2xl mx-auto px-4 py-4">
             <div className="flex items-center gap-3 overflow-x-auto hide-scrollbar">
               <motion.button
                 whileTap={{ scale: 0.96 }}
@@ -372,7 +372,7 @@ export const ConsumerFeed: React.FC = () => {
 
       {/* Alerta de Bairro Desconhecido (Fallback) */}
       {location && location.neighborhood === 'Bairro Desconhecido' && (
-        <div className="mx-auto max-w-7xl px-4 pt-4">
+        <div className="mx-auto max-w-2xl px-4 pt-4">
           <div className="rounded-2xl bg-orange-50 border border-orange-100 p-4 flex items-start gap-3">
             <MapPin className="text-orange-500 shrink-0 mt-0.5" size={20} />
             <div>
@@ -386,15 +386,15 @@ export const ConsumerFeed: React.FC = () => {
       )}
 
       {/* Main Feed */}
-      <main className="mx-auto max-w-7xl px-4 pt-6 flex-1 flex flex-col">
+      <main className="mx-auto max-w-2xl px-6 pt-6 flex-1 flex flex-col">
         {!location ? (
           // ... (JSX de localização omitido, permanece igual)
           <div /> 
         ) : (
-          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-8">
             {loading ? (
-              <div className="col-span-full py-12">
-                <PremiumLoader />
+              <div className="col-span-full">
+                <PremiumFeedLoader />
               </div>
             ) : (
               <>

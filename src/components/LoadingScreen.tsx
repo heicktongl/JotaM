@@ -15,7 +15,6 @@ export const LoadingScreen: React.FC = () => {
                 }}
                 className="flex flex-col items-center gap-6"
             >
-                <Logo variant="orange" className="w-16 h-16" />
                 <div className="flex gap-1.5">
                     {[0, 1, 2].map((i) => (
                         <motion.div

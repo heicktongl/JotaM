@@ -99,12 +99,17 @@ export const MapDispoAutocomplete: React.FC<MapDispoAutocompleteProps> = ({
                                             {res.nome_bairro}
                                         </p>
                                         <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-tight">
-                                            {res.cidade} — {res.estado}
+                                            {res.cidade} — {res.estado} {res.cep && `• CEP ${res.cep}`}
                                         </p>
                                     </div>
                                     {res.fonte === 'local' && (
                                         <div className="px-1.5 py-0.5 rounded-md bg-green-50 text-[8px] font-black text-green-600 uppercase">
                                             Base
+                                        </div>
+                                    )}
+                                    {res.fonte === 'cep' && (
+                                        <div className="px-1.5 py-0.5 rounded-md bg-blue-50 text-[8px] font-black text-blue-600 uppercase">
+                                            CEP
                                         </div>
                                     )}
                                 </button>

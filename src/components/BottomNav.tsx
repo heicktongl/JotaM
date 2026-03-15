@@ -223,6 +223,11 @@ export const BottomNav: React.FC = () => {
                 e.preventDefault();
                 window.dispatchEvent(new CustomEvent('sis-refresh-feed'));
               }
+              if (item.id === 'search' && location.pathname === '/search') {
+                // SIS-REFRESH: Se já estiver na busca, força o carregamento total da página
+                e.preventDefault();
+                window.location.reload();
+              }
             };
 
             return (

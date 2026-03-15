@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { useLocationScope } from '../context/LocationContext';
 import { sisSearch, getSuggestions, getPopularTerms } from '../lib/sis';
 import type { ScoredItem, ScoredStorefront, SISResults } from '../lib/sis';
-import { PremiumLoader } from '../components/PremiumLoader';
+import { SearchSkeleton } from '../components/SearchSkeleton';
 
 // ──────────────────────────────────────────────
 // Tipos (internos)
@@ -212,6 +212,20 @@ export const SearchPage: React.FC = () => {
       ? location.neighborhood
       : null;
   const cityFilter = location?.city || null;
+
+  // SIS-REFRESH: Listener para resetar a página ao clicar no ícone de busca
+  useEffect(() => {
+    const handleRefresh = () => {
+      setQuery('');
+      setResults({ products: [], services: [], storefronts: [] });
+      setSelectedCategory(null);
+      setSelectedSubCategory(null);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.addEventListener('sis-refresh-search', handleRefresh);
+    return () => window.removeEventListener('sis-refresh-search', handleRefresh);
+  }, []);
 
   // ── Categorias (carrega uma vez) ───────────────────────────
   useEffect(() => {
@@ -476,8 +490,8 @@ export const SearchPage: React.FC = () => {
               </div>
 
               {isLoadingTop ? (
-                <div className="py-6">
-                  <PremiumLoader />
+                <div className="py-2">
+                  <SearchSkeleton />
                 </div>
               ) : topStorefronts.length > 0 ? (
                 <div className="flex gap-3 overflow-x-auto pb-4 hide-scrollbar snap-x snap-mandatory -mx-6 px-6">
@@ -558,103 +572,109 @@ export const SearchPage: React.FC = () => {
         ══════════════════════════════════════════ */}
         {isQuerying && (
           <>
-            {/* Resumo do motorzinho */}
-            {!isSearching && totalResults > 0 && (
-              <div className="flex flex-col gap-1 mb-4">
-                <div className="flex items-center gap-2 text-xs font-bold text-neutral-400">
-                  <Sparkles size={12} className="text-orange-400" />
-                  <span>{totalResults} {totalResults === 1 ? 'resultado' : 'resultados'} para "{query}"</span>
-                </div>
-                {isShowingExternal && (
-                   <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-md inline-flex w-fit items-center gap-1">
-                     <MapPin size={10} />
-                     Exibindo resultados de outros bairros
-                   </span>
+            {isSearching ? (
+              <SearchSkeleton />
+            ) : (
+              <>
+                {/* Resumo do motorzinho */}
+                {totalResults > 0 && (
+                  <div className="flex flex-col gap-1 mb-4">
+                    <div className="flex items-center gap-2 text-xs font-bold text-neutral-400">
+                      <Sparkles size={12} className="text-orange-400" />
+                      <span>{totalResults} {totalResults === 1 ? 'resultado' : 'resultados'} para "{query}"</span>
+                    </div>
+                    {isShowingExternal && (
+                      <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-md inline-flex w-fit items-center gap-1">
+                        <MapPin size={10} />
+                        Exibindo resultados de outros bairros
+                      </span>
+                    )}
+                  </div>
                 )}
-              </div>
-            )}
 
-            {/* ── Bloco: Serviços ── */}
-            {results.services.length > 0 && (
-              <section>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Wrench size={16} className="text-purple-500" />
-                    <h2 className="font-display text-lg font-bold text-neutral-900">Serviços</h2>
-                  </div>
-                  <span className="text-xs font-bold text-purple-500">
-                    {results.services.length} {results.services.length === 1 ? 'serviço' : 'serviços'}
-                  </span>
-                </div>
-                <div className="space-y-3">
-                  {results.services.map((item) => (
-                    <SISItemCard key={`svc-${item.id}`} item={item} />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* ── Bloco: Produtos ── */}
-            {results.products.length > 0 && (
-              <section>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <ShoppingBag size={16} className="text-orange-500" />
-                    <h2 className="font-display text-lg font-bold text-neutral-900">Produtos</h2>
-                  </div>
-                  <span className="text-xs font-bold text-orange-500">
-                    {results.products.length} {results.products.length === 1 ? 'produto' : 'produtos'}
-                  </span>
-                </div>
-                <div className="space-y-3">
-                  {results.products.map((item) => (
-                    <SISItemCard key={`prod-${item.id}`} item={item} />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* ── Bloco: Vitrines ── */}
-            {results.storefronts.length > 0 && (
-              <section>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Store size={16} className="text-neutral-700" />
-                    <h2 className="font-display text-lg font-bold text-neutral-900">Vitrines</h2>
-                  </div>
-                  <span className="text-xs font-bold text-neutral-500">
-                    {results.storefronts.length} {results.storefronts.length === 1 ? 'vitrine' : 'vitrines'}
-                  </span>
-                </div>
-                <div className="space-y-3">
-                  {results.storefronts.map((store) => (
-                    <StorefrontCard key={`${store.type}-${store.id}`} store={store} />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* ── Nenhum resultado ── */}
-            {!isSearching && totalResults === 0 && (
-              <div className="flex flex-col items-center justify-center py-14 text-center">
-                <div className="h-14 w-14 rounded-full bg-neutral-100 flex items-center justify-center mb-3 text-neutral-400">
-                  <PackageOpen size={24} />
-                </div>
-                <p className="text-sm font-bold text-neutral-900">Nenhum resultado</p>
-                <p className="text-xs text-neutral-500 mt-1">Tente outras palavras ou verifique a digitação.</p>
-
-                {/* Sugestões alternativas */}
-                {suggestions.length > 0 && (
-                  <div className="mt-6">
-                    <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-2">Sugestões</p>
-                    <div className="flex flex-wrap justify-center gap-2">
-                      {suggestions.slice(0, 6).map((s) => (
-                        <SuggestionChip key={s} label={s} onClick={() => setQuery(s)} />
+                {/* ── Bloco: Serviços ── */}
+                {results.services.length > 0 && (
+                  <section>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Wrench size={16} className="text-purple-500" />
+                        <h2 className="font-display text-lg font-bold text-neutral-900">Serviços</h2>
+                      </div>
+                      <span className="text-xs font-bold text-purple-500">
+                        {results.services.length} {results.services.length === 1 ? 'serviço' : 'serviços'}
+                      </span>
+                    </div>
+                    <div className="space-y-3">
+                      {results.services.map((item) => (
+                        <SISItemCard key={`svc-${item.id}`} item={item} />
                       ))}
                     </div>
+                  </section>
+                )}
+
+                {/* ── Bloco: Produtos ── */}
+                {results.products.length > 0 && (
+                  <section>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <ShoppingBag size={16} className="text-orange-500" />
+                        <h2 className="font-display text-lg font-bold text-neutral-900">Produtos</h2>
+                      </div>
+                      <span className="text-xs font-bold text-orange-500">
+                        {results.products.length} {results.products.length === 1 ? 'produto' : 'produtos'}
+                      </span>
+                    </div>
+                    <div className="space-y-3">
+                      {results.products.map((item) => (
+                        <SISItemCard key={`prod-${item.id}`} item={item} />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* ── Bloco: Vitrines ── */}
+                {results.storefronts.length > 0 && (
+                  <section>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Store size={16} className="text-neutral-700" />
+                        <h2 className="font-display text-lg font-bold text-neutral-900">Vitrines</h2>
+                      </div>
+                      <span className="text-xs font-bold text-neutral-500">
+                        {results.storefronts.length} {results.storefronts.length === 1 ? 'vitrine' : 'vitrines'}
+                      </span>
+                    </div>
+                    <div className="space-y-3">
+                      {results.storefronts.map((store) => (
+                        <StorefrontCard key={`${store.type}-${store.id}`} store={store} />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* ── Nenhum resultado ── */}
+                {totalResults === 0 && (
+                  <div className="flex flex-col items-center justify-center py-14 text-center">
+                    <div className="h-14 w-14 rounded-full bg-neutral-100 flex items-center justify-center mb-3 text-neutral-400">
+                      <PackageOpen size={24} />
+                    </div>
+                    <p className="text-sm font-bold text-neutral-900">Nenhum resultado</p>
+                    <p className="text-xs text-neutral-500 mt-1">Tente outras palavras ou verifique a digitação.</p>
+
+                    {/* Sugestões alternativas */}
+                    {suggestions.length > 0 && (
+                      <div className="mt-6">
+                        <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest mb-2">Sugestões</p>
+                        <div className="flex flex-wrap justify-center gap-2">
+                          {suggestions.slice(0, 6).map((s) => (
+                            <SuggestionChip key={s} label={s} onClick={() => setQuery(s)} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
+              </>
             )}
           </>
         )}

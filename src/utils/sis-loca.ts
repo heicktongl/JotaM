@@ -14,7 +14,8 @@ export interface MapDispoResult {
     estado: string;
     latitude: number;
     longitude: number;
-    fonte: 'local' | 'osm';
+    fonte: 'local' | 'osm' | 'cep';
+    cep?: string;
 }
 
 /**
@@ -138,8 +139,53 @@ export const mapdispoSearch = async (supabase: any, query: string, cityContext?:
     if (!query || query.length < 2) return [];
 
     const results: MapDispoResult[] = [];
+    const cleanCep = query.replace(/\D/g, '');
 
     try {
+        // 0. Busca por CEP (Prioridade SIS-LOCA)
+        if (cleanCep.length >= 5 && cleanCep.length <= 8 && /^\d+$/.test(cleanCep)) {
+            // 0.1 Busca Local por CEP
+            const { data: localCepData } = await supabase
+                .from('store_locations')
+                .select('neighborhood, city, state, latitude, longitude')
+                .eq('zip_code', cleanCep)
+                .limit(5);
+
+            if (localCepData) {
+                localCepData.forEach((d: any) => {
+                    results.push({
+                        nome_bairro: d.neighborhood,
+                        cidade: d.city,
+                        estado: d.state || 'UF',
+                        latitude: d.latitude,
+                        longitude: d.longitude,
+                        fonte: 'local',
+                        cep: cleanCep
+                    });
+                });
+            }
+
+            // 0.2 Busca Externa por CEP (ViaCEP)
+            try {
+                const cepRes = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+                const cepData = await cepRes.json();
+                
+                if (cepData && !cepData.erro && cepData.bairro) {
+                    results.push({
+                        nome_bairro: cepData.bairro,
+                        cidade: cepData.localidade,
+                        estado: cepData.uf,
+                        latitude: 0,
+                        longitude: 0,
+                        fonte: 'cep',
+                        cep: cleanCep
+                    });
+                }
+            } catch (ce) {
+                console.error('ViaCEP Error:', ce);
+            }
+        }
+
         // 1. Busca Local (Base Sovix)
         const { data: localData } = await supabase
             .from('store_locations')

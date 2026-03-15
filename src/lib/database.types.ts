@@ -65,6 +65,7 @@ export interface Database {
                     pinned_product_id: string | null;
                     category_id: string | null;
                     views: number;
+                    deleted_at: string | null;
                     created_at: string;
                 };
                 Insert: Omit<Database['public']['Tables']['sellers']['Row'], 'id' | 'created_at' | 'views'>;
@@ -149,6 +150,7 @@ export interface Database {
                     avatar_url: string | null;
                     category_id: string | null;
                     rating: number;
+                    deleted_at: string | null;
                     created_at: string;
                 };
                 Insert: Omit<Database['public']['Tables']['service_providers']['Row'], 'id' | 'created_at'>;
